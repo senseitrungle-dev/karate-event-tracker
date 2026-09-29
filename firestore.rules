@@ -1,0 +1,61 @@
+rules_version = '2';
+// Karate Event Tracker v1.0.0 — Firestore security rules
+// Director  = roles/{uid}.role == 'director' (full control)
+// Manager   = uid listed in events/{e}/rings/{r}.managerIds (scores only that ring's divisions)
+// Staff     = uid listed in events/{e}.staffIds (camp attendance)
+// Everyone signed in can read public event data; private competitor data (pv/) is director-only.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function roleDoc() { return /databases/$(database)/documents/roles/$(request.auth.uid); }
+    function isDirector() { return signedIn() && exists(roleDoc()) && get(roleDoc()).data.role == 'director'; }
+    function ring(e, rid) { return get(/databases/$(database)/documents/events/$(e)/rings/$(rid)).data; }
+    function managesRing(e, rid) { return signedIn() && rid is string && rid != '' && request.auth.uid in ring(e, rid).get('managerIds', []); }
+    function managesDiv(e, did) {
+      let d = get(/databases/$(database)/documents/events/$(e)/divisions/$(did)).data;
+      return managesRing(e, d.get('ringId', ''));
+    }
+    function isStaff(e) { return signedIn() && request.auth.uid in get(/databases/$(database)/documents/events/$(e)).data.get('staffIds', []); }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
+    match /roles/{uid} {
+      allow read: if signedIn();
+      // first director claims the role together with meta/bootstrap (one batch); afterwards only directors
+      allow create: if isDirector() || (signedIn() && request.auth.uid == uid && request.resource.data.role == 'director'
+        && !exists(/databases/$(database)/documents/meta/bootstrap)
+        && existsAfter(/databases/$(database)/documents/meta/bootstrap));
+      allow update, delete: if isDirector() && uid != request.auth.uid;
+    }
+    match /meta/bootstrap {
+      allow read: if signedIn();
+      allow create: if signedIn() && getAfter(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'director';
+    }
+    match /events/{e} {
+      allow read: if signedIn();
+      allow write: if isDirector();
+      match /{sub=**} {
+        allow read: if signedIn();
+        allow write: if isDirector();
+      }
+    }
+    match /pv/{rest=**} {
+      allow read, write: if isDirector();
+    }
+    match /live/{e}/brackets/{did} {
+      allow read: if signedIn();
+      allow create, delete: if isDirector();
+      allow update: if isDirector() || managesDiv(e, did);
+    }
+    match /live/{e}/ringstate/{rid} {
+      allow read: if signedIn();
+      allow write: if isDirector() || managesRing(e, rid);
+    }
+    match /live/{e}/attendance/{sid} {
+      allow read: if signedIn();
+      allow write: if isDirector() || isStaff(e);
+    }
+  }
+}

@@ -1,0 +1,2502 @@
+<title>Karate Event Tracker</title>
+<meta name="description" content="Karate tournament and camp manager: divisions, brackets, WTKF scoring, rings, results.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@700&display=swap">
+<style>
+/* Layout: app bar + scrollable tab strip + single content column (max 1200px); modal sheets slide up on phones. */
+:root {
+  --paper: #f2f3ee;      /* tatami-grey ground */
+  --panel: #ffffff;
+  --ink: #17191f;
+  --ink-2: #4d525c;
+  --ink-3: #7b808a;
+  --line: #d9dbd3;
+  --line-2: #c6c9bf;
+  --ai: #213f73;         /* aizome indigo accent */
+  --ai-soft: #e3e9f4;
+  --aka: #c21a2c;        /* Aka corner */
+  --aka-soft: #fbe4e6;
+  --aka-bg: #c21a2c;     /* Aka corner fill, white text */
+  --shiro: #ffffff;      /* Shiro corner */
+  --shiro-ink: #17191f;
+  --gold: #b88a13; --silver: #7d8591; --bronze: #9b5a2a;
+  --ok: #2c7a4b; --ok-soft: #e0f1e6;
+  --warn: #9a6a00; --warn-soft: #fbf0d4;
+  --bad: #b3261e; --bad-soft: #fbe3e1;
+  --shadow: 0 1px 2px rgba(20,24,35,.06), 0 8px 24px rgba(20,24,35,.08);
+  --f-display: "Zen Kaku Gothic New", "Hiragino Sans", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #121419; --panel: #1b1e25; --ink: #eceef2; --ink-2: #b4b9c4; --ink-3: #868c98;
+  --line: #2c3039; --line-2: #3a3f4a; --ai: #8fb0ea; --ai-soft: #1f2a3f;
+  --aka: #ff5a67; --aka-soft: #3a1a1e; --aka-bg: #a51c2b; --shiro: #eef0f4; --shiro-ink: #121419;
+  --gold: #e0b43c; --silver: #aab2bf; --bronze: #d08a55;
+  --ok: #6fcf97; --ok-soft: #173024; --warn: #f0c060; --warn-soft: #33290f; --bad: #ff8a80; --bad-soft: #3a1b19;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #121419; --panel: #1b1e25; --ink: #eceef2; --ink-2: #b4b9c4; --ink-3: #868c98;
+  --line: #2c3039; --line-2: #3a3f4a; --ai: #8fb0ea; --ai-soft: #1f2a3f;
+  --aka: #ff5a67; --aka-soft: #3a1a1e; --aka-bg: #a51c2b; --shiro: #eef0f4; --shiro-ink: #121419;
+  --gold: #e0b43c; --silver: #aab2bf; --bronze: #d08a55;
+  --ok: #6fcf97; --ok-soft: #173024; --warn: #f0c060; --warn-soft: #33290f; --bad: #ff8a80; --bad-soft: #3a1b19;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35); color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font: 15px/1.5 var(--f-body); -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4 { font-family: var(--f-display); font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: .01em; }
+h1 { font-size: 1.55rem; } h2 { font-size: 1.25rem; } h3 { font-size: 1.05rem; } h4 { font-size: .95rem; }
+p { margin: 0; }
+a { color: var(--ai); }
+.num, .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-3); } .small { font-size: .82rem; } .tiny { font-size: .74rem; }
+.label { font-size: .7rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+
+/* app bar */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--ink); color: #fff; }
+:root[data-theme="dark"] .bar { background: #0b0c10; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bar { background: #0b0c10; } }
+.bar-in { max-width: 1200px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; cursor: pointer; background: none; border: 0; color: inherit; padding: 0; font: inherit; }
+.brand .mark { width: 30px; height: 30px; border-radius: 50%; background: #fff; position: relative; flex: none; }
+.brand .mark::after { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: #c21a2c; }
+.brand > span { text-align: left; }
+.brand b { font-family: var(--f-display); font-size: 1.02rem; letter-spacing: .02em; }
+.brand small { display: block; font-size: .7rem; opacity: .65; letter-spacing: .08em; text-transform: uppercase; }
+.bar .spacer { flex: 1; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: .75rem; font-weight: 600; background: var(--ai-soft); color: var(--ai); white-space: nowrap; }
+.bar .chip { background: rgba(255,255,255,.12); color: #fff; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); } .chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.bad { background: var(--bad-soft); color: var(--bad); } .chip.aka { background: var(--aka-soft); color: var(--aka); }
+.chip.plain { background: transparent; border: 1px solid var(--line-2); color: var(--ink-2); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; }
+.bar select { width: auto; max-width: 220px; background: rgba(255,255,255,.1); color: #fff; border: 1px solid rgba(255,255,255,.2); }
+.bar select option { color: #000; }
+
+/* tabs */
+.tabs { background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--barh, 52px)); z-index: 15; }
+.tabs-in { max-width: 1200px; margin: 0 auto; padding: 0 16px; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.tabs-in::-webkit-scrollbar { display: none; }
+.tab { border: 0; background: none; padding: 12px 12px 10px; font: 600 .88rem var(--f-body); color: var(--ink-2); border-bottom: 3px solid transparent; cursor: pointer; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--aka); }
+.tab:focus-visible { outline: 2px solid var(--ai); outline-offset: -2px; }
+
+main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 80px; display: grid; gap: 18px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.row.between { justify-content: space-between; }
+.stack { display: grid; gap: 12px; }
+.grid2 { display: grid; gap: 14px; align-items: start; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.grid3 { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; min-width: 0; }
+.card.flush { padding: 0; overflow: hidden; }
+.card-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.section-h { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+
+/* stats */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; }
+.stat b { display: block; font: 600 1.6rem/1.1 var(--f-mono); font-variant-numeric: tabular-nums; margin-top: 4px; }
+.meter { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 8px; }
+.meter > i { display: block; height: 100%; background: var(--ai); }
+
+/* buttons & inputs */
+button, .btn { font: 600 .86rem var(--f-body); border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); padding: 8px 13px; cursor: pointer; min-height: 38px; display: inline-flex; align-items: center; gap: 6px; justify-content: center; }
+button:hover { border-color: var(--ink-3); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--ai); outline-offset: 1px; }
+button.primary { background: var(--ai); border-color: var(--ai); color: #fff; }
+:root[data-theme="dark"] button.primary { color: #0e1422; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button.primary { color: #0e1422; } }
+button.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+button.ghost { border-color: transparent; background: transparent; }
+button.sm { min-height: 30px; padding: 4px 9px; font-size: .8rem; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+label.f { display: grid; gap: 4px; font-size: .8rem; font-weight: 600; color: var(--ink-2); min-width: 0; }
+label.f.req > span::after { content: " *"; color: var(--aka); }
+input, select, textarea { font: .92rem var(--f-body); color: var(--ink); background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; min-height: 38px; width: 100%; min-width: 0; }
+textarea { min-height: 80px; resize: vertical; }
+input[type="checkbox"] { width: 18px; height: 18px; min-height: 0; accent-color: var(--ai); }
+.check { display: inline-flex; gap: 8px; align-items: center; font-size: .88rem; cursor: pointer; }
+.fgrid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.fgrid .span { grid-column: 1 / -1; }
+fieldset { border: 1px solid var(--line); border-radius: var(--r); padding: 12px; margin: 0; min-width: 0; }
+legend { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; padding: 0 6px; }
+.search { max-width: 280px; }
+
+/* tables */
+.tw { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+th { text-align: left; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+tr.click { cursor: pointer; } tr.click:hover td { background: var(--ai-soft); }
+td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+/* empty */
+.empty { text-align: center; padding: 36px 16px; color: var(--ink-2); display: grid; gap: 10px; justify-items: center; }
+.empty .mark-lg { width: 54px; height: 54px; border-radius: 50%; border: 2px solid var(--line-2); position: relative; }
+.empty .mark-lg::after { content: ""; position: absolute; inset: 15px; border-radius: 50%; background: var(--aka); opacity: .8; }
+.notice { border-radius: var(--r); padding: 10px 14px; font-size: .88rem; display: flex; gap: 10px; align-items: flex-start; }
+.notice.warn { background: var(--warn-soft); color: var(--warn); } .notice.info { background: var(--ai-soft); color: var(--ai); }
+.notice.bad { background: var(--bad-soft); color: var(--bad); }
+
+/* event cards */
+.ev-card { text-align: left; display: grid; gap: 8px; align-content: start; cursor: pointer; width: 100%; font-weight: 400; justify-content: stretch; }
+.ev-card:hover { border-color: var(--ai); }
+.ev-card .date { font-family: var(--f-mono); font-size: .8rem; color: var(--ink-2); }
+
+/* aka / shiro */
+.side { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.belt { width: 5px; height: 22px; border-radius: 2px; flex: none; border: 1px solid var(--line-2); }
+.belt.a { background: var(--aka); border-color: var(--aka); } .belt.b { background: var(--shiro); border-color: var(--ink-3); }
+.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dojo { font-size: .76rem; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* brackets */
+.bracket-wrap { overflow-x: auto; padding-bottom: 6px; }
+.bracket { display: flex; gap: 22px; min-width: min-content; align-items: stretch; padding: 4px 2px; }
+.bcol { display: flex; flex-direction: column; gap: 8px; min-width: 210px; width: 210px; }
+.bcol-in { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 12px; }
+.bcol > .label { text-align: center; margin-bottom: 2px; }
+.bm { background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; cursor: default; position: relative; font-size: .84rem; }
+.bm.click { cursor: pointer; } .bm.click:hover { border-color: var(--ai); box-shadow: var(--shadow); }
+.bm.ready { border-color: var(--ai); } .bm.live { border-color: var(--aka); box-shadow: 0 0 0 2px var(--aka-soft); }
+.bm .ln { display: grid; grid-template-columns: 6px 1fr auto; gap: 8px; align-items: center; padding: 6px 9px 6px 0; min-height: 32px; }
+.bm .ln + .ln { border-top: 1px solid var(--line); }
+.bm .ln .strip { align-self: stretch; }
+.bm .ln.a .strip { background: var(--aka); } .bm .ln.b .strip { background: var(--line-2); }
+.bm .ln.win .name { color: var(--ink); } .bm .ln.lose .name { color: var(--ink-3); font-weight: 500; text-decoration: line-through; text-decoration-color: var(--line-2); }
+.bm .ln .sc { font: 600 .8rem var(--f-mono); color: var(--ink-2); }
+.bm .ln.tbd .name { color: var(--ink-3); font-weight: 500; font-style: italic; }
+.bm .meta { font-size: .68rem; color: var(--ink-3); padding: 3px 9px; background: var(--paper); border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 6px; }
+.stage-h { margin: 6px 0 8px; }
+
+/* medals */
+.medal { width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; font: 700 .72rem var(--f-mono); color: #fff; flex: none; }
+.medal.g { background: var(--gold); } .medal.s { background: var(--silver); } .medal.b { background: var(--bronze); }
+.podium { display: grid; gap: 6px; }
+.podium .pl { display: flex; gap: 10px; align-items: center; min-width: 0; }
+
+/* modal */
+.scrim { position: fixed; inset: 0; background: rgba(12,14,20,.5); z-index: 50; display: grid; place-items: center; padding: 16px; }
+.sheet { background: var(--panel); border-radius: 14px; width: min(760px, 100%); max-height: calc(100% - 20px); overflow: auto; box-shadow: var(--shadow); display: grid; grid-template-rows: auto 1fr auto; }
+.sheet.wide { width: min(1000px, 100%); }
+.sheet-h { position: sticky; top: 0; background: var(--panel); z-index: 2; padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.sheet-b { padding: 16px 18px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+.sheet-f { position: sticky; bottom: 0; background: var(--panel); padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 640px) { .scrim { padding: 0; place-items: end stretch; } .sheet { border-radius: 14px 14px 0 0; max-height: 94%; width: 100%; } }
+#confirm .sheet { width: min(420px, 100%); }
+
+/* scoreboard */
+.board { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: stretch; }
+@media (max-width: 640px) { .board { grid-template-columns: 1fr 1fr; } .board .mid { grid-column: 1 / -1; order: -1; } }
+.corner { border-radius: 12px; padding: 12px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.corner.a { background: var(--aka-bg); color: #fff; }
+.corner.b { background: var(--shiro); color: var(--shiro-ink); border: 2px solid var(--line-2); }
+.corner .who { font-weight: 700; font-family: var(--f-display); font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.corner .big { font: 700 3.2rem/1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.corner .tally { font: 600 .78rem var(--f-mono); opacity: .85; }
+.corner .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.corner button { min-height: 42px; font-size: .82rem; background: rgba(255,255,255,.14); color: inherit; border-color: rgba(255,255,255,.4); }
+.corner.b button { background: rgba(0,0,0,.05); border-color: rgba(0,0,0,.22); color: var(--shiro-ink); }
+.corner button.pen { font-weight: 500; }
+.mid { display: grid; gap: 8px; align-content: start; justify-items: stretch; min-width: 150px; }
+.clock { font: 700 2.3rem/1 var(--f-mono); font-variant-numeric: tabular-nums; text-align: center; padding: 10px; border-radius: 10px; background: var(--paper); border: 1px solid var(--line); }
+.clock.zero { color: var(--aka); }
+.phase { text-align: center; font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ai); }
+.log { font: .74rem var(--f-mono); color: var(--ink-3); max-height: 90px; overflow: auto; }
+.judges { display: grid; gap: 8px; }
+.jrow { display: grid; grid-template-columns: 48px 1fr 1fr; gap: 6px; align-items: center; }
+.jrow button.on.a { background: var(--aka-bg); color: #fff; border-color: var(--aka-bg); }
+.jrow button.on.b { background: var(--shiro); color: var(--shiro-ink); border: 2px solid var(--ink); }
+.srow { display: grid; grid-template-columns: 90px repeat(var(--j, 5), minmax(52px, 1fr)) 80px; gap: 6px; align-items: center; }
+.srow input { text-align: center; font-family: var(--f-mono); padding: 6px 2px; }
+.srow .tot { font: 700 1.05rem var(--f-mono); text-align: right; }
+.result-banner { border-radius: 10px; padding: 12px 14px; background: var(--ok-soft); color: var(--ok); font-weight: 600; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bout { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 10px; }
+.bout-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ring board */
+.ring-card .now { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; }
+.ring-card .now .sc { font: 700 1.6rem var(--f-mono); padding: 0 6px; }
+.queue { display: grid; gap: 4px; }
+.queue .q { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; font-size: .84rem; align-items: center; padding: 6px 0; border-top: 1px dashed var(--line); }
+.queue .q .vs { font-size: .7rem; color: var(--ink-3); }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 999px; font-size: .88rem; z-index: 80; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+.toast.bad { background: var(--bad); color: #fff; }
+.pill-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.person { display: inline-flex; gap: 6px; align-items: center; padding: 3px 8px 3px 3px; border: 1px solid var(--line); border-radius: 999px; font-size: .82rem; }
+.person img { width: 22px; height: 22px; border-radius: 50%; }
+.dd { position: relative; }
+.dd-list { position: absolute; left: 0; right: 0; top: 100%; background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; box-shadow: var(--shadow); z-index: 5; max-height: 240px; overflow: auto; }
+.dd-list button { width: 100%; justify-content: flex-start; border: 0; border-radius: 0; }
+@media (prefers-reduced-motion: no-preference) { .sheet { animation: rise .18s ease-out; } @keyframes rise { from { transform: translateY(12px); opacity: .6; } } }
+</style>
+<header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><div id="modal" hidden></div><div id="confirm" hidden></div>
+<script>/* Karate Event Tracker v1.0.0 */
+/* ============================================================
+   Karate Event Tracker — core logic (pure, no DOM)
+   Brackets, divisions, WTKF-style scoring. Portable to native.
+   ============================================================ */
+const KT = (function () {
+  'use strict';
+  const VERSION = '1.0.0';
+
+  /* ---------- reference data ---------- */
+  const EVENT_TYPES = {
+    IKATA:   { label: 'Individual Kata',   short: 'Kata',       team: false, genders: ['M', 'F'],      kind: 'kata',       defMethod: 'flags' },
+    IKUMITE: { label: 'Individual Kumite', short: 'Kumite',     team: false, genders: ['M', 'F'],      kind: 'kumite' },
+    TKATA:   { label: 'Team Kata',         short: 'Team Kata',  team: true,  genders: ['M', 'F', 'X'], kind: 'kata',       defMethod: 'scores', size: [3, 3] },
+    TKUMITE: { label: 'Team Kumite',       short: 'Team Kumite',team: true,  genders: ['M', 'F'],      kind: 'teamkumite', size: [3, 5] },
+    FUKUGO:  { label: 'Fukugo',            short: 'Fukugo',     team: false, genders: ['M', 'F'],      kind: 'fukugo' },
+    ENBU:    { label: 'Enbu',              short: 'Enbu',       team: true,  genders: ['M', 'F', 'X'], kind: 'kata',       defMethod: 'scores', size: [2, 4] },
+  };
+  const EVENT_ORDER = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'];
+  const GENDERS = { M: 'Men', F: 'Women', X: 'Mixed' };
+  const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools of 4)', DE: 'Double elimination' };
+  const LEVELS = ['Local', 'Regional', 'National', 'International'];
+  const EVENT_KINDS = { tournament: 'Tournament', camp: 'Training camp', other: 'Other event' };
+  const BLACK_AGE_GROUPS = [
+    { id: 'SEN', label: 'Senior', min: 21, max: null },
+    { id: 'YOU', label: 'Youth',  min: 19, max: 20 },
+    { id: 'JUN', label: 'Junior', min: 16, max: 18 },
+    { id: 'CAD', label: 'Cadet',  min: 14, max: 15 },
+  ];
+  const RANKS = [];
+  for (let k = 10; k >= 1; k--) RANKS.push({ code: 'k' + k, label: ordinal(k) + ' Kyu', value: -k });
+  for (let d = 1; d <= 10; d++) RANKS.push({ code: 'd' + d, label: ordinal(d) + ' Dan', value: d });
+  const RANK_BY = Object.fromEntries(RANKS.map(r => [r.code, r]));
+
+  function ordinal(n) { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+  function rankValue(code) { return RANK_BY[code] ? RANK_BY[code].value : null; }
+  function rankLabel(code) { return RANK_BY[code] ? RANK_BY[code].label : '—'; }
+  function isBlack(code) { const v = rankValue(code); return v != null && v > 0; }
+
+  /** Age in whole years on a date (YYYY-MM-DD strings). */
+  function ageOn(dob, onDate) {
+    if (!dob || !onDate) return null;
+    const [y, m, d] = dob.split('-').map(Number), [Y, M, D] = onDate.split('-').map(Number);
+    if (!y || !Y) return null;
+    let a = Y - y;
+    if (M < m || (M === m && D < d)) a--;
+    return a;
+  }
+
+  /* ---------- divisions ---------- */
+  function divisionName(dv) {
+    const et = EVENT_TYPES[dv.eventType];
+    const who = dv.belt === 'black' ? 'Black Belt' : 'Kyu';
+    const grp = dv.group ? ' ' + dv.group : '';
+    return `${who}${grp} ${GENDERS[dv.gender] || ''} ${et ? et.label : ''}`.replace(/\s+/g, ' ').trim();
+  }
+  function defaultScoring(eventType) {
+    const et = EVENT_TYPES[eventType];
+    return { method: et.defMethod || 'flags', judges: 5, boutTime: 120, ketteiTime: 30, bouts: 3 };
+  }
+  /** Standard black-belt divisions for the chosen event types. */
+  function blackBeltDivisions(eventTypes, format) {
+    const out = [];
+    for (const et of eventTypes) for (const g of EVENT_TYPES[et].genders) for (const ag of BLACK_AGE_GROUPS) {
+      const dv = { eventType: et, gender: g, belt: 'black', group: ag.label, minAge: ag.min, maxAge: ag.max,
+        minRank: 'd1', maxRank: 'd10', format: format || 'SE', scoring: defaultScoring(et), bronze: 'two', reset: true };
+      dv.name = divisionName(dv); out.push(dv);
+    }
+    return out;
+  }
+  /** Kyu divisions from a director template {label,minRank,maxRank,minAge,maxAge}. */
+  function kyuDivisions(tpl, eventTypes, format) {
+    const out = [];
+    for (const et of eventTypes) for (const g of EVENT_TYPES[et].genders) {
+      const dv = { eventType: et, gender: g, belt: 'kyu', group: tpl.label, minAge: tpl.minAge ?? null, maxAge: tpl.maxAge ?? null,
+        minRank: tpl.minRank || 'k10', maxRank: tpl.maxRank || 'k1', format: format || 'SE', scoring: defaultScoring(et), bronze: 'two', reset: true };
+      dv.name = divisionName(dv); out.push(dv);
+    }
+    return out;
+  }
+  function fitsDivision(dv, ages, ranks) {
+    // ages/ranks: arrays (one per person)
+    for (const a of ages) {
+      if (a == null) return false;
+      if (dv.minAge != null && dv.minAge !== '' && a < +dv.minAge) return false;
+      if (dv.maxAge != null && dv.maxAge !== '' && a > +dv.maxAge) return false;
+    }
+    const lo = rankValue(dv.minRank), hi = rankValue(dv.maxRank);
+    for (const r of ranks) {
+      const v = rankValue(r); if (v == null) return false;
+      if (dv.belt === 'black' && v < 1) return false;
+      if (dv.belt === 'kyu' && v > 0) return false;
+      if (lo != null && v < lo) return false;
+      if (hi != null && v > hi) return false;
+    }
+    return true;
+  }
+  function spanOf(dv) { const lo = dv.minAge == null || dv.minAge === '' ? 0 : +dv.minAge, hi = dv.maxAge == null || dv.maxAge === '' ? 120 : +dv.maxAge; return hi - lo; }
+  /** Candidate divisions for a competitor in one event type, most specific first. */
+  function ageOf(c, asOf) { return c.dob ? ageOn(c.dob, asOf) : (c.age == null || c.age === '' ? null : +c.age); }
+  function candidateDivisions(comp, eventType, divisions, asOf) {
+    const age = ageOf(comp, asOf);
+    return divisions.filter(dv => dv.eventType === eventType && dv.gender === comp.gender && fitsDivision(dv, [age], [comp.rank]))
+      .sort((x, y) => spanOf(x) - spanOf(y) || (x.order || 0) - (y.order || 0) || String(x.id).localeCompare(String(y.id)));
+  }
+  function teamGender(members) {
+    const g = new Set(members.map(m => m.gender));
+    return g.size === 1 ? [...g][0] : 'X';
+  }
+  function teamCandidates(team, members, divisions, asOf) {
+    const g = teamGender(members);
+    const ages = members.map(m => ageOf(m, asOf)), ranks = members.map(m => m.rank);
+    return divisions.filter(dv => dv.eventType === team.eventType && dv.gender === g && fitsDivision(dv, ages, ranks))
+      .sort((x, y) => spanOf(x) - spanOf(y) || (x.order || 0) - (y.order || 0));
+  }
+  /** Resolve the division each entrant lands in. Returns {divId: [entrantIds]} plus unplaced list. */
+  function assignEntrants(competitors, teams, divisions, asOf) {
+    const byDiv = {}, unplaced = [];
+    const divIds = new Set(divisions.map(d => d.id));
+    for (const dv of divisions) byDiv[dv.id] = [];
+    for (const c of competitors) {
+      if (c.status === 'withdrawn') continue;
+      for (const et of (c.events || [])) {
+        if (EVENT_TYPES[et] && EVENT_TYPES[et].team) continue;
+        const ov = c.divOverride && c.divOverride[et];
+        let did = ov && divIds.has(ov) ? ov : null;
+        if (!did) { const cand = candidateDivisions(c, et, divisions, asOf); did = cand.length ? cand[0].id : null; }
+        if (did) byDiv[did].push(c.id); else unplaced.push({ id: c.id, eventType: et, kind: 'competitor' });
+      }
+    }
+    const compBy = Object.fromEntries(competitors.map(c => [c.id, c]));
+    for (const t of teams || []) {
+      if (t.status === 'withdrawn') continue;
+      let did = t.divisionId && divIds.has(t.divisionId) ? t.divisionId : null;
+      if (!did) {
+        const mem = (t.memberIds || []).map(id => compBy[id]).filter(Boolean);
+        const cand = mem.length ? teamCandidates(t, mem, divisions, asOf) : [];
+        did = cand.length ? cand[0].id : null;
+      }
+      if (did) byDiv[did].push(t.id); else unplaced.push({ id: t.id, eventType: t.eventType, kind: 'team' });
+    }
+    return { byDiv, unplaced };
+  }
+  /** Required-info check for a competitor record. Returns list of problems. */
+  function validateCompetitor(c, asOf) {
+    const p = [];
+    if (!c.firstName || !c.lastName) p.push('Full name');
+    if (!c.gender || !['M', 'F'].includes(c.gender)) p.push('Gender');
+    if (!c.dob) p.push('Date of birth');
+    else { const a = ageOn(c.dob, asOf); if (a == null || a < 3 || a > 110) p.push('Valid date of birth'); }
+    if (!RANK_BY[c.rank]) p.push('Rank');
+    if (!c.dojo) p.push('Dojo / club');
+    if (!c.emergencyName || !c.emergencyPhone) p.push('Emergency contact');
+    if (!c.waiver) p.push('Signed waiver');
+    return p;
+  }
+
+  /* ---------- seeding ---------- */
+  function seedOrder(n) {
+    let order = [1];
+    while (order.length < n) { const m = order.length * 2; order = order.flatMap(s => [s, m + 1 - s]); }
+    return order;
+  }
+  function nextPow2(n) { let p = 1; while (p < n) p *= 2; return p; }
+  function shuffle(arr, rnd) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  /** Order entrants: seeded first (by seed), rest shuffled. entrants: [{id, seed, dojo}] */
+  function orderEntrants(entrants, rnd) {
+    const seeded = entrants.filter(e => e.seed).sort((a, b) => a.seed - b.seed);
+    const rest = shuffle(entrants.filter(e => !e.seed), rnd || Math.random);
+    return seeded.concat(rest);
+  }
+  /** Place ordered entrants into bracket slots (null = bye), then spread same-dojo first-round pairs. */
+  function placeSlots(ordered, size) {
+    const so = seedOrder(size);
+    const slots = so.map(s => ordered[s - 1] || null);
+    // dojo spread: swap unseeded entrants to break same-dojo first-round pairs
+    const conflict = (i) => { const a = slots[i - (i % 2)], b = slots[i - (i % 2) + 1]; return a && b && a.dojo && a.dojo === b.dojo; };
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < size; i += 2) {
+        if (!conflict(i)) continue;
+        const victim = slots[i + 1] && !slots[i + 1].seed ? i + 1 : (slots[i] && !slots[i].seed ? i : -1);
+        if (victim < 0) continue;
+        for (let j = 0; j < size; j++) {
+          if ((j >> 1) === (i >> 1) || !slots[j] || slots[j].seed) continue;
+          const tmp = slots[j]; slots[j] = slots[victim]; slots[victim] = tmp;
+          if (!conflict(i) && !conflict(j)) break;
+          slots[victim] = slots[j]; slots[j] = tmp; // undo
+        }
+      }
+    }
+    return slots.map(e => (e ? e.id : null));
+  }
+
+  /* ---------- bracket generation ---------- */
+  const E = (id) => ({ e: id });
+  const W = (m) => ({ m, t: 'W' });
+  const L = (m) => ({ m, t: 'L' });
+
+  function genSE(slots, prefix, opts) {
+    const matches = {}, size = slots.length, k = Math.log2(size);
+    const P = prefix || '';
+    for (let r = 1; r <= k; r++) {
+      const cnt = size >> r;
+      for (let i = 0; i < cnt; i++) {
+        const id = `${P}W${r}-${i}`;
+        const m = { id, stage: P ? 'PO' : 'W', round: r, idx: i, rounds: k };
+        if (r === 1) { m.a = slots[2 * i] && slots[2 * i].p ? slots[2 * i] : E(slots[2 * i]); m.b = slots[2 * i + 1] && slots[2 * i + 1].p ? slots[2 * i + 1] : E(slots[2 * i + 1]); }
+        else { m.a = W(`${P}W${r - 1}-${2 * i}`); m.b = W(`${P}W${r - 1}-${2 * i + 1}`); }
+        matches[id] = m;
+      }
+    }
+    if (opts && opts.bronze === 'match' && k >= 2) {
+      const id = `${P}B`;
+      matches[id] = { id, stage: 'B', round: k, idx: 1, a: L(`${P}W${k - 1}-0`), b: L(`${P}W${k - 1}-1`) };
+    }
+    return matches;
+  }
+
+  function genDE(slots, opts) {
+    const size = slots.length, k = Math.log2(size);
+    const matches = genSE(slots, '', {});
+    if (k === 0) return matches;
+    if (k === 1) {
+      matches.GF = { id: 'GF', stage: 'GF', round: 1, idx: 0, a: W('W1-0'), b: L('W1-0') };
+    } else {
+      const lastL = 2 * (k - 1);
+      for (let i = 0; i < size / 4; i++) matches[`L1-${i}`] = { id: `L1-${i}`, stage: 'L', round: 1, idx: i, a: L(`W1-${2 * i}`), b: L(`W1-${2 * i + 1}`) };
+      for (let r = 1; r <= k - 1; r++) {
+        const cnt = size >> (r + 1), rr = 2 * r;
+        for (let i = 0; i < cnt; i++) {
+          const j = r % 2 === 1 ? cnt - 1 - i : i;
+          matches[`L${rr}-${i}`] = { id: `L${rr}-${i}`, stage: 'L', round: rr, idx: i, a: W(`L${rr - 1}-${i}`), b: L(`W${r + 1}-${j}`) };
+        }
+        if (r <= k - 2) {
+          const c2 = size >> (r + 2), ro = 2 * r + 1;
+          for (let i = 0; i < c2; i++) matches[`L${ro}-${i}`] = { id: `L${ro}-${i}`, stage: 'L', round: ro, idx: i, a: W(`L${rr}-${2 * i}`), b: W(`L${rr}-${2 * i + 1}`) };
+        }
+      }
+      matches.GF = { id: 'GF', stage: 'GF', round: 1, idx: 0, a: W(`W${k}-0`), b: W(`L${lastL}-0`) };
+    }
+    if (!opts || opts.reset !== false) matches.GF2 = { id: 'GF2', stage: 'GF', round: 2, idx: 0, reset: 'GF' };
+    return matches;
+  }
+
+  /** Split ordered entrants into balanced pools of at most 4 (snake order). */
+  function makePools(ordered) {
+    const n = ordered.length, np = Math.max(1, Math.ceil(n / 4));
+    const pools = Array.from({ length: np }, () => []);
+    ordered.forEach((e, i) => { const row = Math.floor(i / np), col = i % np; pools[row % 2 === 0 ? col : np - 1 - col].push(e); });
+    // dojo spread across pools: swap unseeded same-dojo members with another pool
+    for (let p = 0; p < np; p++) {
+      const seen = {};
+      for (let i = 0; i < pools[p].length; i++) {
+        const e = pools[p][i]; if (!e.dojo) continue;
+        if (seen[e.dojo] && !e.seed) {
+          outer: for (let q = 0; q < np; q++) {
+            if (q === p) continue;
+            for (let j = 0; j < pools[q].length; j++) {
+              const f = pools[q][j];
+              if (f.seed || f.dojo === e.dojo) continue;
+              if (pools[p].some((x, xi) => xi !== i && x.dojo === f.dojo)) continue;
+              if (pools[q].some((x, xj) => xj !== j && x.dojo === e.dojo)) continue;
+              pools[p][i] = f; pools[q][j] = e; break outer;
+            }
+          }
+        }
+        seen[pools[p][i].dojo] = true;
+      }
+    }
+    return pools;
+  }
+  const POOL_NAMES = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  function roundRobinPairs(n) {
+    const ids = Array.from({ length: n }, (_, i) => i);
+    if (n % 2) ids.push(null);
+    const m = ids.length, rounds = [];
+    let arr = ids.slice();
+    for (let r = 0; r < m - 1; r++) {
+      const pairs = [];
+      for (let i = 0; i < m / 2; i++) { const a = arr[i], b = arr[m - 1 - i]; if (a != null && b != null) pairs.push([a, b]); }
+      rounds.push(pairs);
+      arr = [arr[0], arr[m - 1], ...arr.slice(1, m - 1)];
+    }
+    return rounds;
+  }
+  function genRR(ordered, opts) {
+    const pools = makePools(ordered), matches = {}, poolMap = {};
+    pools.forEach((pl, p) => {
+      const P = POOL_NAMES[p];
+      poolMap[P] = pl.map(e => e.id);
+      roundRobinPairs(pl.length).forEach((pairs, r) => pairs.forEach(([x, y], i) => {
+        const id = `P${P}-${r + 1}-${i}`;
+        matches[id] = { id, stage: 'P', pool: P, round: r + 1, idx: i, a: E(pl[x].id), b: E(pl[y].id) };
+      }));
+    });
+    let advance = 0;
+    if (pools.length >= 2) {
+      advance = opts && opts.advance ? opts.advance : (pools.length === 2 ? 2 : 1);
+      const qual = [];
+      for (let place = 1; place <= advance; place++) for (let p = 0; p < pools.length; p++) if (pools[p].length >= place) qual.push({ p: POOL_NAMES[p], place });
+      const size = nextPow2(qual.length);
+      const so = seedOrder(size);
+      const slots = so.map(s => qual[s - 1] || null);
+      // avoid same-pool first-round meeting (only possible when advance>1)
+      for (let i = 0; i < size; i += 2) {
+        const a = slots[i], b = slots[i + 1];
+        if (a && b && a.p === b.p) {
+          for (let j = 0; j < size; j++) {
+            if ((j >> 1) === (i >> 1) || !slots[j] || slots[j].place !== b.place) continue;
+            const partner = slots[j ^ 1];
+            if (slots[j].p !== a.p && (!partner || partner.p !== b.p)) { const t = slots[j]; slots[j] = b; slots[i + 1] = t; break; }
+          }
+        }
+      }
+      Object.assign(matches, genSE(slots, 'PO-', { bronze: opts && opts.bronze }));
+    }
+    return { pools: poolMap, matches, advance };
+  }
+
+  /**
+   * Build a bracket document for a division.
+   * entrants: [{id, seed?, dojo?}]
+   */
+  function generateBracket(division, entrants, rnd) {
+    const format = division.format || 'SE';
+    const ordered = orderEntrants(entrants, rnd);
+    const br = { divisionId: division.id, format, entrants: ordered.map(e => e.id), bronze: division.bronze || 'two',
+      reset: division.reset !== false, matches: {}, results: {}, pools: null, tiebreak: {}, createdAt: new Date().toISOString(), version: VERSION };
+    if (ordered.length < 2) return br;
+    if (format === 'RR') {
+      const g = genRR(ordered, { advance: division.advance, bronze: br.bronze });
+      br.pools = g.pools; br.matches = g.matches; br.advance = g.advance;
+    } else {
+      const size = nextPow2(ordered.length);
+      const slots = placeSlots(ordered, size);
+      br.matches = format === 'DE' ? genDE(slots, { reset: br.reset }) : genSE(slots, '', { bronze: br.bronze });
+    }
+    return br;
+  }
+
+  /* ---------- resolution ---------- */
+  const DONE = { done: 1, bye: 1, void: 1, skip: 1 };
+  function resolve(br) {
+    const out = {}, M = br.matches || {}, R = br.results || {};
+    const poolCache = {};
+    const stack = new Set();
+    function poolStanding(P) {
+      if (poolCache[P]) return poolCache[P];
+      const st = standings(br, P, get);
+      poolCache[P] = st; return st;
+    }
+    function side(src) {
+      if (!src) return { known: true, id: null };
+      if ('e' in src) return { known: true, id: src.e };
+      if (src.p) {
+        const st = poolStanding(src.p);
+        if (!st.complete) return { known: false, hint: `Pool ${src.p} #${src.place}` };
+        const row = st.rows[src.place - 1];
+        return { known: true, id: row ? row.id : null };
+      }
+      const r = get(src.m);
+      if (!r || !DONE[r.status]) return { known: false, hint: `${src.t === 'W' ? 'Winner' : 'Loser'} ${src.m}` };
+      return { known: true, id: src.t === 'W' ? r.winner : r.loser };
+    }
+    function get(id) {
+      if (out[id]) return out[id];
+      const m = M[id]; if (!m) return null;
+      if (stack.has(id)) throw new Error('Cycle at ' + id);
+      stack.add(id);
+      let res;
+      if (m.reset) {
+        const g = get(m.reset);
+        if (!g || !DONE[g.status]) res = { status: 'pending', a: null, b: null, hintA: 'Grand final', hintB: 'if needed' };
+        else if (g.status === 'done' && g.winner === g.b && g.a && g.b) res = finish(id, g.a, g.b);
+        else res = { status: 'skip', a: null, b: null, winner: g.winner, loser: g.loser };
+      } else {
+        const sa = side(m.a), sb = side(m.b);
+        if (!sa.known || !sb.known) res = { status: 'pending', a: sa.known ? sa.id : null, b: sb.known ? sb.id : null, hintA: sa.hint, hintB: sb.hint };
+        else if (sa.id && sb.id) res = finish(id, sa.id, sb.id);
+        else if (sa.id || sb.id) res = { status: 'bye', a: sa.id, b: sb.id, winner: sa.id || sb.id, loser: null };
+        else res = { status: 'void', a: null, b: null, winner: null, loser: null };
+      }
+      stack.delete(id);
+      out[id] = res; return res;
+    }
+    function finish(id, a, b) {
+      const r = R[id];
+      if (r && (r.winnerId === a || r.winnerId === b)) return { status: 'done', a, b, winner: r.winnerId, loser: r.winnerId === a ? b : a, result: r };
+      return { status: 'ready', a, b, stale: !!(r && r.winnerId) };
+    }
+    Object.keys(M).forEach(get);
+    return out;
+  }
+
+  /** Pool standings. getRes: fn(matchId)->resolved */
+  function standings(br, P, getRes) {
+    const ids = (br.pools && br.pools[P]) || [];
+    const rows = Object.fromEntries(ids.map(id => [id, { id, w: 0, l: 0, pf: 0, pa: 0, played: 0 }]));
+    const pm = Object.values(br.matches).filter(m => m.stage === 'P' && m.pool === P);
+    let complete = true; const h2h = {};
+    for (const m of pm) {
+      const r = getRes ? getRes(m.id) : null;
+      if (!r || !DONE[r.status]) { complete = false; continue; }
+      if (r.status !== 'done') continue;
+      const res = r.result || {}, pts = res.pts || {};
+      const A = rows[r.a], B = rows[r.b];
+      if (!A || !B) continue;
+      A.played++; B.played++;
+      A.pf += +pts.a || 0; A.pa += +pts.b || 0; B.pf += +pts.b || 0; B.pa += +pts.a || 0;
+      rows[r.winner].w++; rows[r.loser].l++;
+      h2h[r.winner + '>' + r.loser] = true;
+    }
+    const tb = (br.tiebreak && br.tiebreak[P]) || [];
+    const list = Object.values(rows);
+    list.sort((x, y) => y.w - x.w);
+    // resolve ties inside equal-win groups
+    const outRows = []; let tie = false;
+    for (let i = 0; i < list.length;) {
+      let j = i; while (j < list.length && list[j].w === list[i].w) j++;
+      let grp = list.slice(i, j);
+      if (grp.length === 2 && (h2h[grp[1].id + '>' + grp[0].id] || h2h[grp[0].id + '>' + grp[1].id])) {
+        if (h2h[grp[1].id + '>' + grp[0].id]) grp = [grp[1], grp[0]];
+      } else if (grp.length > 1) {
+        grp.sort((x, y) => (y.pf - y.pa) - (x.pf - x.pa) || y.pf - x.pf || tbIdx(tb, x.id) - tbIdx(tb, y.id));
+        for (let q = 1; q < grp.length; q++) {
+          const x = grp[q - 1], y = grp[q];
+          if (x.pf - x.pa === y.pf - y.pa && x.pf === y.pf && tbIdx(tb, x.id) === tbIdx(tb, y.id)) { tie = true; x.tied = y.tied = true; }
+        }
+      }
+      outRows.push(...grp); i = j;
+    }
+    return { rows: outRows, complete, tie: complete && tie };
+  }
+  function tbIdx(tb, id) { const i = tb.indexOf(id); return i < 0 ? 999 : i; }
+
+  /** Final placings of a bracket: {complete, gold, silver, bronze:[], fourth} */
+  function placings(br, res) {
+    res = res || resolve(br);
+    const n = (br.entrants || []).length;
+    const out = { complete: false, gold: null, silver: null, bronze: [] };
+    if (n === 0) return out;
+    if (n === 1) { out.gold = br.entrants[0]; out.complete = true; return out; }
+    const allDone = Object.keys(br.matches).every(id => DONE[res[id].status]);
+    const fin = (id) => res[id] && DONE[res[id].status] ? res[id] : null;
+    if (br.format === 'RR' && !br.matches['PO-W1-0']) {
+      const P = Object.keys(br.pools)[0];
+      const st = standings(br, P, id => res[id]);
+      if (st.complete && !st.tie) {
+        out.gold = st.rows[0] ? st.rows[0].id : null; out.silver = st.rows[1] ? st.rows[1].id : null;
+        if (st.rows[2]) out.bronze = [st.rows[2].id];
+        out.complete = true;
+      }
+      out.tie = st.tie;
+      return out;
+    }
+    const P = br.format === 'RR' ? 'PO-' : '';
+    if (br.format === 'DE') {
+      const gf2 = fin('GF2'), gf = fin('GF');
+      const last = gf2 && gf2.status === 'done' ? gf2 : gf;
+      if (last && (!br.matches.GF2 || gf2)) {
+        out.gold = last.winner; out.silver = last.loser;
+        const lids = Object.keys(br.matches).filter(id => br.matches[id].stage === 'L');
+        if (lids.length) {
+          const maxR = Math.max(...lids.map(id => br.matches[id].round));
+          const lf = fin(`L${maxR}-0`);
+          if (lf && lf.loser) out.bronze = [lf.loser];
+        }
+      }
+    } else {
+      const ks = Object.values(br.matches).filter(m => (m.stage === 'W' || m.stage === 'PO'));
+      const k = Math.max(...ks.map(m => m.round));
+      const f = fin(`${P}W${k}-0`);
+      if (f) { out.gold = f.winner; out.silver = f.loser; }
+      if (br.bronze === 'match' && br.matches[`${P}B`]) {
+        const b = fin(`${P}B`); if (b && b.winner) { out.bronze = [b.winner]; out.fourth = b.loser; }
+      } else if (k >= 2) {
+        for (const id of [`${P}W${k - 1}-0`, `${P}W${k - 1}-1`]) { const s = fin(id); if (s && s.loser) out.bronze.push(s.loser); }
+      }
+    }
+    out.complete = allDone && !!out.gold;
+    return out;
+  }
+
+  /** Matches that can be fought now, in call order. */
+  function readyMatches(br, res) {
+    res = res || resolve(br);
+    const order = { P: 0, W: 1, L: 1, PO: 2, B: 3, GF: 4 };
+    return Object.values(br.matches).filter(m => res[m.id].status === 'ready')
+      .sort((x, y) => (order[x.stage] - order[y.stage]) || (x.round - y.round) || String(x.pool || '').localeCompare(String(y.pool || '')) || (x.idx - y.idx) || (x.stage === 'L') - (y.stage === 'L'));
+  }
+  /** Can the result of this match be changed? Not if any downstream match that uses it already has a result. */
+  function canEdit(br, matchId, res) {
+    res = res || resolve(br);
+    const m0 = br.matches[matchId];
+    for (const m of Object.values(br.matches)) {
+      const uses = (m.a && m.a.m === matchId) || (m.b && m.b.m === matchId) || m.reset === matchId ||
+        (m0.stage === 'P' && ((m.a && m.a.p === m0.pool) || (m.b && m.b.p === m0.pool)));
+      if (uses && res[m.id] && (res[m.id].status === 'done')) return false;
+    }
+    return true;
+  }
+  function matchLabel(m, br) {
+    if (!m) return '';
+    if (m.stage === 'P') return `Pool ${m.pool} · Round ${m.round}`;
+    if (m.stage === 'GF') return m.reset ? 'Grand final (reset)' : 'Grand final';
+    if (m.stage === 'B') return 'Bronze match';
+    if (m.stage === 'L') return `Repechage R${m.round}`;
+    const k = m.rounds || Math.max(...Object.values(br.matches).filter(x => x.stage === m.stage).map(x => x.round));
+    const pre = m.stage === 'PO' ? 'Playoff ' : '';
+    const left = k - m.round;
+    if (left === 0) return pre + (br.format === 'DE' ? 'Winners final' : 'Final');
+    if (left === 1) return pre + 'Semi-final';
+    if (left === 2) return pre + 'Quarter-final';
+    return `${pre}Round ${m.round}`;
+  }
+
+  /* ---------- WTKF-style scoring ---------- */
+  const PTS = { ippon: 8, waza: 4, keikoku: 2, chui: 4 };
+  const OTHER = { a: 'b', b: 'a' };
+  /**
+   * Evaluate a kumite bout from its event log.
+   * log: [{s:'a'|'b', t:'waza'|'ippon'|'keikoku'|'chui'|'hansoku'|'kiken'|'hantei'} | {t:'timeup'|'ketteiend'}]
+   * opts: {allowDraw, kettei:boolean}
+   */
+  function kumiteEval(log, opts) {
+    opts = opts || {};
+    const st = { a: { ippon: 0, waza: 0, keikoku: 0, chui: 0 }, b: { ippon: 0, waza: 0, keikoku: 0, chui: 0 } };
+    let phase = 'regular', done = false, winner = null, method = null;
+    const tech = s => st[s].ippon * PTS.ippon + st[s].waza * PTS.waza;
+    const pen = s => st[s].keikoku * PTS.keikoku + st[s].chui * PTS.chui;
+    const score = s => tech(s) + pen(OTHER[s]);
+    const end = (w, how) => { done = true; winner = w; method = how; };
+    for (const ev of log || []) {
+      if (done) break;
+      const s = ev.s;
+      switch (ev.t) {
+        case 'waza': case 'ippon': case 'keikoku': case 'chui': {
+          st[s][ev.t]++;
+          const scorer = (ev.t === 'waza' || ev.t === 'ippon') ? s : OTHER[s];
+          if (st[scorer].ippon >= 1) end(scorer, 'Ippon');
+          else if (st[scorer].waza >= 2) end(scorer, 'Awasete Ippon');
+          else if (phase === 'kettei') end(scorer, 'Kettei-sen');
+          break;
+        }
+        case 'hansoku': end(OTHER[s], 'Hansoku'); break;
+        case 'kiken': end(OTHER[s], 'Kiken'); break;
+        case 'hantei': if (phase === 'hantei') end(s, 'Hantei'); break;
+        case 'timeup':
+          if (phase !== 'regular') break;
+          if (score('a') !== score('b')) end(score('a') > score('b') ? 'a' : 'b', 'Points');
+          else if (opts.allowDraw) { done = true; winner = null; method = 'Hikiwake (draw)'; }
+          else if (opts.kettei !== false) phase = 'kettei';
+          else if (pen('a') !== pen('b')) end(pen('a') < pen('b') ? 'a' : 'b', 'Fewer penalties');
+          else phase = 'hantei';
+          break;
+        case 'ketteiend':
+          if (phase !== 'kettei') break;
+          if (pen('a') !== pen('b')) end(pen('a') < pen('b') ? 'a' : 'b', 'Fewer penalties');
+          else phase = 'hantei';
+          break;
+      }
+    }
+    return { done, winner, method, phase: done ? 'done' : phase, score: { a: score('a'), b: score('b') }, st };
+  }
+  function flagsEval(aFlags, judges) {
+    const j = +judges || 5, a = +aFlags;
+    if (!(a >= 0 && a <= j) || j % 2 === 0) return { done: false };
+    return { done: true, winner: a > j / 2 ? 'a' : 'b', method: `Flags ${Math.max(a, j - a)}–${Math.min(a, j - a)}`, score: { a, b: j - a } };
+  }
+  function scoreTotal(arr, judges) {
+    const v = (arr || []).slice(0, judges).map(Number);
+    if (v.length !== +judges || v.some(x => !(x >= 0 && x <= 10))) return null;
+    const sorted = v.slice().sort((x, y) => x - y);
+    const kept = +judges >= 5 ? sorted.slice(1, -1) : sorted;
+    const total = Math.round(kept.reduce((s, x) => s + x, 0) * 100) / 100;
+    const all = Math.round(v.reduce((s, x) => s + x, 0) * 100) / 100;
+    return { total, all, hi: sorted[sorted.length - 1], lo: sorted[0] };
+  }
+  /** Compare two score sheets; tie → needs flags ('tieFlags' param as aFlags). */
+  function scoresEval(aArr, bArr, judges, tieFlags) {
+    const A = scoreTotal(aArr, judges), B = scoreTotal(bArr, judges);
+    if (!A || !B) return { done: false };
+    const cmp = (A.total - B.total) || (A.all - B.all) || (A.hi - B.hi) || (A.lo - B.lo);
+    if (cmp !== 0) return { done: true, winner: cmp > 0 ? 'a' : 'b', method: `Score ${A.total.toFixed(1)}–${B.total.toFixed(1)}`, score: { a: A.total, b: B.total } };
+    if (tieFlags != null && tieFlags !== '') {
+      const f = flagsEval(tieFlags, judges);
+      if (f.done) return { done: true, winner: f.winner, method: `Tie ${A.total.toFixed(1)}, ${f.method}`, score: { a: A.total, b: B.total } };
+    }
+    return { done: false, tie: true, score: { a: A.total, b: B.total } };
+  }
+  /** Team kumite: bouts [{log}], daihyo {log} */
+  function teamKumiteEval(bouts, nBouts, daihyo) {
+    let wa = 0, wb = 0, pa = 0, pb = 0, complete = 0;
+    const per = [];
+    for (let i = 0; i < nBouts; i++) {
+      const r = kumiteEval((bouts[i] || {}).log, { allowDraw: true });
+      per.push(r);
+      if (r.done) { complete++; pa += r.score.a; pb += r.score.b; if (r.winner === 'a') wa++; else if (r.winner === 'b') wb++; }
+    }
+    const res = { per, wins: { a: wa, b: wb }, pts: { a: pa, b: pb }, done: false };
+    // early decision: majority of bouts already won
+    const need = Math.floor(nBouts / 2) + 1;
+    if (wa >= need || wb >= need) return Object.assign(res, { done: true, winner: wa > wb ? 'a' : 'b', method: `Bouts ${Math.max(wa, wb)}–${Math.min(wa, wb)}` });
+    if (complete < nBouts) return res;
+    if (wa !== wb) return Object.assign(res, { done: true, winner: wa > wb ? 'a' : 'b', method: `Bouts ${Math.max(wa, wb)}–${Math.min(wa, wb)}` });
+    if (pa !== pb) return Object.assign(res, { done: true, winner: pa > pb ? 'a' : 'b', method: `Bouts ${wa}–${wb}, points ${Math.max(pa, pb)}–${Math.min(pa, pb)}` });
+    const d = kumiteEval((daihyo || {}).log, {});
+    res.daihyo = d; res.needDaihyo = true;
+    if (d.done) return Object.assign(res, { done: true, winner: d.winner, method: 'Daihyo-sen · ' + d.method });
+    return res;
+  }
+  /** Fukugo: kata flags + kumite log; split → hantei side. */
+  function fukugoEval(kataFlags, judges, kumiteLog, hanteiSide) {
+    const k = flagsEval(kataFlags, judges), c = kumiteEval(kumiteLog, {});
+    const res = { kata: k, kumite: c, done: false };
+    if (!k.done || !c.done) return res;
+    if (k.winner === c.winner) return Object.assign(res, { done: true, winner: k.winner, method: 'Won kata & kumite', score: { a: (k.winner === 'a' ? 2 : 0), b: (k.winner === 'b' ? 2 : 0) } });
+    res.split = true;
+    if (hanteiSide === 'a' || hanteiSide === 'b') return Object.assign(res, { done: true, winner: hanteiSide, method: 'Split · Hantei', score: { a: 1, b: 1 } });
+    return res;
+  }
+
+  /* ---------- medals ---------- */
+  function medalTable(list) {
+    // list: [{dojo, place:'gold'|'silver'|'bronze'}]
+    const t = {};
+    for (const x of list) {
+      const k = x.dojo || '—';
+      t[k] = t[k] || { dojo: k, gold: 0, silver: 0, bronze: 0 };
+      t[k][x.place]++;
+    }
+    return Object.values(t).sort((a, b) => b.gold - a.gold || b.silver - a.silver || b.bronze - a.bronze || a.dojo.localeCompare(b.dojo));
+  }
+
+  function csvEscape(v) { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+  function toCSV(rows) { return rows.map(r => r.map(csvEscape).join(',')).join('\n'); }
+
+  return {
+    VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
+    ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions,
+    fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
+    seedOrder, nextPow2, orderEntrants, placeSlots, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
+    kumiteEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoEval, medalTable, toCSV, PTS,
+  };
+})();
+if (typeof module !== 'undefined' && module.exports) module.exports = KT;
+(function () {
+'use strict';
+/* ===== core: helpers, stores, state, roles ===== */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const clone = o => JSON.parse(JSON.stringify(o));
+const fmtDate = d => { if (!d) return ''; const [y, m, dd] = d.split('-').map(Number); return new Date(y, m - 1, dd).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); };
+const plural = (n, w, ws) => `${n} ${n === 1 ? w : (ws || w + 's')}`;
+function deepMerge(t, p) {
+  for (const k of Object.keys(p)) {
+    const v = p[k];
+    if (v && typeof v === 'object' && !Array.isArray(v) && t[k] && typeof t[k] === 'object' && !Array.isArray(t[k])) t[k] = deepMerge(Object.assign({}, t[k]), v);
+    else t[k] = v && typeof v === 'object' ? clone(v) : v;
+  }
+  return t;
+}
+
+/* ---------- stores ---------- */
+function LocalStore() {
+  const KEY = 'kt-local-v1';
+  let docs = {};
+  const load = () => { try { docs = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { docs = {}; } };
+  load();
+  const listeners = new Set();
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(docs)); } catch (e) { /* storage blocked: keep in memory */ } };
+  const parent = p => p.split('/').slice(0, -1).join('/');
+  let pending = false;
+  const notify = () => { if (pending) return; pending = true; setTimeout(() => { pending = false; listeners.forEach(l => l.fire()); }, 0); };
+  try { window.addEventListener('storage', e => { if (e.key === KEY) { load(); notify(); } }); } catch (e) { /* ignore */ }
+  return {
+    mode: 'local',
+    watch(col, cb) {
+      const l = { fire() { const o = {}; for (const p in docs) if (parent(p) === col) { const id = p.split('/').pop(); o[id] = Object.assign({}, clone(docs[p]), { id }); } cb(o); } };
+      listeners.add(l); setTimeout(() => l.fire(), 0);
+      return () => listeners.delete(l);
+    },
+    async set(p, d) { docs[p] = clone(d); save(); notify(); },
+    async update(p, d) { if (!docs[p]) throw { code: 'invalid_argument', message: 'Document does not exist' }; docs[p] = deepMerge(Object.assign({}, docs[p]), d); save(); notify(); },
+    async del(p) { delete docs[p]; save(); notify(); },
+    async get(p) { return docs[p] ? clone(docs[p]) : null; },
+  };
+}
+function CloudStore(db) {
+  const chain = {};
+  const run = (p, fn) => { const next = (chain[p] || Promise.resolve()).catch(() => {}).then(fn); chain[p] = next; return next; };
+  const retry = async fn => {
+    try { return await fn(); } catch (e) {
+      if (e && e.code === 'unavailable') { await new Promise(r => setTimeout(r, 400 + Math.random() * 600)); return fn(); }
+      throw e;
+    }
+  };
+  return {
+    mode: 'cloud',
+    watch(col, cb, onErr) {
+      return db.collection(col).onSnapshot(s => {
+        const o = {}; s.docs.forEach(d => { o[d.id] = Object.assign({}, d.data(), { id: d.id }); }); cb(o);
+      }, e => { if (onErr) onErr(e); });
+    },
+    set: (p, d) => run(p, () => retry(() => db.doc(p).set(d))),
+    update: (p, d) => run(p, () => retry(() => db.doc(p).update(d))),
+    del: p => run(p, () => retry(() => db.doc(p).delete())),
+    async get(p) { const s = await db.doc(p).get(); return s.exists ? s.data() : null; },
+  };
+}
+
+/* ---------- state ---------- */
+const S = {
+  store: null, user: null, downloads: null, myId: null, isDirector: false, canWrite: null, readOnly: false,
+  events: {}, evId: null, loadedEvents: false,
+  d: { competitors: {}, pv: {}, teams: {}, divisions: {}, rings: {}, sessions: {}, brackets: {}, attendance: {}, ringstate: {} },
+  loaded: {}, unsub: [],
+  ui: { tab: 'overview', q: '', filter: 'all', bracketDiv: '', ring: '', session: '', divFilter: '', simRole: 'director', simRing: '' },
+  draft: {}, profiles: {},
+};
+function readUIPrefs() { try { const p = JSON.parse(localStorage.getItem('kt-ui') || '{}'); if (p.simRole) S.ui.simRole = p.simRole; if (p.simRing) S.ui.simRing = p.simRing; if (p.evId) S.lastEv = p.evId; } catch (e) { /* ignore */ } }
+function saveUIPrefs() { try { localStorage.setItem('kt-ui', JSON.stringify({ simRole: S.ui.simRole, simRing: S.ui.simRing, evId: S.evId })); } catch (e) { /* ignore */ } }
+
+const P = {
+  event: e => `events/${e}`,
+  col: (e, c) => `events/${e}/${c}`,
+  doc: (e, c, id) => `events/${e}/${c}/${id}`,
+  pvCol: e => `pv/${e}/competitors`,
+  pv: (e, id) => `pv/${e}/competitors/${id}`,
+  liveCol: (e, c) => `live/${e}/${c}`,
+  live: (e, c, id) => `live/${e}/${c}/${id}`,
+};
+
+/* ---------- roles ---------- */
+function isLocal() { return S.store && S.store.mode === 'local'; }
+function role() {
+  if (isLocal()) return S.ui.simRole;
+  if (S.isDirector) return 'director';
+  if (!S.myId) return 'viewer';
+  if (myRingIds().length || isStaff()) return 'manager';
+  return 'viewer';
+}
+function isDirector() { return role() === 'director'; }
+function myRingIds() {
+  if (isLocal()) {
+    if (S.ui.simRole === 'director') return Object.keys(S.d.rings);
+    return S.ui.simRole === 'manager' && S.ui.simRing ? [S.ui.simRing] : [];
+  }
+  if (S.isDirector) return Object.keys(S.d.rings);
+  return Object.values(S.d.rings).filter(r => (r.managerIds || []).includes(S.myId)).map(r => r.id);
+}
+function isStaff() {
+  const ev = curEvent(); if (!ev) return false;
+  if (isLocal()) return S.ui.simRole !== 'viewer';
+  return S.isDirector || (!!S.myId && (ev.staffIds || []).includes(S.myId));
+}
+function canScoreDiv(did) {
+  if (S.readOnly) return false;
+  if (isDirector()) return true;
+  const dv = S.d.divisions[did];
+  return !!dv && role() === 'manager' && myRingIds().includes(dv.ringId);
+}
+function curEvent() { return S.evId ? S.events[S.evId] : null; }
+const ROLE_LABEL = { director: 'Director', manager: 'Ring manager', viewer: 'Spectator' };
+
+/* ---------- derived data ---------- */
+const GROUP_ORDER = { Senior: 0, Youth: 1, Junior: 2, Cadet: 3 };
+function divSort(a, b) {
+  return KT.EVENT_ORDER.indexOf(a.eventType) - KT.EVENT_ORDER.indexOf(b.eventType) || (a.belt === b.belt ? 0 : a.belt === 'black' ? -1 : 1)
+    || (GROUP_ORDER[a.group] ?? 9) - (GROUP_ORDER[b.group] ?? 9) || String(a.group || '').localeCompare(String(b.group || '')) || String(a.gender).localeCompare(String(b.gender)) || String(a.name).localeCompare(String(b.name));
+}
+let DC = null; // derived cache per render
+function derive() {
+  const ev = curEvent();
+  const asOf = ev ? (ev.ageAsOf || ev.startDate || todayISO()) : todayISO();
+  const comps = Object.values(S.d.competitors).map(c => S.d.pv[c.id] ? Object.assign({}, c, S.d.pv[c.id], { id: c.id }) : c);
+  const compBy = Object.fromEntries(comps.map(c => [c.id, c]));
+  const teams = Object.values(S.d.teams);
+  const teamBy = Object.fromEntries(teams.map(t => [t.id, t]));
+  const divs = Object.values(S.d.divisions).sort(divSort);
+  const divBy = Object.fromEntries(divs.map(d => [d.id, d]));
+  const rings = Object.values(S.d.rings).sort((a, b) => (a.order || 0) - (b.order || 0) || String(a.name).localeCompare(String(b.name)));
+  const assign = KT.assignEntrants(comps, teams, divs, asOf);
+  const res = {}, pl = {};
+  for (const did in S.d.brackets) {
+    const br = S.d.brackets[did];
+    try { res[did] = KT.resolve(br); pl[did] = KT.placings(br, res[did]); } catch (e) { res[did] = {}; pl[did] = { complete: false, bronze: [] }; console.error(e); }
+  }
+  DC = { ev, asOf, comps, compBy, teams, teamBy, divs, divBy, rings, assign, res, pl };
+  return DC;
+}
+function entName(id) {
+  if (!id) return '';
+  const c = DC.compBy[id]; if (c) return `${c.lastName || ''}, ${c.firstName || ''}`.replace(/^, |, $/g, '');
+  const t = DC.teamBy[id]; if (t) return t.name || 'Team';
+  return 'Withdrawn entrant';
+}
+function entDojo(id) {
+  const c = DC.compBy[id]; if (c) return c.dojo || '';
+  const t = DC.teamBy[id]; if (!t) return '';
+  if (t.dojo) return t.dojo;
+  const ds = [...new Set((t.memberIds || []).map(m => DC.compBy[m] && DC.compBy[m].dojo).filter(Boolean))];
+  return ds.length === 1 ? ds[0] : ds.length ? 'Combined team' : '';
+}
+function divEntrants(did) { return (DC.assign.byDiv[did] || []); }
+function bracketState(did) {
+  const br = S.d.brackets[did];
+  if (!br) return { drawn: false };
+  const res = DC.res[did] || {};
+  const ids = Object.keys(br.matches || {});
+  const fought = ids.filter(id => res[id] && res[id].status === 'done').length;
+  const playable = ids.filter(id => res[id] && !['bye', 'void', 'skip'].includes(res[id].status)).length;
+  const cur = divEntrants(did).slice().sort().join('|'), was = (br.entrants || []).slice().sort().join('|');
+  return { drawn: true, fought, playable, complete: DC.pl[did] && DC.pl[did].complete, changed: cur !== was, results: Object.values(br.results || {}).some(Boolean) };
+}
+function kindOf(dv) { return (KT.EVENT_TYPES[dv.eventType] || {}).kind; }
+function scoringOf(dv) { return Object.assign(KT.defaultScoring(dv.eventType), dv.scoring || {}); }
+function scoringLabel(dv) {
+  const s = scoringOf(dv), k = kindOf(dv);
+  if (k === 'kata') return s.method === 'scores' ? `Scores · ${s.judges} judges` : `Flags · ${s.judges} judges`;
+  if (k === 'kumite') return `Shobu ippon · ${fmtClock(s.boutTime)}`;
+  if (k === 'teamkumite') return `${s.bouts} bouts · ${fmtClock(s.boutTime)}`;
+  if (k === 'fukugo') return `Kata flags + kumite`;
+  return '';
+}
+function fmtClock(sec) { sec = Math.max(0, Math.round(sec)); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
+function parseRank(s) {
+  if (!s) return '';
+  s = String(s).trim().toLowerCase();
+  if (/^[kd]\d{1,2}$/.test(s)) return s;
+  const words = { shodan: 'd1', nidan: 'd2', sandan: 'd3', yondan: 'd4', godan: 'd5', rokudan: 'd6', nanadan: 'd7', hachidan: 'd8', kudan: 'd9', judan: 'd10' };
+  if (words[s]) return words[s];
+  const m = s.match(/(\d{1,2})\s*(st|nd|rd|th)?\s*(kyu|dan)/);
+  if (m) return (m[3] === 'kyu' ? 'k' : 'd') + (+m[1]);
+  return '';
+}
+
+/* ---------- UI primitives ---------- */
+let toastT = null;
+function toast(msg, bad) {
+  let el = $('#toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; document.body.appendChild(el); }
+  el.className = 'toast' + (bad ? ' bad' : ''); el.textContent = msg; el.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, bad ? 5200 : 2600);
+}
+function errMsg(e) {
+  const c = e && e.code;
+  if (c === 'invalid_argument') return 'You do not have permission to change this, or the data was not accepted.';
+  if (c === 'quota_exceeded') return 'The database is full. Delete an old event to free space.';
+  if (c === 'resource_exhausted') return 'Too many changes at once. Wait a moment and try again.';
+  if (c === 'revoked') return 'Your access to this page changed. Reload to continue.';
+  return (e && e.message) || 'Could not save. Check your connection and try again.';
+}
+async function guard(fn, okMsg) {
+  try { const r = await fn(); if (okMsg) toast(okMsg); return r === undefined ? true : r; } catch (e) { console.error(e); toast(errMsg(e), true); return undefined; }
+}
+function openModal(html, opts) {
+  const host = $('#modal');
+  host.innerHTML = `<div class="scrim" data-act="modal-scrim"><div class="sheet ${opts && opts.wide ? 'wide' : ''}" role="dialog" aria-modal="true">${html}</div></div>`;
+  host.hidden = false;
+  const f = host.querySelector('[autofocus]') || host.querySelector('input,select,textarea,button:not(.ghost)');
+  if (f && !(opts && opts.nofocus)) setTimeout(() => f.focus(), 30);
+}
+function closeModal() { const host = $('#modal'); host.hidden = true; host.innerHTML = ''; S.modal = null; stopClock(); }
+function sheet(title, body, foot, sub) {
+  return `<div class="sheet-h"><div><h2>${title}</h2>${sub ? `<div class="small muted">${sub}</div>` : ''}</div><button class="ghost" data-act="modal-close" aria-label="Close">✕</button></div>
+    <div class="sheet-b">${body}</div>${foot ? `<div class="sheet-f">${foot}</div>` : ''}`;
+}
+let confirmResolve = null;
+function confirmBox(msg, ok, danger) {
+  return new Promise(res => {
+    confirmResolve = res;
+    const host = $('#confirm');
+    host.innerHTML = `<div class="scrim"><div class="sheet" role="alertdialog" aria-modal="true"><div class="sheet-b"><p>${esc(msg)}</p></div>
+      <div class="sheet-f"><button data-act="confirm-no">Cancel</button><button class="${danger ? 'danger' : 'primary'}" data-act="confirm-yes" autofocus>${esc(ok || 'OK')}</button></div></div></div>`;
+    host.hidden = false; setTimeout(() => { const b = host.querySelector('[data-act="confirm-yes"]'); if (b) b.focus(); }, 30);
+  });
+}
+function confirmDone(v) { const host = $('#confirm'); host.hidden = true; host.innerHTML = ''; if (confirmResolve) { const r = confirmResolve; confirmResolve = null; r(v); } }
+async function saveFile(filename, text) {
+  if (S.downloads) {
+    try { await S.downloads.save({ filename, data: text }); return; } catch (e) { if (e && e.code === 'declined') return; }
+  }
+  openModal(sheet('Copy export', `<p class="small muted">Downloads are not available here. Copy the text below into a file named ${esc(filename)}.</p><textarea id="export-text" rows="14" readonly>${esc(text)}</textarea>`,
+    `<button data-act="copy-export">Copy</button><button class="primary" data-act="modal-close">Done</button>`));
+}
+function fd(form) {
+  const o = {};
+  for (const el of form.elements) {
+    if (!el.name) continue;
+    if (el.type === 'checkbox') { if (el.dataset.multi) { o[el.name] = o[el.name] || []; if (el.checked) o[el.name].push(el.value); } else o[el.name] = el.checked; }
+    else if (el.type === 'radio') { if (el.checked) o[el.name] = el.value; }
+    else if (el.multiple) o[el.name] = Array.from(el.selectedOptions).map(x => x.value);
+    else o[el.name] = el.value.trim();
+  }
+  return o;
+}
+const opt = (v, label, sel) => `<option value="${esc(v)}" ${String(v) === String(sel) ? 'selected' : ''}>${esc(label)}</option>`;
+const rankOptions = sel => `<option value="">Select rank…</option>` + KT.RANKS.map(r => opt(r.code, r.label, sel)).join('');
+function personChip(id) {
+  const p = S.profiles[id] || {};
+  return `<span class="person">${p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" alt="">` : ''}<span>${esc(p.name || 'Team member')}</span></span>`;
+}
+async function refreshProfiles(ids) {
+  if (!S.user || !ids.length) return;
+  const missing = ids.filter(id => !S.profiles[id]);
+  try { const ps = await S.user.profiles(ids); let changed = false; for (const id of ids) { if (ps[id] && (!S.profiles[id] || S.profiles[id].name !== ps[id].name)) { S.profiles[id] = ps[id]; changed = true; } } if (changed && missing.length) render(); } catch (e) { /* never rejects */ }
+}
+/* ===== Firebase (Firestore + Google sign-in) — used by the Vercel build ===== */
+const FB = { on: false, auth: null, fs: null, user: null, needSignIn: false, bootstrapOpen: false, users: null, usersAt: 0, cache: {} };
+function fbErr(e) {
+  const c = e && e.code;
+  if (c === 'permission-denied') return { code: 'invalid_argument', message: 'You do not have permission to change this.' };
+  if (c === 'resource-exhausted') return { code: 'resource_exhausted', message: e.message };
+  if (c === 'unavailable' || c === 'deadline-exceeded') return { code: 'unavailable', message: e.message };
+  return e;
+}
+function FirestoreStore(fs) {
+  const chain = {};
+  const run = (p, fn) => { const next = (chain[p] || Promise.resolve()).catch(() => {}).then(fn); chain[p] = next; return next; };
+  const wrap = pr => pr.catch(e => { throw fbErr(e); });
+  return {
+    mode: 'firebase',
+    watch(col, cb, onErr) {
+      return fs.collection(col).onSnapshot(s => { const o = {}; s.docs.forEach(d => { o[d.id] = Object.assign({}, d.data(), { id: d.id }); }); cb(o); }, e => { if (onErr) onErr(fbErr(e)); });
+    },
+    set: (p, d) => run(p, () => wrap(fs.doc(p).set(d))),
+    // Firestore update() replaces nested maps; set(merge) deep-merges like the claude.ai store
+    update: (p, d) => run(p, () => wrap(fs.doc(p).set(d, { merge: true }))),
+    del: p => run(p, () => wrap(fs.doc(p).delete())),
+    async get(p) { const s = await fs.doc(p).get(); return s.exists ? s.data() : null; },
+  };
+}
+function fbUserShim(fs) {
+  const toProfile = (id, u) => ({ id, name: (u && (u.name || u.email)) || '', avatarUrl: (u && u.photo) || '', email: (u && u.email) || null, isMe: id === FB.user.uid, guest: false });
+  return {
+    async profiles(ids) {
+      const out = {};
+      await Promise.all([].concat(ids).map(async id => {
+        if (!(id in FB.cache)) { try { const s = await fs.doc('users/' + id).get(); FB.cache[id] = s.exists ? s.data() : null; } catch (e) { FB.cache[id] = null; } }
+        out[id] = toProfile(id, FB.cache[id]);
+      }));
+      return out;
+    },
+    async search(q) {
+      if (!FB.users || Date.now() - FB.usersAt > 30000) {
+        try { const s = await fs.collection('users').get(); FB.users = s.docs.map(d => Object.assign({ id: d.id }, d.data())); FB.usersAt = Date.now(); FB.users.forEach(u => { FB.cache[u.id] = u; }); } catch (e) { FB.users = []; }
+      }
+      q = String(q || '').toLowerCase();
+      return FB.users.filter(u => !q || (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)).slice(0, 8).map(u => toProfile(u.id, u));
+    },
+  };
+}
+async function initFirebase(cfg) {
+  firebase.initializeApp(cfg);
+  FB.on = true; FB.auth = firebase.auth(); FB.fs = firebase.firestore();
+  try { FB.fs.settings({ ignoreUndefinedProperties: true }); } catch (e) { /* ignore */ }
+  const user = await new Promise(res => { const off = FB.auth.onAuthStateChanged(u => { off(); res(u); }); });
+  if (!user) { FB.needSignIn = true; S.store = { mode: 'firebase' }; render(); return false; }
+  FB.user = user;
+  await FB.fs.doc('users/' + user.uid).set({ name: user.displayName || '', email: user.email || '', photo: user.photoURL || '', seenAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+  const roleDoc = await FB.fs.doc('roles/' + user.uid).get().catch(() => null);
+  S.isDirector = !!(roleDoc && roleDoc.exists && roleDoc.data().role === 'director');
+  if (!S.isDirector) { const b = await FB.fs.doc('meta/bootstrap').get().catch(() => null); FB.bootstrapOpen = !(b && b.exists); }
+  S.store = FirestoreStore(FB.fs); S.user = fbUserShim(FB.fs); S.myId = user.uid; S.canWrite = null;
+  return true;
+}
+async function fbSignIn() { try { await FB.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); location.reload(); } catch (e) { toast(e.message || 'Sign-in failed', true); } }
+async function fbSignOut() { await FB.auth.signOut(); location.reload(); }
+async function fbClaimDirector() {
+  const b = FB.fs.batch();
+  b.set(FB.fs.doc('roles/' + FB.user.uid), { role: 'director', at: new Date().toISOString() });
+  b.set(FB.fs.doc('meta/bootstrap'), { by: FB.user.uid, at: new Date().toISOString() });
+  try { await b.commit(); location.reload(); } catch (e) { toast('Someone has already set up this tracker. Ask a director for access.', true); FB.bootstrapOpen = false; render(); }
+}
+async function accessForm() {
+  const users = await S.user.search('');
+  const roles = {};
+  await Promise.all(users.map(async u => { const r = await FB.fs.doc('roles/' + u.id).get().catch(() => null); roles[u.id] = r && r.exists ? r.data().role : ''; }));
+  openModal(sheet('Directors', `<p class="small muted">People appear here after they sign in once. Directors have full control of every event. Ring managers are assigned per ring on the Rings tab.</p>
+    <div class="stack" style="gap:6px">${users.map(u => `<label class="row between"><span>${u.avatarUrl ? `<img src="${esc(u.avatarUrl)}" alt="" width="22" height="22" style="border-radius:50%;vertical-align:middle"> ` : ''}${esc(u.name)} <span class="muted small">${esc(u.email || '')}</span></span>
+      <input type="checkbox" data-change="fb-role" data-uid="${esc(u.id)}" ${roles[u.id] === 'director' ? 'checked' : ''} ${u.id === FB.user.uid ? 'disabled' : ''} aria-label="Director"></label>`).join('')}</div>`, '<button class="primary" data-act="modal-close">Done</button>'));
+}
+function fbBarBits() {
+  if (!FB.on || !FB.user) return '';
+  return `<button class="sm ghost" style="color:#fff" data-act="fb-signout" title="${esc(FB.user.email || '')}">Sign out</button>`;
+}
+function fbHomeBits() {
+  if (!FB.on) return '';
+  let h = '';
+  if (FB.bootstrapOpen && !S.isDirector) h += `<div class="card stack"><h3>Set up this tracker</h3><p class="small muted">No director has been set up yet. The first person to claim the role becomes the tournament director and can add other directors later.</p><div><button class="primary" data-act="fb-claim">Become director</button></div></div>`;
+  if (S.isDirector) h += `<div class="row"><button class="sm" data-act="fb-access">Manage directors</button></div>`;
+  return h;
+}
+function fbSignInHTML() {
+  return `<div class="card empty" style="margin-top:40px"><div class="mark-lg"></div><h2>Sign in to continue</h2><p class="muted" style="max-width:48ch">Directors, ring managers and spectators sign in with a Google account. What you can change depends on the role the tournament director gives you.</p><button class="primary" data-act="fb-signin">Sign in with Google</button></div>`;
+}
+/* ===== views ===== */
+let rq = false;
+function render() { if (rq) return; rq = true; setTimeout(() => { rq = false; doRender(); }, 0); }
+function doRender() {
+  derive();
+  const ae = document.activeElement, aid = ae && ae.id && !$('#modal').contains(ae) ? ae.id : null;
+  const sel = aid && ae.selectionStart != null ? [ae.selectionStart, ae.selectionEnd] : null;
+  $('#bar').innerHTML = barHTML();
+  const bar = $('#bar'); document.documentElement.style.setProperty('--barh', bar.offsetHeight + 'px');
+  $('#tabs').innerHTML = tabsHTML();
+  $('#tabs').hidden = !S.evId;
+  if (S.lastTab !== S.ui.tab) { S.lastTab = S.ui.tab; const t = $('.tab[aria-selected="true"]'); if (t && t.scrollIntoView) try { t.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { /* ignore */ } }
+  $('#main').innerHTML = mainHTML();
+  if (aid) { const el = document.getElementById(aid); if (el) { el.focus(); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) { /* ignore */ } } }
+  if (S.modal && S.modal.refresh) S.modal.refresh();
+  const ids = new Set(); DC.rings.forEach(r => (r.managerIds || []).forEach(i => ids.add(i))); const ev = curEvent(); if (ev) (ev.staffIds || []).forEach(i => ids.add(i));
+  if (ids.size) refreshProfiles([...ids]);
+}
+function barHTML() {
+  const ev = curEvent(), r = role();
+  if (FB.needSignIn) return `<div class="bar-in"><span class="brand"><span class="mark"></span><span><b>Karate Event Tracker</b><small>v${KT.VERSION}</small></span></span></div>`;
+  const mode = !S.store ? `<span class="chip"><span class="dot"></span>Connecting…</span>` : isLocal()
+    ? `<span class="chip" title="Data stays in this browser only">Local mode</span>` : `<span class="chip" title="Shared live database"><span class="dot" style="color:#6fcf97"></span>Live</span>`;
+  let roleCtl = `<span class="chip">${ROLE_LABEL[r]}</span>`;
+  if (isLocal()) {
+    roleCtl = `<select id="sim-role" aria-label="View as" data-change="sim-role">${opt('director', 'View as Director', r)}${opt('manager', 'View as Ring manager', r)}${opt('viewer', 'View as Spectator', r)}</select>`;
+    if (r === 'manager' && ev) roleCtl += `<select id="sim-ring" aria-label="Manager of ring" data-change="sim-ring">${opt('', 'Pick ring…', S.ui.simRing)}${DC.rings.map(x => opt(x.id, x.name, S.ui.simRing)).join('')}</select>`;
+  }
+  return `<div class="bar-in">
+    <button class="brand" data-act="home" aria-label="All events"><span class="mark"></span><span><b>Karate Event Tracker</b><small>${ev ? esc(ev.name) : 'v' + KT.VERSION}</small></span></button>
+    <span class="spacer"></span>${mode}${roleCtl}${fbBarBits()}</div>`;
+}
+function tabsFor() {
+  const ev = curEvent(); if (!ev) return [];
+  const r = role();
+  if (ev.kind === 'tournament') {
+    const t = [['overview', 'Overview'], ['competitors', 'Competitors'], ['teams', 'Teams'], ['divisions', 'Divisions'], ['rings', 'Rings'], ['mat', 'Mat'], ['brackets', 'Brackets'], ['results', 'Results']];
+    if (r === 'director') return t;
+    return t.filter(([k]) => ['overview', 'competitors', 'mat', 'brackets', 'results'].includes(k));
+  }
+  const t = [['overview', 'Overview'], ['competitors', 'Participants'], ['sessions', 'Sessions'], ['attendance', 'Attendance']];
+  if (r === 'director') t.push(['staff', 'Staff']);
+  return t;
+}
+function tabsHTML() {
+  const t = tabsFor();
+  if (t.length && !t.some(x => x[0] === S.ui.tab)) S.ui.tab = t[0][0];
+  return `<div class="tabs-in" role="tablist">${t.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${S.ui.tab === k}" data-act="tab" data-v="${k}">${l}</button>`).join('')}</div>`;
+}
+function mainHTML() {
+  if (FB.needSignIn) return fbSignInHTML();
+  if (!S.store) return `<div class="empty"><div class="mark-lg"></div><p>Connecting to the event database…</p></div>`;
+  if (!S.evId) return homeHTML();
+  const ev = curEvent();
+  if (!ev) return `<div class="empty"><p>This event is no longer available.</p><button data-act="home">All events</button></div>`;
+  const v = { overview: overviewHTML, competitors: competitorsHTML, teams: teamsHTML, divisions: divisionsHTML, rings: ringsHTML, mat: matHTML,
+    brackets: bracketsHTML, results: resultsHTML, sessions: sessionsHTML, attendance: attendanceHTML, staff: staffHTML }[S.ui.tab] || overviewHTML;
+  return v();
+}
+
+/* ---------- home ---------- */
+function homeHTML() {
+  const evs = Object.values(S.events).sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || '')));
+  const dir = isDirector();
+  const head = `<div class="section-h"><div><div class="label">Events</div><h1>Tournaments, camps &amp; clinics</h1></div>
+    <div class="row">${dir ? `<button data-act="demo">Create demo tournament</button><button class="primary" data-act="event-new">New event</button>` : ''}</div></div>`;
+  const fbx = fbHomeBits();
+  if (!S.loadedEvents) return head + fbx + `<div class="card empty"><p>Loading events…</p></div>`;
+  if (!evs.length) return head + fbx + `<div class="card empty"><div class="mark-lg"></div><h2>No events yet</h2>
+    <p class="muted" style="max-width:52ch">${dir ? 'Create your first tournament or training camp. A demo tournament with fictional competitors is available to explore how divisions, brackets and scoring work.' : 'The tournament director has not published any events yet.'}</p>
+    ${dir ? `<div class="row"><button data-act="demo">Create demo tournament</button><button class="primary" data-act="event-new">New event</button></div>` : ''}</div>`;
+  return head + fbx + `<div class="grid3">${evs.map(e => `<button class="card ev-card" data-act="open-event" data-id="${esc(e.id)}">
+      <div class="row"><span class="chip ${e.kind === 'tournament' ? 'aka' : ''}">${esc(KT.EVENT_KINDS[e.kind] || e.kind)}</span>${e.kind === 'tournament' && e.level ? `<span class="chip plain">${esc(e.level)}</span>` : ''}${e.demo ? '<span class="chip warn">Demo</span>' : ''}</div>
+      <h3>${esc(e.name)}</h3>
+      <div class="date">${fmtDate(e.startDate)}${e.endDate && e.endDate !== e.startDate ? ' – ' + fmtDate(e.endDate) : ''}</div>
+      ${e.location ? `<div class="small muted">${esc(e.location)}</div>` : ''}</button>`).join('')}</div>`;
+}
+
+/* ---------- overview ---------- */
+function eventHeader(extra) {
+  const ev = curEvent();
+  return `<div class="section-h"><div><div class="label">${esc(KT.EVENT_KINDS[ev.kind])}${ev.level && ev.kind === 'tournament' ? ' · ' + esc(ev.level) : ''}</div>
+    <h1>${esc(ev.name)}</h1><div class="small muted">${fmtDate(ev.startDate)}${ev.endDate && ev.endDate !== ev.startDate ? ' – ' + fmtDate(ev.endDate) : ''}${ev.location ? ' · ' + esc(ev.location) : ''}</div></div>
+    <div class="row">${extra || ''}${isDirector() ? `<button data-act="event-edit">Event settings</button>` : ''}</div></div>`;
+}
+function overviewHTML() {
+  const ev = curEvent();
+  if (ev.kind !== 'tournament') return campOverviewHTML();
+  const comps = DC.comps, active = comps.filter(c => c.status !== 'withdrawn');
+  const checked = active.filter(c => c.checkedIn).length;
+  const divs = DC.divs;
+  let drawn = 0, fought = 0, playable = 0, complete = 0;
+  const warn = [];
+  for (const d of divs) {
+    const bs = bracketState(d.id);
+    if (bs.drawn) { drawn++; fought += bs.fought; playable += bs.playable; if (bs.complete) complete++; if (bs.changed && !bs.complete) warn.push(`<b>${esc(d.name)}</b>: entrants changed since the draw.`); }
+  }
+  const dir = isDirector();
+  if (dir) {
+    const un = DC.assign.unplaced;
+    if (un.length) warn.push(`${plural(un.length, 'entry', 'entries')} match no division. <button class="sm" data-act="tab" data-v="competitors" data-filter="unplaced">Review</button>`);
+    const inc = active.filter(c => KT.validateCompetitor(c, DC.asOf).length).length;
+    if (inc) warn.push(`${plural(inc, 'registration')} missing required information. <button class="sm" data-act="tab" data-v="competitors" data-filter="incomplete">Review</button>`);
+    const lone = divs.filter(d => divEntrants(d.id).length === 1).length;
+    if (lone) warn.push(`${plural(lone, 'division')} with a single entrant (automatic gold, or merge).`);
+    const noRing = divs.filter(d => divEntrants(d.id).length >= 2 && !S.d.rings[d.ringId]).length;
+    if (noRing) warn.push(`${plural(noRing, 'division')} with entrants but no ring.`);
+  }
+  const steps = dir ? `<div class="card"><h3>Director checklist</h3><ol class="small" style="margin:8px 0 0;padding-left:20px;display:grid;gap:4px">
+      <li>${divs.length ? '✓' : ''} Create divisions — standard black-belt set plus your kyu groups (<a href="#" data-act="tab" data-v="divisions">Divisions</a>)</li>
+      <li>${comps.length ? '✓' : ''} Register competitors and check them in (<a href="#" data-act="tab" data-v="competitors">Competitors</a>)</li>
+      <li>${DC.teams.length ? '✓' : ''} Form Team Kata, Team Kumite and Enbu teams (<a href="#" data-act="tab" data-v="teams">Teams</a>)</li>
+      <li>${DC.rings.length ? '✓' : ''} Set up rings, assign managers and divisions (<a href="#" data-act="tab" data-v="rings">Rings</a>)</li>
+      <li>${drawn ? '✓' : ''} Draw brackets (<a href="#" data-act="tab" data-v="divisions">Divisions</a>)</li>
+      <li>${fought ? '✓' : ''} Run matches on the mat and present awards (<a href="#" data-act="tab" data-v="mat">Mat</a>, <a href="#" data-act="tab" data-v="results">Results</a>)</li></ol></div>` : '';
+  return eventHeader() + `<div class="stats">
+      <div class="stat"><span class="label">Competitors</span><b>${active.length}</b><div class="small muted">${checked} checked in</div><div class="meter"><i style="width:${active.length ? checked / active.length * 100 : 0}%"></i></div></div>
+      <div class="stat"><span class="label">Divisions</span><b>${divs.length}</b><div class="small muted">${drawn} drawn · ${complete} finished</div></div>
+      <div class="stat"><span class="label">Matches</span><b>${fought}<span class="muted" style="font-size:1rem">/${playable}</span></b><div class="meter"><i style="width:${playable ? fought / playable * 100 : 0}%"></i></div></div>
+      <div class="stat"><span class="label">Rings</span><b>${DC.rings.length}</b><div class="small muted">${DC.teams.length} teams entered</div></div></div>
+    ${warn.length ? `<div class="stack">${warn.map(w => `<div class="notice warn">${w}</div>`).join('')}</div>` : ''}
+    <div class="grid2">${steps}<div class="stack"><div class="section-h"><h2>On the mat</h2></div>${ringBoardHTML(DC.rings)}</div></div>`;
+}
+
+/* ---------- competitors ---------- */
+function competitorsHTML() {
+  const ev = curEvent(), dir = isDirector(), tour = ev.kind === 'tournament';
+  const q = S.ui.q.toLowerCase(), f = S.ui.filter;
+  const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'competitor').map(u => u.id));
+  const placedIn = {};
+  for (const did in DC.assign.byDiv) for (const id of DC.assign.byDiv[did]) (placedIn[id] = placedIn[id] || []).push(did);
+  let list = DC.comps.slice().sort((a, b) => String(a.lastName).localeCompare(String(b.lastName)) || String(a.firstName).localeCompare(String(b.firstName)));
+  if (q) list = list.filter(c => `${c.firstName} ${c.lastName} ${c.dojo} ${c.country || ''} ${c.state || ''}`.toLowerCase().includes(q));
+  if (f === 'out') list = list.filter(c => !c.checkedIn && c.status !== 'withdrawn');
+  if (f === 'in') list = list.filter(c => c.checkedIn);
+  if (f === 'incomplete') list = list.filter(c => KT.validateCompetitor(c, DC.asOf).length);
+  if (f === 'unplaced') list = list.filter(c => unplaced.has(c.id));
+  if (f === 'withdrawn') list = list.filter(c => c.status === 'withdrawn');
+  const word = tour ? 'competitor' : 'participant';
+  const tools = `<div class="row"><input id="comp-q" class="search" type="search" placeholder="Search name, dojo…" value="${esc(S.ui.q)}" data-input="q" aria-label="Search">
+    <select id="comp-f" data-change="filter" aria-label="Filter">${opt('all', 'All', f)}${opt('out', 'Not checked in', f)}${opt('in', 'Checked in', f)}${dir ? opt('incomplete', 'Missing information', f) : ''}${tour && dir ? opt('unplaced', 'No division match', f) : ''}${opt('withdrawn', 'Withdrawn', f)}</select></div>`;
+  const acts = dir ? `<button data-act="import-open">Import CSV</button><button data-act="export-comps">Export CSV</button><button class="primary" data-act="comp-new">Add ${word}</button>` : '';
+  if (!DC.comps.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No ${word}s registered</h2><p class="muted">${dir ? `Add ${word}s one at a time or import a spreadsheet (CSV).` : 'Registrations will appear here.'}</p>${dir ? `<div class="row">${acts}</div>` : ''}</div>`;
+  const rows = list.map(c => {
+    const age = KT.ageOf(c, DC.asOf), miss = dir ? KT.validateCompetitor(c, DC.asOf) : [];
+    const evs = tour ? (c.events || []).map(et => {
+      const T = KT.EVENT_TYPES[et]; if (!T) return '';
+      if (T.team) { const tm = DC.teams.find(t => t.eventType === et && (t.memberIds || []).includes(c.id)); return `<span class="chip plain" title="${esc(tm ? tm.name : 'Not on a team yet')}">${esc(T.short)}${tm ? '' : ' ?'}</span>`; }
+      const did = (placedIn[c.id] || []).find(d => DC.divBy[d] && DC.divBy[d].eventType === et);
+      return `<span class="chip ${did ? 'plain' : 'bad'}" title="${esc(did ? DC.divBy[did].name : 'No matching division')}">${esc(T.short)}</span>`;
+    }).join(' ') : '';
+    return `<tr class="${dir ? 'click' : ''}" ${dir ? `data-act="comp-edit" data-id="${esc(c.id)}"` : ''}>
+      <td><div class="name">${esc(c.lastName)}, ${esc(c.firstName)}</div><div class="dojo">${esc(c.dojo || '')}${c.state || c.country ? ' · ' + esc([c.state, c.country].filter(Boolean).join(', ')) : ''}</div></td>
+      <td>${esc(c.gender === 'F' ? 'W' : c.gender === 'M' ? 'M' : '')}${age != null ? ` · <span class="num">${age}</span>` : ''}</td>
+      <td>${esc(KT.rankLabel(c.rank))}</td>
+      ${tour ? `<td><div class="pill-list">${evs}</div></td>` : ''}
+      <td>${c.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : dir ? `<button class="sm ${c.checkedIn ? '' : 'ghost'}" data-act="checkin" data-id="${esc(c.id)}" aria-pressed="${!!c.checkedIn}">${c.checkedIn ? '✓ Checked in' : 'Check in'}</button>` : (c.checkedIn ? '<span class="chip ok">Checked in</span>' : '<span class="chip plain">Not checked in</span>')}
+        ${miss.length ? `<span class="chip warn" title="Missing: ${esc(miss.join(', '))}">Incomplete</span>` : ''}</td></tr>`;
+  }).join('');
+  return eventHeader() + `<div class="section-h">${tools}<div class="row">${acts}</div></div>
+    <div class="card flush"><div class="tw"><table><thead><tr><th>Name</th><th>Sex · Age</th><th>Rank</th>${tour ? '<th>Events</th>' : ''}<th>Status</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="5" class="muted">No ${word}s match this filter.</td></tr>`}</tbody></table></div></div>
+    <p class="small muted">${plural(list.length, word)} shown · ages as of ${fmtDate(DC.asOf)}.${dir ? ' Contact details, dates of birth and emergency contacts are visible to directors only.' : ''}</p>`;
+}
+
+/* ---------- teams ---------- */
+function teamsHTML() {
+  const ev = curEvent();
+  const types = (ev.eventTypes || KT.EVENT_ORDER).filter(t => KT.EVENT_TYPES[t].team);
+  const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'team').map(u => u.id));
+  const placed = {}; for (const did in DC.assign.byDiv) for (const id of DC.assign.byDiv[did]) placed[id] = did;
+  const secs = types.map(et => {
+    const T = KT.EVENT_TYPES[et], list = DC.teams.filter(t => t.eventType === et).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    const need = DC.comps.filter(c => (c.events || []).includes(et) && c.status !== 'withdrawn' && !DC.teams.some(t => t.eventType === et && (t.memberIds || []).includes(c.id)));
+    return `<div class="card flush"><div class="card-h"><div><h3>${esc(T.label)}</h3><div class="small muted">${T.size[0] === T.size[1] ? T.size[0] : T.size[0] + '–' + T.size[1]} members · ${T.genders.map(g => KT.GENDERS[g]).join(' / ')}</div></div>
+      <button class="sm" data-act="team-new" data-et="${et}">New team</button></div>
+      ${need.length ? `<div class="notice info" style="margin:10px 16px 0">${plural(need.length, 'competitor')} entered ${esc(T.short)} without a team: ${need.slice(0, 6).map(c => esc(c.firstName + ' ' + c.lastName)).join(', ')}${need.length > 6 ? '…' : ''}</div>` : ''}
+      <div class="tw"><table><tbody>${list.map(t => {
+        const mem = (t.memberIds || []).map(id => DC.compBy[id]).filter(Boolean);
+        return `<tr class="click" data-act="team-edit" data-id="${esc(t.id)}"><td><div class="name">${esc(t.name)}</div><div class="dojo">${esc(t.dojo || '')}</div></td>
+        <td class="small">${mem.map(m => esc(m.firstName + ' ' + m.lastName)).join(', ') || '<span class="muted">No members</span>'}</td>
+        <td>${unplaced.has(t.id) ? '<span class="chip bad">No division</span>' : placed[t.id] ? `<span class="small">${esc(DC.divBy[placed[t.id]].name)}</span>` : ''}${t.status === 'withdrawn' ? ' <span class="chip bad">Withdrawn</span>' : ''}</td></tr>`;
+      }).join('') || `<tr><td class="muted">No teams yet.</td></tr>`}</tbody></table></div></div>`;
+  }).join('');
+  return eventHeader() + (types.length ? `<div class="stack">${secs}</div>` : `<div class="card empty"><p>This tournament offers no team events. Turn them on in Event settings.</p></div>`);
+}
+
+/* ---------- divisions ---------- */
+function divisionsHTML() {
+  const ev = curEvent();
+  const f = S.ui.divFilter;
+  const list = DC.divs.filter(d => !f || d.eventType === f);
+  const acts = `<button data-act="div-std">Add black-belt divisions</button><button data-act="div-kyu">Add kyu divisions</button><button data-act="div-new">New division</button>
+    <button class="primary" data-act="draw-all">Draw all ready</button>`;
+  if (!DC.divs.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No divisions yet</h2>
+    <p class="muted" style="max-width:56ch">Start with the standard black-belt age groups — Senior 21+, Youth 19–20, Junior 16–18, Cadet 14–15 — for every event you offer, then define kyu divisions by rank and age.</p><div class="row">${acts}</div></div>`;
+  const rows = list.map(d => {
+    const n = divEntrants(d.id).length, bs = bracketState(d.id), ring = S.d.rings[d.ringId];
+    const st = !bs.drawn ? (n >= 2 ? '<span class="chip plain">Ready to draw</span>' : n === 1 ? '<span class="chip warn">1 entrant</span>' : '<span class="chip plain">Empty</span>')
+      : bs.complete ? '<span class="chip ok">Finished</span>' : `<span class="chip">${bs.fought}/${bs.playable} matches</span>${bs.changed ? ' <span class="chip warn">Entrants changed</span>' : ''}`;
+    return `<tr><td><button class="ghost sm" style="padding:0;min-height:0;text-align:left;justify-content:flex-start" data-act="div-edit" data-id="${esc(d.id)}"><span class="name">${esc(d.name)}</span></button>
+        <div class="dojo">${d.belt === 'kyu' ? esc(KT.rankLabel(d.minRank) + ' – ' + KT.rankLabel(d.maxRank)) + ' · ' : ''}${ageRange(d)}</div></td>
+      <td class="small">${esc(KT.FORMATS[d.format] || d.format)}<div class="dojo">${esc(scoringLabel(d))}</div></td>
+      <td class="small">${ring ? esc(ring.name) : '<span class="muted">—</span>'}</td>
+      <td class="n">${n}</td><td>${st}</td>
+      <td style="white-space:nowrap">${bs.drawn ? `<button class="sm" data-act="view-bracket" data-id="${esc(d.id)}">Bracket</button>` : n >= 1 ? `<button class="sm" data-act="draw" data-id="${esc(d.id)}">Draw</button>` : ''}</td></tr>`;
+  }).join('');
+  return eventHeader() + `<div class="section-h"><select id="div-f" data-change="divFilter" aria-label="Event filter" style="max-width:240px">${opt('', 'All events', f)}${(ev.eventTypes || KT.EVENT_ORDER).map(t => opt(t, KT.EVENT_TYPES[t].label, f)).join('')}</select><div class="row">${acts}</div></div>
+    <div class="card flush"><div class="tw"><table><thead><tr><th>Division</th><th>Format</th><th>Ring</th><th class="n">Entrants</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function ageRange(d) {
+  const lo = d.minAge === '' || d.minAge == null ? null : d.minAge, hi = d.maxAge === '' || d.maxAge == null ? null : d.maxAge;
+  if (lo == null && hi == null) return 'All ages';
+  if (hi == null) return `Age ${lo}+`;
+  if (lo == null) return `Age ≤${hi}`;
+  return lo === hi ? `Age ${lo}` : `Age ${lo}–${hi}`;
+}
+
+/* ---------- rings ---------- */
+function ringsHTML() {
+  const cards = DC.rings.map(r => {
+    const divs = DC.divs.filter(d => d.ringId === r.id).sort((a, b) => (a.ringOrder || 0) - (b.ringOrder || 0));
+    const free = DC.divs.filter(d => !S.d.rings[d.ringId] && divEntrants(d.id).length);
+    return `<div class="card stack"><div class="row between"><h3>${esc(r.name)}</h3><div class="row"><button class="sm" data-act="ring-edit" data-id="${esc(r.id)}">Rename</button></div></div>
+      <div><div class="label">Managers</div><div class="pill-list" style="margin-top:6px">${(r.managerIds || []).map(id => `${personChip(id)}<button class="sm ghost" data-act="ring-unmanage" data-id="${esc(r.id)}" data-uid="${esc(id)}" aria-label="Remove manager">✕</button>`).join('') || '<span class="small muted">No manager assigned — only directors can score this ring.</span>'}</div>
+      ${isLocal() ? '<p class="tiny muted" style="margin-top:6px">People can be assigned once the tracker is shared from claude.ai. In local mode, use “View as Ring manager” to preview their access.</p>' : `<div class="dd" style="margin-top:8px"><input id="mgr-q-${esc(r.id)}" type="search" placeholder="Add manager by name or email…" data-input="mgr-search" data-ring="${esc(r.id)}" autocomplete="off"><div class="dd-list" id="mgr-dd-${esc(r.id)}" hidden></div></div>`}</div>
+      <div><div class="label">Divisions, in running order</div><div class="stack" style="gap:4px;margin-top:6px">${divs.map((d, i) => `<div class="row between small" style="gap:6px"><span style="min-width:0">${i + 1}. ${esc(d.name)} <span class="muted">(${divEntrants(d.id).length})</span></span>
+        <span class="row" style="gap:4px"><button class="sm ghost" data-act="ring-move" data-id="${esc(d.id)}" data-dir="-1" aria-label="Move up" ${i === 0 ? 'disabled' : ''}>↑</button><button class="sm ghost" data-act="ring-move" data-id="${esc(d.id)}" data-dir="1" aria-label="Move down" ${i === divs.length - 1 ? 'disabled' : ''}>↓</button><button class="sm ghost" data-act="ring-undiv" data-id="${esc(d.id)}" aria-label="Remove from ring">✕</button></span></div>`).join('') || '<span class="small muted">No divisions assigned.</span>'}</div>
+      ${divs.length ? `<label class="f" style="margin-top:8px"><span>Bracket format for this ring</span><select id="ring-fmt-${esc(r.id)}" data-change="ring-format" data-ring="${esc(r.id)}">${opt('', 'Set for all divisions…', '')}${Object.entries(KT.FORMATS).map(([k, l]) => opt(k, l, '')).join('')}</select></label>` : ''}
+      ${free.length ? `<select id="ring-add-${esc(r.id)}" data-change="ring-adddiv" data-ring="${esc(r.id)}" style="margin-top:8px">${opt('', 'Assign a division…', '')}${free.map(d => opt(d.id, `${d.name} (${divEntrants(d.id).length})`, '')).join('')}</select>` : ''}</div></div>`;
+  }).join('');
+  return eventHeader(`<button class="primary" data-act="ring-new">Add ring</button>`) + (DC.rings.length ? `<div class="grid2">${cards}</div>` :
+    `<div class="card empty"><div class="mark-lg"></div><h2>No rings yet</h2><p class="muted">Add a ring (court) for each competition area, then assign a manager and the divisions it will run.</p><button class="primary" data-act="ring-new">Add ring</button></div>`);
+}
+
+/* ---------- mat / ring board ---------- */
+function ringQueue(rid) {
+  const out = [];
+  const divs = DC.divs.filter(d => d.ringId === rid).sort((a, b) => (a.ringOrder || 0) - (b.ringOrder || 0));
+  for (const d of divs) { const br = S.d.brackets[d.id]; if (!br) continue; for (const m of KT.readyMatches(br, DC.res[d.id])) out.push({ did: d.id, m, r: DC.res[d.id][m.id] }); }
+  return out;
+}
+function ringBoardHTML(rings, withActions) {
+  if (!rings.length) return `<div class="card small muted">No rings set up yet.</div>`;
+  return `<div class="grid2">${rings.map(r => {
+    const rs = S.d.ringstate[r.id], q = ringQueue(r.id);
+    let now = '<div class="small muted">Nothing on the mat.</div>';
+    if (rs && rs.did && S.d.brackets[rs.did]) {
+      const dv = DC.divBy[rs.did], res = (DC.res[rs.did] || {})[rs.mid];
+      if (res && res.status === 'ready') {
+        now = `<div class="label">${esc(dv ? dv.name : '')} · ${esc(KT.matchLabel(S.d.brackets[rs.did].matches[rs.mid], S.d.brackets[rs.did]))}</div>
+        <div class="now"><div class="side"><span class="belt a"></span><span style="min-width:0"><div class="name">${esc(entName(res.a))}</div><div class="dojo">${esc(entDojo(res.a))}</div></span></div>
+        <div class="sc num">${rs.score ? `${esc(rs.score.a)}–${esc(rs.score.b)}` : 'vs'}</div>
+        <div class="side" style="justify-content:flex-end;text-align:right"><span style="min-width:0"><div class="name">${esc(entName(res.b))}</div><div class="dojo">${esc(entDojo(res.b))}</div></span><span class="belt b"></span></div></div>
+        ${rs.phase ? `<div class="phase">${esc(rs.phase)}</div>` : ''}`;
+      }
+    }
+    const next = q.filter(x => !(rs && x.did === rs.did && x.m.id === rs.mid)).slice(0, withActions ? 12 : 3);
+    const canR = canScoreDiv(DC.divs.find(d => d.ringId === r.id)?.id) || isDirector();
+    return `<div class="card ring-card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${q.length ? '' : 'plain'}">${plural(q.length, 'match', 'matches')} ready</span></div>
+      <div>${now}${withActions && rs && rs.did && canScoreDiv(rs.did) && DC.res[rs.did] && DC.res[rs.did][rs.mid] && DC.res[rs.did][rs.mid].status === 'ready' ? `<div class="row" style="margin-top:8px"><button class="primary" data-act="score" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}">Open scoresheet</button></div>` : ''}</div>
+      <div class="queue"><div class="label">Up next</div>${next.map(x => `<div class="q"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a))}</span></span>
+        <span class="vs">${withActions && canR && canScoreDiv(x.did) ? `<button class="sm" data-act="score" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}">Score</button>` : 'vs'}</span>
+        <span class="side" style="justify-content:flex-end"><span class="name">${esc(entName(x.r.b))}</span><span class="belt b"></span></span></div>
+        <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(KT.matchLabel(x.m, S.d.brackets[x.did]))}</div>`).join('') || '<div class="small muted">No matches waiting.</div>'}</div></div>`;
+  }).join('')}</div>`;
+}
+function matHTML() {
+  const mine = myRingIds();
+  const r = role();
+  let rings = DC.rings;
+  const sel = S.ui.ring;
+  if (sel) rings = rings.filter(x => x.id === sel);
+  const note = r === 'manager' ? `<div class="notice info">You manage ${mine.length ? mine.map(id => esc((S.d.rings[id] || {}).name || '')).join(', ') : 'no ring yet'}. You can score matches for divisions assigned to your ring${mine.length === 1 ? '' : 's'}.</div>`
+    : r === 'viewer' ? `<div class="notice info">Live view. Scores update as ring managers record them.</div>` : '';
+  return eventHeader(`<select id="mat-ring" data-change="ring" aria-label="Ring" style="max-width:200px">${opt('', 'All rings', sel)}${DC.rings.map(x => opt(x.id, x.name + (mine.includes(x.id) && r === 'manager' ? ' (yours)' : ''), sel)).join('')}</select>`)
+    + note + ringBoardHTML(rings, true);
+}
+
+/* ---------- brackets ---------- */
+function bracketsHTML() {
+  const drawn = DC.divs.filter(d => S.d.brackets[d.id]);
+  if (!S.ui.bracketDiv || !DC.divBy[S.ui.bracketDiv]) S.ui.bracketDiv = drawn.length ? drawn[0].id : '';
+  const did = S.ui.bracketDiv;
+  const picker = `<select id="br-div" data-change="bracketDiv" aria-label="Division" style="max-width:420px">${drawn.length ? '' : opt('', 'No brackets drawn yet', '')}${DC.rings.map(r => {
+      const ds = drawn.filter(d => d.ringId === r.id); return ds.length ? `<optgroup label="${esc(r.name)}">${ds.map(d => opt(d.id, d.name, did)).join('')}</optgroup>` : '';
+    }).join('')}${drawn.filter(d => !S.d.rings[d.ringId]).length ? `<optgroup label="No ring">${drawn.filter(d => !S.d.rings[d.ringId]).map(d => opt(d.id, d.name, did)).join('')}</optgroup>` : ''}</select>`;
+  if (!did) return eventHeader() + `<div class="section-h">${picker}</div><div class="card empty"><div class="mark-lg"></div><h2>No brackets yet</h2><p class="muted">${isDirector() ? 'Draw brackets from the Divisions tab once competitors are registered.' : 'Brackets appear here once the director draws them.'}</p>${isDirector() ? '<button data-act="tab" data-v="divisions">Go to Divisions</button>' : ''}</div>`;
+  const dv = DC.divBy[did], br = S.d.brackets[did];
+  const bs = bracketState(did);
+  const dirActs = isDirector() ? `<button class="sm" data-act="div-edit" data-id="${esc(did)}">Division settings</button>${!bs.results ? `<button class="sm" data-act="draw" data-id="${esc(did)}">Redraw</button>` : ''}` : '';
+  return eventHeader() + `<div class="section-h">${picker}<div class="row">${dirActs}</div></div>
+    <div class="row small muted">${esc(KT.FORMATS[br.format])} · ${esc(scoringLabel(dv))} · ${plural((br.entrants || []).length, 'entrant')}${S.d.rings[dv.ringId] ? ' · ' + esc(S.d.rings[dv.ringId].name) : ''}</div>
+    ${bs.changed && !bs.complete ? `<div class="notice warn">Entrants changed since this bracket was drawn.${isDirector() && !bs.results ? ' Redraw to include them.' : ' Results already exist; late changes need a manual decision.'}</div>` : ''}
+    ${podiumHTML(did)}${bracketViewHTML(did)}`;
+}
+function podiumHTML(did) {
+  const pl = DC.pl[did]; if (!pl || !pl.gold) return pl && pl.tie ? `<div class="notice warn">Pool finished with a tie that the rules cannot break. ${isDirector() || canScoreDiv(did) ? `<button class="sm" data-act="tiebreak" data-did="${esc(did)}" data-pool="A">Set tiebreak order</button>` : 'Waiting for the director.'}</div>` : '';
+  const line = (cls, lbl, id) => id ? `<div class="pl"><span class="medal ${cls}">${lbl}</span><span style="min-width:0"><div class="name">${esc(entName(id))}</div><div class="dojo">${esc(entDojo(id))}</div></span></div>` : '';
+  return `<div class="card"><div class="row between"><h3>${pl.complete ? 'Final placings' : 'Placings so far'}</h3>${pl.complete ? '<span class="chip ok">Finished</span>' : ''}</div><div class="podium" style="margin-top:8px">${line('g', '1', pl.gold)}${line('s', '2', pl.silver)}${(pl.bronze || []).map(b => line('b', '3', b)).join('')}</div></div>`;
+}
+function bmHTML(did, m, res, live) {
+  const r = res[m.id]; if (!r) return '';
+  if (r.status === 'void' || r.status === 'skip') return `<div class="bm" style="opacity:.45"><div class="ln tbd"><span class="strip"></span><span class="name">${r.status === 'skip' ? 'Not needed' : 'No match'}</span><span></span></div></div>`;
+  const canS = canScoreDiv(did) && (r.status === 'ready' || r.status === 'done');
+  const res1 = r.result || {};
+  const ln = (side) => {
+    const id = r[side], hint = side === 'a' ? r.hintA : r.hintB;
+    const cls = !id ? 'tbd' : r.status === 'done' || r.status === 'bye' ? (r.winner === id ? 'win' : 'lose') : '';
+    const sc = r.status === 'done' && res1.pts ? res1.pts[side] : '';
+    return `<div class="ln ${side} ${cls}"><span class="strip"></span><span style="min-width:0"><div class="name">${id ? esc(entName(id)) : r.status === 'bye' ? 'Bye' : esc(hint || 'TBD')}</div>${id ? `<div class="dojo">${esc(entDojo(id))}</div>` : ''}</span><span class="sc">${sc === '' || sc == null ? '' : esc(sc)}</span></div>`;
+  };
+  return `<div class="bm ${r.status === 'ready' ? 'ready' : ''} ${live ? 'live' : ''} ${canS ? 'click' : ''}" ${canS ? `data-act="score" data-did="${esc(did)}" data-mid="${esc(m.id)}" tabindex="0" role="button"` : ''}>${ln('a')}${ln('b')}
+    <div class="meta"><span>${esc(m.id)}</span><span>${r.status === 'done' ? esc(res1.method || '') : r.status === 'bye' ? 'Bye' : r.status === 'ready' ? (live ? 'On the mat' : 'Ready') : ''}</span></div></div>`;
+}
+function bracketViewHTML(did) {
+  const br = S.d.brackets[did], res = DC.res[did] || {};
+  const ms = Object.values(br.matches || {});
+  if (!ms.length) return `<div class="card small muted">Only one entrant — awarded automatically.</div>`;
+  const live = Object.values(S.d.ringstate).find(x => x.did === did);
+  const liveId = live ? live.mid : null;
+  const cols = (stage, title) => {
+    const list = ms.filter(m => m.stage === stage || (stage === 'W' && m.stage === 'B' && false));
+    if (!list.length) return '';
+    const rounds = [...new Set(list.map(m => m.round))].sort((a, b) => a - b);
+    return `<div class="stage-h label">${title}</div><div class="bracket-wrap"><div class="bracket">${rounds.map(rd => {
+      const rm = list.filter(m => m.round === rd).sort((a, b) => a.idx - b.idx);
+      return `<div class="bcol"><div class="label">${esc(stage === 'L' ? 'Round ' + rd : KT.matchLabel(rm[0], br))}</div><div class="bcol-in">${rm.map(m => bmHTML(did, m, res, m.id === liveId)).join('')}</div></div>`;
+    }).join('')}</div></div>`;
+  };
+  let html = '';
+  if (br.format === 'RR') {
+    html += `<div class="grid2">${Object.keys(br.pools || {}).map(P => poolHTML(did, P, liveId)).join('')}</div>`;
+    if (ms.some(m => m.stage === 'PO')) html += `<div class="card">${cols('PO', 'Playoff')}${ms.some(m => m.stage === 'B') ? `<div class="stage-h label">Bronze match</div><div class="bcol">${bmHTML(did, br.matches['PO-B'], res, liveId === 'PO-B')}</div>` : ''}</div>`;
+  } else {
+    html += `<div class="card">${cols('W', br.format === 'DE' ? 'Winners bracket' : 'Bracket')}${br.matches.B ? `<div class="stage-h label">Bronze match</div><div class="bcol">${bmHTML(did, br.matches.B, res, liveId === 'B')}</div>` : ''}</div>`;
+    if (br.format === 'DE') {
+      if (ms.some(m => m.stage === 'L')) html += `<div class="card">${cols('L', 'Repechage (losers) bracket')}</div>`;
+      html += `<div class="card"><div class="stage-h label">Grand final</div><div class="bracket">${['GF', 'GF2'].filter(id => br.matches[id]).map(id => `<div class="bcol"><div class="label">${id === 'GF' ? 'Grand final' : 'Reset (if needed)'}</div>${bmHTML(did, br.matches[id], res, liveId === id)}</div>`).join('')}</div></div>`;
+    }
+  }
+  return html;
+}
+function poolHTML(did, P, liveId) {
+  const br = S.d.brackets[did], res = DC.res[did] || {};
+  const st = KT.standings(br, P, id => res[id]);
+  const ms = Object.values(br.matches).filter(m => m.stage === 'P' && m.pool === P).sort((a, b) => a.round - b.round || a.idx - b.idx);
+  const adv = br.advance || 0;
+  return `<div class="card stack"><div class="row between"><h3>Pool ${esc(P)}</h3>${st.complete ? (st.tie ? `<span class="chip warn">Tie</span>` : '<span class="chip ok">Complete</span>') : ''}</div>
+    <div class="tw"><table><thead><tr><th>#</th><th>Entrant</th><th class="n">W</th><th class="n">L</th><th class="n">For</th><th class="n">Agst</th></tr></thead><tbody>
+    ${st.rows.map((r, i) => `<tr><td class="num">${i + 1}${adv && i < adv && st.complete ? ' ▸' : ''}</td><td><div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div></td><td class="n">${r.w}</td><td class="n">${r.l}</td><td class="n">${r.pf}</td><td class="n">${r.pa}</td></tr>`).join('')}
+    </tbody></table></div>
+    ${st.tie && (isDirector() || canScoreDiv(did)) ? `<div class="notice warn">Tied on wins, head-to-head and points. <button class="sm" data-act="tiebreak" data-did="${esc(did)}" data-pool="${esc(P)}">Set order</button></div>` : ''}
+    <div class="grid3" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">${ms.map(m => bmHTML(did, m, res, m.id === liveId)).join('')}</div></div>`;
+}
+
+/* ---------- results ---------- */
+function resultsHTML() {
+  const medals = [];
+  const rows = DC.divs.filter(d => S.d.brackets[d.id] || divEntrants(d.id).length === 1).map(d => {
+    const br = S.d.brackets[d.id];
+    const pl = br ? DC.pl[d.id] : { complete: true, gold: divEntrants(d.id)[0], bronze: [] };
+    if (pl.complete) {
+      if (pl.gold) medals.push({ dojo: entDojo(pl.gold), place: 'gold' });
+      if (pl.silver) medals.push({ dojo: entDojo(pl.silver), place: 'silver' });
+      (pl.bronze || []).forEach(b => medals.push({ dojo: entDojo(b), place: 'bronze' }));
+    }
+    const cell = (id, cls, n) => id ? `<div class="pl"><span class="medal ${cls}">${n}</span><span style="min-width:0"><div class="name">${esc(entName(id))}</div><div class="dojo">${esc(entDojo(id))}</div></span></div>` : '';
+    const canAward = br && (isDirector() || canScoreDiv(d.id));
+    return `<div class="card stack"><div class="row between"><div style="min-width:0"><h3>${esc(d.name)}</h3><div class="small muted">${S.d.rings[d.ringId] ? esc(S.d.rings[d.ringId].name) : 'No ring'}</div></div>
+      ${pl.complete ? (br && br.awarded ? '<span class="chip ok">Awarded</span>' : '<span class="chip">Final</span>') : pl.tie ? `<span class="chip warn">Tie to resolve</span>` : `<span class="chip plain">In progress</span>`}</div>
+      ${pl.complete ? `<div class="podium">${cell(pl.gold, 'g', 1)}${cell(pl.silver, 's', 2)}${(pl.bronze || []).map(b => cell(b, 'b', 3)).join('')}</div>` : `<div class="small muted">${br ? `${bracketState(d.id).fought} of ${bracketState(d.id).playable} matches fought.` : ''}</div>`}
+      ${pl.complete && canAward ? `<label class="check"><input type="checkbox" id="aw-${esc(d.id)}" data-change="awarded" data-did="${esc(d.id)}" ${br.awarded ? 'checked' : ''}> Medals presented</label>` : ''}</div>`;
+  });
+  const table = KT.medalTable(medals);
+  return eventHeader(`<button data-act="export-results">Export results CSV</button>`) + `<div class="grid2">
+    <div class="card flush"><div class="card-h"><h3>Medal table by dojo</h3><span class="small muted">${plural(medals.length, 'medal')}</span></div><div class="tw"><table><thead><tr><th>Dojo</th><th class="n">Gold</th><th class="n">Silver</th><th class="n">Bronze</th></tr></thead><tbody>
+    ${table.map(r => `<tr><td>${esc(r.dojo)}</td><td class="n">${r.gold}</td><td class="n">${r.silver}</td><td class="n">${r.bronze}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">Medals appear as divisions finish.</td></tr>'}</tbody></table></div></div>
+    ${rows.join('')}</div>`;
+}
+
+/* ---------- camps: overview, sessions, attendance, staff ---------- */
+function campOverviewHTML() {
+  const parts = DC.comps.filter(c => c.status !== 'withdrawn');
+  const sess = Object.values(S.d.sessions).sort(sessSort);
+  const att = sess.map(s => { const a = (S.d.attendance[s.id] || {}).present || {}; return parts.filter(p => a[p.id]).length; });
+  const total = att.reduce((x, y) => x + y, 0), possible = sess.length * parts.length;
+  return eventHeader() + `<div class="stats">
+    <div class="stat"><span class="label">Participants</span><b>${parts.length}</b><div class="small muted">${parts.filter(p => p.feePaid).length} paid</div></div>
+    <div class="stat"><span class="label">Sessions</span><b>${sess.length}</b></div>
+    <div class="stat"><span class="label">Attendance</span><b>${possible ? Math.round(total / possible * 100) : 0}%</b><div class="meter"><i style="width:${possible ? total / possible * 100 : 0}%"></i></div></div></div>
+    <div class="card flush"><div class="card-h"><h3>Schedule</h3>${isDirector() ? '<button class="sm" data-act="tab" data-v="sessions">Edit sessions</button>' : ''}</div><div class="tw"><table><tbody>
+    ${sess.map((s, i) => `<tr><td class="num small">${fmtDate(s.date)}<div class="dojo">${esc(s.start || '')}${s.end ? '–' + esc(s.end) : ''}</div></td><td><div class="name">${esc(s.title)}</div><div class="dojo">${esc(s.instructor || '')}${s.location ? ' · ' + esc(s.location) : ''}</div></td><td class="n">${att[i]}/${parts.length}</td></tr>`).join('') || '<tr><td class="muted">No sessions scheduled yet.</td></tr>'}
+    </tbody></table></div></div>`;
+}
+function sessSort(a, b) { return String(a.date || '').localeCompare(String(b.date || '')) || String(a.start || '').localeCompare(String(b.start || '')); }
+function sessionsHTML() {
+  const sess = Object.values(S.d.sessions).sort(sessSort), dir = isDirector();
+  return eventHeader(dir ? '<button class="primary" data-act="session-new">Add session</button>' : '') + (sess.length ? `<div class="card flush"><div class="tw"><table><thead><tr><th>When</th><th>Session</th><th>Instructor</th><th>Location</th><th class="n">Capacity</th></tr></thead><tbody>
+    ${sess.map(s => `<tr class="${dir ? 'click' : ''}" ${dir ? `data-act="session-edit" data-id="${esc(s.id)}"` : ''}><td class="num small">${fmtDate(s.date)}<div class="dojo">${esc(s.start || '')}${s.end ? '–' + esc(s.end) : ''}</div></td><td class="name">${esc(s.title)}</td><td>${esc(s.instructor || '')}</td><td>${esc(s.location || '')}</td><td class="n">${esc(s.capacity || '')}</td></tr>`).join('')}
+    </tbody></table></div></div>` : `<div class="card empty"><div class="mark-lg"></div><h2>No sessions yet</h2><p class="muted">Add each class, seminar or grading on the schedule.</p>${dir ? '<button class="primary" data-act="session-new">Add session</button>' : ''}</div>`);
+}
+function attendanceHTML() {
+  const sess = Object.values(S.d.sessions).sort(sessSort);
+  if (!S.ui.session || !S.d.sessions[S.ui.session]) S.ui.session = sess.length ? sess[0].id : '';
+  const sid = S.ui.session;
+  if (!sid) return eventHeader() + `<div class="card empty"><p>Add sessions first, then take attendance here.</p></div>`;
+  const parts = DC.comps.filter(c => c.status !== 'withdrawn').sort((a, b) => String(a.lastName).localeCompare(String(b.lastName)));
+  const present = (S.d.attendance[sid] || {}).present || {};
+  const can = !S.readOnly && isStaff();
+  const n = parts.filter(p => present[p.id]).length;
+  return eventHeader() + `<div class="section-h"><select id="att-s" data-change="session" aria-label="Session" style="max-width:360px">${sess.map(s => opt(s.id, `${fmtDate(s.date)} ${s.start || ''} · ${s.title}`, sid)).join('')}</select>
+    <div class="row"><span class="chip">${n}/${parts.length} present</span>${can ? '<button data-act="att-all">Mark all present</button>' : ''}</div></div>
+    ${!can ? '<div class="notice info">Only the director and assigned staff can take attendance.</div>' : ''}
+    <div class="card flush"><div class="tw"><table><tbody>${parts.map(p => `<tr><td><div class="name">${esc(p.lastName)}, ${esc(p.firstName)}</div><div class="dojo">${esc(p.dojo || '')} · ${esc(KT.rankLabel(p.rank))}</div></td>
+      <td style="text-align:right"><label class="check"><input type="checkbox" id="att-${esc(p.id)}" data-change="att" data-id="${esc(p.id)}" ${present[p.id] ? 'checked' : ''} ${can ? '' : 'disabled'}> Present</label></td></tr>`).join('') || '<tr><td class="muted">Register participants first.</td></tr>'}</tbody></table></div></div>`;
+}
+function staffHTML() {
+  const ev = curEvent();
+  return eventHeader() + `<div class="card stack"><h3>Camp staff</h3><p class="small muted">Staff can take attendance for every session. Directors can do everything.</p>
+    <div class="pill-list">${(ev.staffIds || []).map(id => `${personChip(id)}<button class="sm ghost" data-act="staff-remove" data-uid="${esc(id)}" aria-label="Remove">✕</button>`).join('') || '<span class="small muted">No staff assigned.</span>'}</div>
+    ${isLocal() ? '<p class="tiny muted">People can be assigned once the tracker is shared from claude.ai.</p>' : `<div class="dd"><input id="staff-q" type="search" placeholder="Add staff by name or email…" data-input="staff-search" autocomplete="off"><div class="dd-list" id="staff-dd" hidden></div></div>`}</div>`;
+}
+/* ===== forms & modals ===== */
+function eventForm(id) {
+  const e = id ? S.events[id] : { kind: 'tournament', level: 'Local', startDate: todayISO(), eventTypes: KT.EVENT_ORDER.slice(), defaultFormat: 'SE', bronze: 'two' };
+  const et = new Set(e.eventTypes || KT.EVENT_ORDER);
+  openModal(sheet(id ? 'Event settings' : 'New event', `<form id="f-event" data-form="event" data-id="${esc(id || '')}" class="stack">
+    <div class="fgrid">
+      <label class="f req span"><span>Event name</span><input name="name" id="ev-name" required value="${esc(e.name || '')}" placeholder="e.g. Great Lakes Traditional Karate Championship"></label>
+      <label class="f"><span>Type</span><select name="kind" id="ev-kind" data-change="ev-kind">${Object.entries(KT.EVENT_KINDS).map(([k, v]) => opt(k, v, e.kind)).join('')}</select></label>
+      <label class="f ev-t" ${e.kind === 'tournament' ? '' : 'hidden'}><span>Level</span><select name="level" id="ev-level">${KT.LEVELS.map(l => opt(l, l, e.level)).join('')}</select></label>
+      <label class="f req"><span>Start date</span><input type="date" name="startDate" id="ev-start" required value="${esc(e.startDate || '')}"></label>
+      <label class="f"><span>End date</span><input type="date" name="endDate" id="ev-end" value="${esc(e.endDate || '')}"></label>
+      <label class="f"><span>Location</span><input name="location" id="ev-loc" value="${esc(e.location || '')}" placeholder="Venue, city"></label>
+      <label class="f"><span>Host organization</span><input name="host" id="ev-host" value="${esc(e.host || '')}"></label>
+    </div>
+    <fieldset class="ev-t" ${e.kind === 'tournament' ? '' : 'hidden'}><legend>Tournament rules</legend><div class="stack">
+      <div class="fgrid">
+        <label class="f"><span>Ages calculated as of</span><input type="date" name="ageAsOf" id="ev-asof" value="${esc(e.ageAsOf || '')}"><span class="tiny muted">Blank = start date</span></label>
+        <label class="f"><span>Default bracket</span><select name="defaultFormat" id="ev-fmt">${Object.entries(KT.FORMATS).map(([k, v]) => opt(k, v, e.defaultFormat)).join('')}</select></label>
+        <label class="f"><span>Third place</span><select name="bronze" id="ev-bronze">${opt('two', 'Two bronze medals', e.bronze)}${opt('match', 'Bronze match (one bronze)', e.bronze)}</select></label>
+      </div>
+      <div><div class="label" style="margin-bottom:6px">Events offered</div><div class="pill-list">${KT.EVENT_ORDER.map(k => `<label class="check chip plain"><input type="checkbox" data-multi="1" name="eventTypes" value="${k}" ${et.has(k) ? 'checked' : ''}> ${esc(KT.EVENT_TYPES[k].label)}</label>`).join('')}</div></div>
+    </div></fieldset>
+    <label class="f"><span>Notes</span><textarea name="notes" id="ev-notes">${esc(e.notes || '')}</textarea></label></form>`,
+    `${id ? '<button class="danger" data-act="event-delete" style="margin-right:auto">Delete event</button>' : ''}<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-event">${id ? 'Save' : 'Create event'}</button>`));
+}
+
+function compForm(id) {
+  const ev = curEvent(), tour = ev.kind === 'tournament';
+  const c = id ? DC.compBy[id] : { gender: '', events: [], status: 'active' };
+  const evs = new Set(c.events || []);
+  const offered = (ev.eventTypes || KT.EVENT_ORDER);
+  const evRows = tour ? offered.map(et => {
+    const T = KT.EVENT_TYPES[et];
+    if (T.team) return `<div class="row between small"><label class="check"><input type="checkbox" data-multi="1" name="events" value="${et}" ${evs.has(et) ? 'checked' : ''}> ${esc(T.label)}</label><span class="muted tiny">Assign on the Teams tab</span></div>`;
+    const cand = id ? KT.candidateDivisions(c, et, DC.divs, DC.asOf) : [];
+    const all = DC.divs.filter(d => d.eventType === et);
+    const ov = (c.divOverride || {})[et] || '';
+    return `<div class="row between small" style="gap:6px"><label class="check"><input type="checkbox" data-multi="1" name="events" value="${et}" ${evs.has(et) ? 'checked' : ''}> ${esc(T.label)}</label>
+      <select name="ov_${et}" id="ov-${et}" style="max-width:320px" aria-label="${esc(T.label)} division">${opt('', cand.length ? `Auto → ${cand[0].name}` : 'Auto (save to match)', ov)}${all.map(d => opt(d.id, d.name, ov)).join('')}</select></div>`;
+  }).join('') : '';
+  openModal(sheet(id ? `${esc(c.firstName)} ${esc(c.lastName)}` : (tour ? 'Register competitor' : 'Add participant'), `<form id="f-comp" data-form="comp" data-id="${esc(id || '')}" class="stack">
+    <fieldset><legend>Competitor</legend><div class="fgrid">
+      <label class="f req"><span>First name</span><input name="firstName" id="c-first" required value="${esc(c.firstName || '')}"></label>
+      <label class="f req"><span>Last name</span><input name="lastName" id="c-last" required value="${esc(c.lastName || '')}"></label>
+      <label class="f ${tour ? 'req' : ''}"><span>Gender</span><select name="gender" id="c-gender" ${tour ? 'required' : ''}>${opt('', 'Select…', c.gender)}${opt('M', 'Male', c.gender)}${opt('F', 'Female', c.gender)}</select></label>
+      <label class="f ${tour ? 'req' : ''}"><span>Date of birth</span><input type="date" name="dob" id="c-dob" ${tour ? 'required' : ''} value="${esc(c.dob || '')}"></label>
+      <label class="f req"><span>Rank</span><select name="rank" id="c-rank" required>${rankOptions(c.rank)}</select></label>
+      <label class="f req"><span>Dojo / club</span><input name="dojo" id="c-dojo" required value="${esc(c.dojo || '')}" list="dojo-list"><datalist id="dojo-list">${[...new Set(DC.comps.map(x => x.dojo).filter(Boolean))].map(d => `<option value="${esc(d)}">`).join('')}</datalist></label>
+      <label class="f"><span>State / region</span><input name="state" id="c-state" value="${esc(c.state || '')}"></label>
+      <label class="f"><span>Country</span><input name="country" id="c-country" value="${esc(c.country || '')}"></label>
+    </div></fieldset>
+    <fieldset><legend>Contact &amp; emergency (directors only)</legend><div class="fgrid">
+      <label class="f"><span>Email</span><input type="email" name="email" id="c-email" value="${esc(c.email || '')}"></label>
+      <label class="f"><span>Phone</span><input type="tel" name="phone" id="c-phone" value="${esc(c.phone || '')}"></label>
+      <label class="f req"><span>Emergency contact</span><input name="emergencyName" id="c-ename" value="${esc(c.emergencyName || '')}"></label>
+      <label class="f req"><span>Emergency phone</span><input type="tel" name="emergencyPhone" id="c-ephone" value="${esc(c.emergencyPhone || '')}"></label>
+    </div></fieldset>
+    <fieldset><legend>Registration</legend><div class="row" style="gap:18px">
+      <label class="check"><input type="checkbox" name="waiver" id="c-waiver" ${c.waiver ? 'checked' : ''}> Waiver signed <span style="color:var(--aka)">*</span></label>
+      <label class="check"><input type="checkbox" name="feePaid" id="c-paid" ${c.feePaid ? 'checked' : ''}> Fee paid</label>
+      <label class="check"><input type="checkbox" name="checkedIn" id="c-in" ${c.checkedIn ? 'checked' : ''}> Checked in</label>
+      <label class="f" style="max-width:140px"><span>Amount paid</span><input name="feeAmount" id="c-fee" inputmode="decimal" value="${esc(c.feeAmount || '')}"></label>
+      <label class="f" style="max-width:180px"><span>Status</span><select name="status" id="c-status">${opt('active', 'Active', c.status)}${opt('withdrawn', 'Withdrawn', c.status)}</select></label></div></fieldset>
+    ${tour ? `<fieldset><legend>Events entered</legend><div class="stack" style="gap:8px">${evRows}</div><p class="tiny muted" style="margin-top:8px">Divisions are matched automatically by gender, age on ${fmtDate(DC.asOf)} and rank. Choose a division only to override.</p></fieldset>` : ''}
+    <label class="f"><span>Notes (directors only)</span><textarea name="notes" id="c-notes">${esc(c.notes || '')}</textarea></label>
+    <p id="c-miss" class="small" style="color:var(--warn)"></p></form>`,
+    `${id ? '<button class="danger" data-act="comp-delete" style="margin-right:auto">Delete</button>' : ''}<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-comp">Save</button>`));
+}
+const PV_FIELDS = ['dob', 'email', 'phone', 'emergencyName', 'emergencyPhone', 'feeAmount', 'notes'];
+async function saveComp(form) {
+  const ev = curEvent(), id = form.dataset.id || uid(), v = fd(form);
+  const tour = ev.kind === 'tournament';
+  if (!v.firstName || !v.lastName || !v.rank || (tour && (!v.gender || !v.dob))) { toast('Name, rank' + (tour ? ', gender and date of birth are' : ' are') + ' required.', true); return; }
+  const divOverride = {};
+  for (const k of Object.keys(v)) if (k.startsWith('ov_')) { if (v[k]) divOverride[k.slice(3)] = v[k]; delete v[k]; }
+  const pub = { firstName: v.firstName, lastName: v.lastName, gender: v.gender, rank: v.rank, dojo: v.dojo, state: v.state, country: v.country,
+    waiver: v.waiver, feePaid: v.feePaid, checkedIn: v.checkedIn, status: v.status || 'active', events: v.events || [], divOverride,
+    age: v.dob ? KT.ageOn(v.dob, DC.asOf) : null, updatedAt: new Date().toISOString() };
+  const old = DC.compBy[form.dataset.id];
+  if (old && old.createdAt) pub.createdAt = old.createdAt; else pub.createdAt = new Date().toISOString();
+  const pv = {}; PV_FIELDS.forEach(k => { pv[k] = v[k] || ''; });
+  const ok = await guard(async () => { await S.store.set(P.doc(S.evId, 'competitors', id), pub); await S.store.set(P.pv(S.evId, id), pv); }, 'Saved');
+  if (ok) closeModal();
+}
+
+function importForm() {
+  openModal(sheet('Import competitors', `<p class="small">Paste CSV text or choose a .csv file. The first row must be column headings. Recognised columns:</p>
+    <p class="tiny mono muted">first_name, last_name, gender, dob, rank, dojo, state, country, email, phone, emergency_name, emergency_phone, waiver, paid, events</p>
+    <p class="tiny muted">Dates as YYYY-MM-DD or M/D/YYYY · ranks like “3rd Kyu”, “Shodan”, “2nd Dan”, k3, d2 · events separated by “;” (Individual Kata; Individual Kumite; Team Kata; Team Kumite; Fukugo; Enbu).</p>
+    <input type="file" id="imp-file" accept=".csv,text/csv" data-change="imp-file">
+    <textarea id="imp-text" rows="10" placeholder="first_name,last_name,gender,dob,rank,dojo,events&#10;Aiko,Tanaka,F,2001-04-12,Shodan,Hoshi Dojo,Individual Kata;Individual Kumite"></textarea>
+    <div id="imp-preview" class="small muted"></div>`,
+    `<button data-act="modal-close">Cancel</button><button data-act="imp-preview">Check</button><button class="primary" data-act="imp-run">Import</button>`));
+}
+function parseCSV(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ',') { row.push(cur); cur = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; }
+    else cur += ch;
+  }
+  if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim() !== ''));
+}
+const EV_ALIASES = { 'individual kata': 'IKATA', kata: 'IKATA', ikata: 'IKATA', 'individual kumite': 'IKUMITE', kumite: 'IKUMITE', ikumite: 'IKUMITE', 'team kata': 'TKATA', tkata: 'TKATA',
+  'team kumite': 'TKUMITE', tkumite: 'TKUMITE', fukugo: 'FUKUGO', fukogo: 'FUKUGO', enbu: 'ENBU' };
+function importRows(text) {
+  const rows = parseCSV(text); if (rows.length < 2) return { recs: [], errors: ['Need a heading row and at least one competitor.'] };
+  const h = rows[0].map(x => x.toLowerCase().replace(/[^a-z]/g, ''));
+  const col = (...names) => h.findIndex(x => names.includes(x));
+  const ix = { first: col('firstname', 'first', 'givenname'), last: col('lastname', 'last', 'surname', 'familyname'), gender: col('gender', 'sex'), dob: col('dob', 'dateofbirth', 'birthdate', 'birthday'),
+    rank: col('rank', 'belt', 'grade'), dojo: col('dojo', 'club', 'school'), state: col('state', 'region', 'province'), country: col('country'), email: col('email'), phone: col('phone', 'mobile'),
+    en: col('emergencyname', 'emergencycontact', 'emergency'), ep: col('emergencyphone'), waiver: col('waiver', 'waiversigned'), paid: col('paid', 'feepaid'), events: col('events', 'event', 'divisions') };
+  const recs = [], errors = [];
+  const g = (r, i) => (i >= 0 ? (r[i] || '').trim() : '');
+  const yes = s => /^(y|yes|true|1|x|✓)$/i.test(s);
+  rows.slice(1).forEach((r, n) => {
+    let dob = g(r, ix.dob);
+    const m = dob.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if (m) dob = `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+    const gs = g(r, ix.gender).toLowerCase();
+    const rec = { firstName: g(r, ix.first), lastName: g(r, ix.last), gender: /^(m|male|man|men)$/.test(gs) ? 'M' : /^(f|female|w|woman|women)$/.test(gs) ? 'F' : '',
+      dob: /^\d{4}-\d{2}-\d{2}$/.test(dob) ? dob : '', rank: parseRank(g(r, ix.rank)), dojo: g(r, ix.dojo), state: g(r, ix.state), country: g(r, ix.country), email: g(r, ix.email), phone: g(r, ix.phone),
+      emergencyName: g(r, ix.en), emergencyPhone: g(r, ix.ep), waiver: yes(g(r, ix.waiver)), feePaid: yes(g(r, ix.paid)),
+      events: [...new Set(g(r, ix.events).split(/[;|]/).map(s => EV_ALIASES[s.trim().toLowerCase()] || (KT.EVENT_TYPES[s.trim().toUpperCase()] ? s.trim().toUpperCase() : null)).filter(Boolean))] };
+    const miss = [];
+    if (!rec.firstName || !rec.lastName) miss.push('name'); if (!rec.rank) miss.push('rank');
+    if (curEvent().kind === 'tournament') { if (!rec.gender) miss.push('gender'); if (!rec.dob) miss.push('date of birth'); }
+    if (miss.length) errors.push(`Row ${n + 2}: missing ${miss.join(', ')}`); else recs.push(rec);
+  });
+  return { recs, errors };
+}
+async function runImport() {
+  const { recs, errors } = importRows($('#imp-text').value);
+  if (!recs.length) { $('#imp-preview').textContent = errors.join(' · ') || 'Nothing to import.'; return; }
+  const btn = $('[data-act="imp-run"]'); btn.disabled = true;
+  let done = 0;
+  for (const r of recs) {
+    const id = uid();
+    const pub = { firstName: r.firstName, lastName: r.lastName, gender: r.gender, rank: r.rank, dojo: r.dojo, state: r.state, country: r.country, waiver: r.waiver, feePaid: r.feePaid,
+      checkedIn: false, status: 'active', events: r.events, divOverride: {}, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : null, createdAt: new Date().toISOString() };
+    const ok = await guard(async () => { await S.store.set(P.doc(S.evId, 'competitors', id), pub); await S.store.set(P.pv(S.evId, id), { dob: r.dob, email: r.email, phone: r.phone, emergencyName: r.emergencyName, emergencyPhone: r.emergencyPhone, feeAmount: '', notes: '' }); return true; });
+    if (!ok) break;
+    done++; $('#imp-preview').textContent = `Imported ${done} of ${recs.length}…`;
+  }
+  closeModal(); toast(`Imported ${plural(done, 'competitor')}${errors.length ? ` · ${errors.length} rows skipped` : ''}`);
+}
+
+function teamForm(id, et) {
+  const t = id ? DC.teamBy[id] : { eventType: et, memberIds: [], status: 'active' };
+  et = t.eventType; const T = KT.EVENT_TYPES[et];
+  const mem = new Set(t.memberIds || []);
+  const pool = DC.comps.filter(c => c.status !== 'withdrawn' && ((c.events || []).includes(et) || mem.has(c.id)))
+    .sort((a, b) => String(a.dojo).localeCompare(String(b.dojo)) || String(a.lastName).localeCompare(String(b.lastName)));
+  const inOther = new Set(DC.teams.filter(x => x.id !== id && x.eventType === et).flatMap(x => x.memberIds || []));
+  const divs = DC.divs.filter(d => d.eventType === et);
+  openModal(sheet(id ? esc(t.name) : `New ${esc(T.label)} team`, `<form id="f-team" data-form="team" data-id="${esc(id || '')}" data-et="${et}" class="stack">
+    <div class="fgrid"><label class="f req"><span>Team name</span><input name="name" id="t-name" required value="${esc(t.name || '')}" placeholder="e.g. Hoshi Dojo A"></label>
+      <label class="f"><span>Dojo / club</span><input name="dojo" id="t-dojo" value="${esc(t.dojo || '')}"></label>
+      <label class="f"><span>Division</span><select name="divisionId" id="t-div">${opt('', 'Auto (by members)', t.divisionId)}${divs.map(d => opt(d.id, d.name, t.divisionId)).join('')}</select></label>
+      <label class="f"><span>Status</span><select name="status" id="t-status">${opt('active', 'Active', t.status)}${opt('withdrawn', 'Withdrawn', t.status)}</select></label></div>
+    <fieldset><legend>Members · ${T.size[0] === T.size[1] ? T.size[0] : T.size[0] + '–' + T.size[1]} needed</legend>
+      ${pool.length ? `<div class="stack" style="gap:6px;max-height:300px;overflow:auto">${pool.map(c => `<label class="check"><input type="checkbox" data-multi="1" name="memberIds" value="${esc(c.id)}" ${mem.has(c.id) ? 'checked' : ''}>
+        ${esc(c.lastName)}, ${esc(c.firstName)} <span class="muted small">· ${esc(c.dojo || '')} · ${esc(c.gender === 'F' ? 'W' : 'M')} · ${esc(KT.rankLabel(c.rank))}${inOther.has(c.id) ? ' · on another team' : ''}</span></label>`).join('')}</div>`
+        : `<p class="small muted">No competitors have entered ${esc(T.label)} yet. Tick the event on their registration first.</p>`}</fieldset></form>`,
+    `${id ? '<button class="danger" data-act="team-delete" style="margin-right:auto">Delete</button>' : ''}<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-team">Save</button>`));
+}
+async function saveTeam(form) {
+  const v = fd(form), et = form.dataset.et, T = KT.EVENT_TYPES[et], id = form.dataset.id || uid();
+  if (!v.name) { toast('Give the team a name.', true); return; }
+  const mids = v.memberIds || [];
+  if (mids.length < T.size[0] || mids.length > T.size[1]) { toast(`${T.label} teams need ${T.size[0] === T.size[1] ? T.size[0] : T.size[0] + '–' + T.size[1]} members (selected ${mids.length}).`, true); return; }
+  const mem = mids.map(i => DC.compBy[i]).filter(Boolean);
+  const g = KT.teamGender(mem);
+  if (!T.genders.includes(g)) { toast(`${T.label} has no mixed division. Pick members of one gender.`, true); return; }
+  if (!v.dojo && mem.length && mem.every(m => m.dojo === mem[0].dojo)) v.dojo = mem[0].dojo;
+  const ok = await guard(async () => {
+    await S.store.set(P.doc(S.evId, 'teams', id), { name: v.name, dojo: v.dojo, eventType: et, memberIds: mids, divisionId: v.divisionId || '', status: v.status || 'active', gender: g });
+    for (const m of mem) if (!(m.events || []).includes(et)) await S.store.update(P.doc(S.evId, 'competitors', m.id), { events: (m.events || []).concat(et) });
+  }, 'Team saved');
+  if (ok) closeModal();
+}
+
+function divForm(id) {
+  const ev = curEvent();
+  const d = id ? DC.divBy[id] : { eventType: (ev.eventTypes || KT.EVENT_ORDER)[0], gender: 'M', belt: 'black', group: 'Senior', minAge: 21, maxAge: '', minRank: 'd1', maxRank: 'd10', format: ev.defaultFormat || 'SE', bronze: ev.bronze || 'two', reset: true };
+  const sc = scoringOf(d), k = kindOf(d);
+  const ents = id ? divEntrants(id) : [];
+  const bs = id ? bracketState(id) : { drawn: false };
+  openModal(sheet(id ? esc(d.name) : 'New division', `<form id="f-div" data-form="div" data-id="${esc(id || '')}" class="stack">
+    <div class="fgrid">
+      <label class="f"><span>Event</span><select name="eventType" id="d-et" data-change="div-et">${(ev.eventTypes || KT.EVENT_ORDER).map(t => opt(t, KT.EVENT_TYPES[t].label, d.eventType)).join('')}</select></label>
+      <label class="f"><span>Gender</span><select name="gender" id="d-g">${KT.EVENT_TYPES[d.eventType].genders.map(g => opt(g, KT.GENDERS[g], d.gender)).join('')}</select></label>
+      <label class="f"><span>Belt class</span><select name="belt" id="d-belt">${opt('black', 'Black belt (Dan)', d.belt)}${opt('kyu', 'Kyu belt', d.belt)}</select></label>
+      <label class="f"><span>Group label</span><input name="group" id="d-group" value="${esc(d.group || '')}" placeholder="Senior, Youth, Novice…"></label>
+      <label class="f"><span>Minimum age</span><input type="number" name="minAge" id="d-min" min="0" max="99" value="${esc(d.minAge ?? '')}"></label>
+      <label class="f"><span>Maximum age</span><input type="number" name="maxAge" id="d-max" min="0" max="120" value="${esc(d.maxAge ?? '')}" placeholder="No limit"></label>
+      <label class="f"><span>Lowest rank</span><select name="minRank" id="d-rlo">${rankOptions(d.minRank)}</select></label>
+      <label class="f"><span>Highest rank</span><select name="maxRank" id="d-rhi">${rankOptions(d.maxRank)}</select></label>
+      <label class="f span"><span>Division name</span><input name="name" id="d-name" value="${esc(d.name || '')}" placeholder="Leave blank to name automatically"></label>
+    </div>
+    <fieldset><legend>Bracket</legend><div class="fgrid">
+      <label class="f"><span>Format</span><select name="format" id="d-fmt" ${bs.results ? 'disabled' : ''}>${Object.entries(KT.FORMATS).map(([x, l]) => opt(x, l, d.format)).join('')}</select></label>
+      <label class="f"><span>Third place (single elim. / playoff)</span><select name="bronze" id="d-bronze">${opt('two', 'Two bronzes', d.bronze)}${opt('match', 'Bronze match', d.bronze)}</select></label>
+      <label class="f"><span>Double elim. grand final</span><select name="reset" id="d-reset">${opt('1', 'Reset match if needed', d.reset === false ? '0' : '1')}${opt('0', 'Single final', d.reset === false ? '0' : '1')}</select></label>
+      <label class="f"><span>Round robin: advance per pool</span><select name="advance" id="d-adv">${opt('', 'Auto (2 if two pools, else 1)', d.advance || '')}${opt('1', '1', d.advance)}${opt('2', '2', d.advance)}</select></label>
+      <label class="f"><span>Ring</span><select name="ringId" id="d-ring">${opt('', 'No ring yet', d.ringId)}${DC.rings.map(r => opt(r.id, r.name, d.ringId)).join('')}</select></label>
+    </div>${bs.results ? '<p class="tiny muted">Format is locked because results exist.</p>' : ''}</fieldset>
+    <fieldset><legend>Scoring (WTKF)</legend><div class="fgrid">
+      ${k === 'kata' ? `<label class="f"><span>Decision</span><select name="method" id="d-method">${opt('flags', 'Flags (judges’ majority)', sc.method)}${opt('scores', 'Scores 0–10 (drop high & low with 5)', sc.method)}</select></label>` : ''}
+      ${k === 'kata' || k === 'fukugo' ? `<label class="f"><span>Judges</span><select name="judges" id="d-judges">${opt('3', '3', sc.judges)}${opt('5', '5', sc.judges)}</select></label>` : ''}
+      ${k !== 'kata' ? `<label class="f"><span>Bout time (seconds)</span><input type="number" name="boutTime" id="d-bt" min="30" max="600" step="10" value="${esc(sc.boutTime)}"></label>
+      <label class="f"><span>Kettei-sen (seconds, 0 = none)</span><input type="number" name="ketteiTime" id="d-kt" min="0" max="180" step="10" value="${esc(sc.ketteiTime)}"></label>` : ''}
+      ${k === 'teamkumite' ? `<label class="f"><span>Bouts per team match</span><select name="bouts" id="d-bouts">${opt('3', '3', sc.bouts)}${opt('5', '5', sc.bouts)}</select></label>` : ''}
+    </div></fieldset>
+    ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${ents.length ? `<div class="stack" style="gap:6px">${ents.map(e => `<div class="row between small"><span style="min-width:0"><b>${esc(entName(e))}</b> <span class="muted">${esc(entDojo(e))}</span></span>
+      <input type="number" min="1" max="64" name="seed_${esc(e)}" id="seed-${esc(e)}" value="${esc((d.seeds || {})[e] || '')}" placeholder="Seed" style="width:86px" aria-label="Seed"></div>`).join('')}</div>
+      <p class="tiny muted" style="margin-top:6px">Seeded entrants are kept apart in the draw. Others are placed at random with dojo-mates separated where possible.</p>` : '<p class="small muted">No entrants match this division yet.</p>'}</fieldset>` : ''}</form>`,
+    `${id ? `<button class="danger" data-act="div-delete" style="margin-right:auto">Delete</button>${bs.drawn ? `<button class="danger" data-act="bracket-clear">Clear bracket</button>` : ''}` : ''}<button data-act="modal-close">Cancel</button>${id && ents.length ? `<button data-act="draw" data-id="${esc(id)}" ${bs.results ? 'disabled' : ''}>${bs.drawn ? 'Save & redraw' : 'Save & draw'}</button>` : ''}<button class="primary" type="submit" form="f-div">Save</button>`));
+}
+async function saveDiv(form, thenDraw) {
+  const v = fd(form), id = form.dataset.id || uid();
+  const old = DC.divBy[form.dataset.id] || {};
+  const T = KT.EVENT_TYPES[v.eventType];
+  if (!T.genders.includes(v.gender)) v.gender = T.genders[0];
+  const seeds = {}; for (const k of Object.keys(v)) if (k.startsWith('seed_')) { if (+v[k] > 0) seeds[k.slice(5)] = +v[k]; delete v[k]; }
+  const kind = T.kind, base = Object.assign(KT.defaultScoring(v.eventType), old.scoring || {});
+  const scoring = { method: v.method || base.method, judges: +(v.judges || base.judges), boutTime: +(v.boutTime || base.boutTime), ketteiTime: v.ketteiTime === '' || v.ketteiTime == null ? base.ketteiTime : +v.ketteiTime, bouts: +(v.bouts || base.bouts) };
+  const dv = { eventType: v.eventType, gender: v.gender, belt: v.belt, group: v.group, minAge: v.minAge === '' ? null : +v.minAge, maxAge: v.maxAge === '' ? null : +v.maxAge,
+    minRank: v.minRank || (v.belt === 'black' ? 'd1' : 'k10'), maxRank: v.maxRank || (v.belt === 'black' ? 'd10' : 'k1'), format: v.format || old.format || 'SE', bronze: v.bronze, reset: v.reset !== '0', advance: v.advance ? +v.advance : null,
+    ringId: v.ringId || '', ringOrder: old.ringOrder ?? Date.now(), scoring, seeds, order: old.order || 0 };
+  dv.name = v.name && v.name !== (old.eventType ? KT.divisionName(old) : '') ? v.name : KT.divisionName(dv);
+  if (dv.minRank && dv.maxRank && KT.rankValue(dv.minRank) > KT.rankValue(dv.maxRank)) { toast('Lowest rank must be below highest rank.', true); return false; }
+  const ok = await guard(() => S.store.set(P.doc(S.evId, 'divisions', id), dv), thenDraw ? null : 'Division saved');
+  if (!ok) return false;
+  closeModal();
+  return id;
+}
+function stdDivForm(kyu) {
+  const ev = curEvent();
+  const ets = ev.eventTypes || KT.EVENT_ORDER;
+  openModal(sheet(kyu ? 'Add kyu divisions' : 'Add black-belt divisions', `<form id="f-std" data-form="${kyu ? 'kyu' : 'std'}" class="stack">
+    ${kyu ? `<p class="small muted">Define one kyu group. A division is created for every event and gender you pick.</p><div class="fgrid">
+      <label class="f req"><span>Group label</span><input name="label" id="k-label" required placeholder="e.g. Youth Novice"></label>
+      <label class="f"><span>Lowest rank</span><select name="minRank" id="k-lo">${rankOptions('k10').replace(/<option value="d[\s\S]*$/, '')}</select></label>
+      <label class="f"><span>Highest rank</span><select name="maxRank" id="k-hi">${rankOptions('k1')}</select></label>
+      <label class="f"><span>Minimum age</span><input type="number" name="minAge" id="k-min" min="0" max="99"></label>
+      <label class="f"><span>Maximum age</span><input type="number" name="maxAge" id="k-max" min="0" max="120" placeholder="No limit"></label></div>`
+      : `<p class="small muted">Creates Senior (21+), Youth (19–20), Junior (16–18) and Cadet (14–15) divisions for each gender category of the events you pick. Existing divisions are skipped.</p>`}
+    <div><div class="label" style="margin-bottom:6px">Events</div><div class="pill-list">${ets.map(k => `<label class="check chip plain"><input type="checkbox" data-multi="1" name="ets" value="${k}" checked> ${esc(KT.EVENT_TYPES[k].label)}</label>`).join('')}</div></div>
+    <label class="f" style="max-width:320px"><span>Bracket format</span><select name="format" id="std-fmt">${Object.entries(KT.FORMATS).map(([x, l]) => opt(x, l, ev.defaultFormat || 'SE')).join('')}</select></label></form>`,
+    `<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-std">Create divisions</button>`));
+}
+async function saveStd(form, kyu) {
+  const v = fd(form), ev = curEvent();
+  if (!(v.ets || []).length) { toast('Pick at least one event.', true); return; }
+  let list;
+  if (kyu) {
+    if (!v.label) { toast('Give the group a label.', true); return; }
+    list = KT.kyuDivisions({ label: v.label, minRank: v.minRank, maxRank: v.maxRank, minAge: v.minAge === '' ? null : +v.minAge, maxAge: v.maxAge === '' ? null : +v.maxAge }, v.ets, v.format);
+  } else list = KT.blackBeltDivisions(v.ets, v.format);
+  const key = d => [d.eventType, d.gender, d.belt, d.group, d.minAge, d.maxAge, d.minRank, d.maxRank].join('|');
+  const have = new Set(DC.divs.map(key));
+  const add = list.filter(d => !have.has(key(d)));
+  for (const d of add) { d.bronze = ev.bronze || 'two'; d.ringId = ''; d.ringOrder = Date.now(); await guard(() => S.store.set(P.doc(S.evId, 'divisions', uid()), d)); }
+  closeModal(); toast(add.length ? `Created ${plural(add.length, 'division')}` : 'Those divisions already exist');
+}
+function ringForm(id) {
+  const r = id ? S.d.rings[id] : {};
+  openModal(sheet(id ? 'Ring' : 'Add ring', `<form id="f-ring" data-form="ring" data-id="${esc(id || '')}" class="stack"><label class="f req"><span>Ring name</span><input name="name" id="r-name" required value="${esc(r.name || '')}" placeholder="Ring ${DC.rings.length + 1}"></label></form>`,
+    `${id ? '<button class="danger" data-act="ring-delete" style="margin-right:auto">Delete ring</button>' : ''}<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-ring">Save</button>`));
+}
+function sessionForm(id) {
+  const s = id ? S.d.sessions[id] : { date: curEvent().startDate };
+  openModal(sheet(id ? 'Session' : 'Add session', `<form id="f-sess" data-form="session" data-id="${esc(id || '')}" class="stack"><div class="fgrid">
+    <label class="f req span"><span>Title</span><input name="title" id="s-title" required value="${esc(s.title || '')}" placeholder="e.g. Kata: Bassai Dai"></label>
+    <label class="f req"><span>Date</span><input type="date" name="date" id="s-date" required value="${esc(s.date || '')}"></label>
+    <label class="f"><span>Start</span><input type="time" name="start" id="s-start" value="${esc(s.start || '')}"></label>
+    <label class="f"><span>End</span><input type="time" name="end" id="s-end" value="${esc(s.end || '')}"></label>
+    <label class="f"><span>Instructor</span><input name="instructor" id="s-inst" value="${esc(s.instructor || '')}"></label>
+    <label class="f"><span>Location</span><input name="location" id="s-loc" value="${esc(s.location || '')}"></label>
+    <label class="f"><span>Capacity</span><input type="number" name="capacity" id="s-cap" min="0" value="${esc(s.capacity || '')}"></label>
+    <label class="f span"><span>Notes</span><textarea name="notes" id="s-notes">${esc(s.notes || '')}</textarea></label></div></form>`,
+    `${id ? '<button class="danger" data-act="session-delete" style="margin-right:auto">Delete</button>' : ''}<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-sess">Save</button>`));
+}
+function tiebreakForm(did, P) {
+  const br = S.d.brackets[did], res = DC.res[did];
+  const st = KT.standings(br, P, id => res[id]);
+  S.tbOrder = st.rows.map(r => r.id);
+  S.modal = { type: 'tb', did, P, refresh: null };
+  const draw = () => `<p class="small muted">Set the final order for Pool ${esc(P)} (for example after a deciding bout or a referee panel decision).</p>
+    <div class="stack" style="gap:6px">${S.tbOrder.map((id, i) => `<div class="row between"><span><b class="num">${i + 1}.</b> ${esc(entName(id))} <span class="muted small">${esc(entDojo(id))}</span></span>
+    <span class="row" style="gap:4px"><button class="sm" data-act="tb-move" data-i="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Up">↑</button><button class="sm" data-act="tb-move" data-i="${i}" data-dir="1" ${i === S.tbOrder.length - 1 ? 'disabled' : ''} aria-label="Down">↓</button></span></div>`).join('')}</div>`;
+  S.tbDraw = draw;
+  openModal(sheet(`Tiebreak · Pool ${esc(P)}`, `<div id="tb-body">${draw()}</div>`, `<button data-act="modal-close">Cancel</button><button class="primary" data-act="tb-save">Save order</button>`));
+  S.modal = { type: 'tb', did, P };
+}
+/* ===== scoresheet (WTKF) ===== */
+const CLOCK = { left: 0, running: false, t0: 0, base: 0, timer: null, key: '' };
+function stopClock() { if (CLOCK.timer) clearInterval(CLOCK.timer); CLOCK.timer = null; if (CLOCK.running) { CLOCK.left = Math.max(0, CLOCK.base - (Date.now() - CLOCK.t0) / 1000); CLOCK.running = false; } }
+function setClock(sec, key) { stopClock(); CLOCK.left = sec; CLOCK.base = sec; CLOCK.key = key || CLOCK.key; paintClock(); }
+function clockLeft() { return CLOCK.running ? Math.max(0, CLOCK.base - (Date.now() - CLOCK.t0) / 1000) : CLOCK.left; }
+function toggleClock() {
+  if (CLOCK.running) { stopClock(); }
+  else { if (clockLeft() <= 0) return; CLOCK.base = CLOCK.left; CLOCK.t0 = Date.now(); CLOCK.running = true; CLOCK.timer = setInterval(() => { paintClock(); if (clockLeft() <= 0) { stopClock(); CLOCK.left = 0; paintClock(); } }, 200); }
+  paintClock();
+}
+function paintClock() {
+  const el = $('#clock'); if (!el) return;
+  const l = clockLeft(); el.textContent = fmtClock(Math.ceil(l)); el.classList.toggle('zero', l <= 0);
+  const b = $('#clock-btn'); if (b) b.textContent = CLOCK.running ? 'Stop' : 'Start';
+}
+
+function draftKey(did, mid) { return `${S.evId}:${did}:${mid}`; }
+function loadDraft(key) {
+  if (S.draft[key]) return S.draft[key];
+  try { const v = JSON.parse(localStorage.getItem('kt-draft-' + key) || 'null'); if (v) return (S.draft[key] = v); } catch (e) { /* ignore */ }
+  return (S.draft[key] = {});
+}
+function saveDraft(key) { try { localStorage.setItem('kt-draft-' + key, JSON.stringify(S.draft[key])); } catch (e) { /* ignore */ } }
+function dropDraft(key) { delete S.draft[key]; try { localStorage.removeItem('kt-draft-' + key); } catch (e) { /* ignore */ } }
+
+function openScore(did, mid) {
+  S.modal = { type: 'score', did, mid, key: draftKey(did, mid), sig: '', refresh: () => renderScore(false) };
+  const dv = DC.divBy[did]; const sc = scoringOf(dv);
+  setClock(sc.boutTime, S.modal.key + ':main');
+  openModal('<div id="score-root"></div>', { wide: true, nofocus: true });
+  renderScore(true);
+}
+/** Evaluate the draft into an outcome {done, winner:'a'|'b', method, pts, detail, need} */
+function evaluate(dv, d) {
+  const k = kindOf(dv), sc = scoringOf(dv);
+  if (d.kiken) return { done: true, winner: d.kiken === 'a' ? 'b' : 'a', method: 'Kiken (withdrawal)', pts: { a: 0, b: 0 } };
+  if (k === 'kata') {
+    if (sc.method === 'scores') {
+      const r = KT.scoresEval(d.sa || [], d.sb || [], sc.judges, d.tieFlags != null ? (d.tieFlags || []).filter(x => x === 'a').length : null);
+      if (d.tieFlags && d.tieFlags.filter(Boolean).length < sc.judges && r.done && r.method.startsWith('Tie')) return { done: false, tie: true, pts: r.score };
+      return { done: r.done, winner: r.winner, method: r.method, pts: r.score, tie: r.tie, detail: { sa: d.sa, sb: d.sb } };
+    }
+    const fl = d.flags || [];
+    if (fl.filter(Boolean).length < sc.judges) return { done: false };
+    const r = KT.flagsEval(fl.filter(x => x === 'a').length, sc.judges);
+    return { done: r.done, winner: r.winner, method: r.method, pts: r.score, detail: { flags: fl } };
+  }
+  if (k === 'kumite') {
+    const r = KT.kumiteEval(d.log || [], { kettei: sc.ketteiTime > 0 });
+    return { done: r.done, winner: r.winner, method: r.method, pts: r.score, phase: r.phase, detail: { log: d.log } };
+  }
+  if (k === 'teamkumite') {
+    const r = KT.teamKumiteEval(d.bouts || [], sc.bouts, d.daihyo);
+    return { done: r.done, winner: r.winner, method: r.method, pts: r.wins, needDaihyo: r.needDaihyo, per: r.per, detail: { bouts: d.bouts, daihyo: d.daihyo || null } };
+  }
+  if (k === 'fukugo') {
+    const fl = d.flags || [];
+    const kf = fl.filter(Boolean).length === sc.judges ? fl.filter(x => x === 'a').length : null;
+    const r = KT.fukugoEval(kf, sc.judges, d.log || [], d.hantei);
+    return { done: r.done, winner: r.winner, method: r.method, pts: r.score || { a: 0, b: 0 }, split: r.split, kata: r.kata, kumite: r.kumite, detail: { flags: fl, log: d.log } };
+  }
+  return { done: false };
+}
+function renderScore(force) {
+  const M = S.modal; if (!M || M.type !== 'score') return;
+  const root = $('#score-root'); if (!root) return;
+  const { did, mid, key } = M;
+  const dv = DC.divBy[did], br = S.d.brackets[did];
+  if (!dv || !br || !br.matches[mid]) { root.innerHTML = sheet('Match unavailable', '<p>This match no longer exists (the bracket may have been redrawn).</p>', '<button data-act="modal-close">Close</button>'); return; }
+  const r = DC.res[did][mid], m = br.matches[mid];
+  const sig = [r.status, r.a, r.b, r.winner].join('|');
+  if (!force && sig === M.sig) return; // background update that doesn't affect this sheet
+  M.sig = sig;
+  const title = `${esc(KT.matchLabel(m, br))} · ${esc(mid)}`;
+  const sub = esc(dv.name) + (S.d.rings[dv.ringId] ? ' · ' + esc(S.d.rings[dv.ringId].name) : '');
+  const hdr = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="corner a"><div class="label" style="color:#fff;opacity:.8">Aka</div><div class="who">${esc(entName(r.a) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(r.a))}</div></div>
+    <div class="corner b"><div class="label">Shiro</div><div class="who">${esc(entName(r.b) || 'TBD')}</div><div class="tiny muted">${esc(entDojo(r.b))}</div></div></div>`;
+  if (r.status === 'done') {
+    const can = canScoreDiv(did) && KT.canEdit(br, mid, DC.res[did]);
+    root.innerHTML = sheet(title, `${hdr}<div class="result-banner">Winner: ${esc(entName(r.winner))} · ${esc((r.result || {}).method || '')}${r.result && r.result.pts ? ` · <span class="num">${esc(r.result.pts.a)}–${esc(r.result.pts.b)}</span>` : ''}</div>
+      ${!can && canScoreDiv(did) ? '<p class="small muted">This result can no longer be changed because a later match that depends on it has been scored. Undo that match first.</p>' : ''}`,
+      `${can ? '<button class="danger" data-act="undo-result">Undo result</button>' : ''}<button class="primary" data-act="modal-close">Close</button>`, sub);
+    return;
+  }
+  if (r.status !== 'ready') { root.innerHTML = sheet(title, `${hdr}<p class="muted">Waiting for earlier matches.</p>`, '<button data-act="modal-close">Close</button>', sub); return; }
+  if (!canScoreDiv(did)) { root.innerHTML = sheet(title, `${hdr}<p class="muted">Only the director or this ring’s manager can score this match.</p>`, '<button data-act="modal-close">Close</button>', sub); return; }
+  const d = loadDraft(key), out = evaluate(dv, d), k = kindOf(dv), sc = scoringOf(dv);
+  let body = '';
+  if (k === 'kata') body = sc.method === 'scores' ? scoresPanel(d, sc, out) : flagsPanel(d, sc, 'flags', 'Judges’ flags');
+  else if (k === 'kumite') body = kumitePanel(d.log || [], 'log', sc, r, { kettei: sc.ketteiTime > 0 });
+  else if (k === 'teamkumite') body = teamPanel(d, sc, r, out);
+  else if (k === 'fukugo') body = fukugoPanel(d, sc, r, out);
+  const kiken = `<div class="row small"><span class="muted">Withdrawal / no-show:</span><button class="sm ${d.kiken === 'a' ? 'danger' : ''}" data-act="kiken" data-s="a">Aka kiken</button><button class="sm ${d.kiken === 'b' ? 'danger' : ''}" data-act="kiken" data-s="b">Shiro kiken</button></div>`;
+  const banner = out.done ? `<div class="result-banner">Result: ${esc(entName(out.winner === 'a' ? r.a : r.b))} wins · ${esc(out.method)}</div>` : '';
+  const ring = S.d.rings[dv.ringId];
+  root.innerHTML = sheet(title, `${k === 'kumite' ? '' : hdr}${body}${banner}${kiken}`,
+    `${ring ? `<button data-act="call-mat" style="margin-right:auto">Call to ${esc(ring.name)}</button>` : ''}<button data-act="reset-draft">Clear sheet</button><button data-act="modal-close">Close</button><button class="primary" data-act="save-result" ${out.done ? '' : 'disabled'}>Confirm result</button>`, sub);
+  paintClock();
+}
+function flagsPanel(d, sc, field, title) {
+  const fl = d[field] || [];
+  const n = fl.filter(x => x === 'a').length, m = fl.filter(x => x === 'b').length;
+  return `<div class="stack"><div class="row between"><h3>${title}</h3><span class="chip"><span class="num">${n}</span>&nbsp;Aka · <span class="num">${m}</span>&nbsp;Shiro</span></div><div class="judges">${Array.from({ length: sc.judges }, (_, i) => `<div class="jrow"><span class="label">J${i + 1}</span>
+    <button class="${fl[i] === 'a' ? 'on a' : ''}" data-act="flag" data-f="${field}" data-i="${i}" data-s="a" aria-pressed="${fl[i] === 'a'}">Aka</button><button class="${fl[i] === 'b' ? 'on b' : ''}" data-act="flag" data-f="${field}" data-i="${i}" data-s="b" aria-pressed="${fl[i] === 'b'}">Shiro</button></div>`).join('')}</div></div>`;
+}
+function scoresPanel(d, sc, out) {
+  const J = sc.judges;
+  const row = (side, arr) => {
+    const t = KT.scoreTotal(arr || [], J);
+    return `<div class="srow" style="--j:${J}"><span class="side"><span class="belt ${side}"></span><b>${side === 'a' ? 'Aka' : 'Shiro'}</b></span>
+      ${Array.from({ length: J }, (_, i) => `<input id="sc-${side}-${i}" inputmode="decimal" data-change="kscore" data-s="${side}" data-i="${i}" value="${esc((arr || [])[i] ?? '')}" placeholder="0.0" aria-label="${side === 'a' ? 'Aka' : 'Shiro'} judge ${i + 1}">`).join('')}
+      <span class="tot">${t ? t.total.toFixed(1) : '—'}</span></div>`;
+  };
+  return `<div class="stack"><div class="row between"><h3>Judges’ scores</h3><span class="small muted">0.0–10.0${J >= 5 ? ' · highest and lowest dropped' : ''}</span></div>
+    <div class="tw"><div class="stack" style="min-width:${120 + J * 60 + 80}px"><div class="srow" style="--j:${J}"><span></span>${Array.from({ length: J }, (_, i) => `<span class="label" style="text-align:center">J${i + 1}</span>`).join('')}<span class="label" style="text-align:right">Total</span></div>${row('a', d.sa)}${row('b', d.sb)}</div></div>
+    ${out.tie ? `<div class="notice warn">Scores are tied on every tiebreak. Judges decide by flags.</div>${flagsPanel(d, sc, 'tieFlags', 'Tie decision')}` : ''}</div>`;
+}
+function kumitePanel(log, path, sc, r, opts) {
+  const ev = KT.kumiteEval(log, opts);
+  const corner = (s) => {
+    const st = ev.st[s];
+    const name = s === 'a' ? entName(r.a) : entName(r.b);
+    const dis = ev.done ? 'disabled' : '';
+    return `<div class="corner ${s}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${ev.done && ev.winner === s ? '<span class="chip ok">Winner</span>' : ''}</div>
+      <div class="who">${esc(opts.names ? opts.names[s] || name : name)}</div><div class="big">${ev.score[s]}</div>
+      <div class="tally">Ippon ${st.ippon} · Waza-ari ${st.waza}${st.keikoku || st.chui ? ` · <span title="Penalties">K${st.keikoku} C${st.chui}</span>` : ''}</div>
+      <div class="btns"><button data-act="k-ev" data-p="${path}" data-s="${s}" data-t="waza" ${dis}>Waza-ari</button><button data-act="k-ev" data-p="${path}" data-s="${s}" data-t="ippon" ${dis}>Ippon</button>
+      <button class="pen" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="keikoku" ${dis}>Keikoku</button><button class="pen" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="chui" ${dis}>Chui</button>
+      <button class="pen" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="hansoku" ${dis}>Hansoku</button>${ev.phase === 'hantei' ? `<button data-act="k-ev" data-p="${path}" data-s="${s}" data-t="hantei">Hantei</button>` : '<span></span>'}</div></div>`;
+  };
+  const phaseTxt = ev.done ? `${ev.winner ? (ev.winner === 'a' ? 'Aka' : 'Shiro') + ' · ' : ''}${ev.method}` : ev.phase === 'kettei' ? 'Kettei-sen · first score wins' : ev.phase === 'hantei' ? 'Hantei · judges decide' : 'Shobu ippon';
+  const main = path === S.activeClock || !S.activeClock;
+  return `<div class="board">${corner('a')}<div class="mid"><div class="phase">${esc(phaseTxt)}</div>
+      ${main ? `<div class="clock" id="clock">${fmtClock(clockLeft())}</div><div class="row" style="justify-content:center"><button id="clock-btn" data-act="clock" ${ev.done ? 'disabled' : ''}>${CLOCK.running ? 'Stop' : 'Start'}</button><button data-act="clock-reset" data-p="${path}" aria-label="Reset clock">↺</button></div>` : ''}
+      ${ev.phase === 'regular' && !ev.done ? `<button data-act="k-ev" data-p="${path}" data-t="timeup">Time up</button>` : ''}
+      ${ev.phase === 'kettei' ? `<button data-act="k-ev" data-p="${path}" data-t="ketteiend">End Kettei-sen</button>` : ''}
+      <button data-act="k-undo" data-p="${path}" ${log.length ? '' : 'disabled'}>Undo last</button>
+      <div class="log">${log.slice(-6).map(e => esc((e.s ? (e.s === 'a' ? 'Aka ' : 'Shiro ') : '') + ({ waza: 'Waza-ari', ippon: 'Ippon', keikoku: 'Keikoku', chui: 'Chui', hansoku: 'Hansoku', kiken: 'Kiken', timeup: 'Time up', ketteiend: 'Kettei-sen ended', hantei: 'Hantei' }[e.t] || e.t))).join('<br>')}</div></div>${corner('b')}</div>`;
+}
+function teamPanel(d, sc, r, out) {
+  const ta = DC.teamBy[r.a] || {}, tb = DC.teamBy[r.b] || {};
+  const nm = (t, id) => { const c = DC.compBy[id]; return c ? `${c.firstName} ${c.lastName}` : ''; };
+  const sel = (t, side, i, v) => `<select id="tm-${side}-${i}" data-change="bout-member" data-s="${side}" data-i="${i}" aria-label="Competitor">${opt('', side === 'a' ? 'Aka competitor…' : 'Shiro competitor…', v)}${(t.memberIds || []).map(id => opt(id, nm(t, id), v)).join('')}</select>`;
+  const bouts = d.bouts || [];
+  const idx = Math.min(S.boutSel ?? 0, sc.bouts - 1 + (out.needDaihyo ? 1 : 0));
+  const tabs = Array.from({ length: sc.bouts }, (_, i) => { const p = out.per[i]; return `<button class="sm ${idx === i ? 'primary' : ''}" data-act="bout-sel" data-i="${i}">Bout ${i + 1}${p && p.done ? (p.winner ? (p.winner === 'a' ? ' · Aka' : ' · Shiro') : ' · Draw') : ''}</button>`; }).join('')
+    + (out.needDaihyo ? `<button class="sm ${idx === sc.bouts ? 'primary' : ''}" data-act="bout-sel" data-i="${sc.bouts}">Daihyo-sen</button>` : '');
+  const isD = idx === sc.bouts, b = isD ? (d.daihyo || {}) : (bouts[idx] || {});
+  const path = isD ? 'daihyo' : `bouts.${idx}`;
+  return `<div class="stack"><div class="row between"><h3>Team match</h3><span class="chip">Bouts <span class="num">&nbsp;${out.pts ? out.pts.a : 0}–${out.pts ? out.pts.b : 0}</span></span></div>
+    <div class="row">${tabs}</div>
+    <div class="bout"><div class="bout-h"><b>${isD ? 'Daihyo-sen (representative bout)' : `Bout ${idx + 1}`}</b><div class="row">${sel(ta, 'a', isD ? 'd' : idx, b.ma)}${sel(tb, 'b', isD ? 'd' : idx, b.mb)}</div></div>
+    ${kumitePanel(b.log || [], path, sc, r, { allowDraw: !isD, names: { a: b.ma ? nm(ta, b.ma) : entName(r.a), b: b.mb ? nm(tb, b.mb) : entName(r.b) } })}</div></div>`;
+}
+function fukugoPanel(d, sc, r, out) {
+  return `<div class="stack">${flagsPanel(d, sc, 'flags', 'Part 1 · Kata (flags)')}
+    <div class="stack"><h3>Part 2 · Kumite</h3>${kumitePanel(d.log || [], 'log', sc, r, { kettei: sc.ketteiTime > 0 })}</div>
+    ${out.split ? `<div class="notice warn">Kata and kumite went to different competitors. Judges give an overall hantei:</div><div class="row"><button class="${d.hantei === 'a' ? 'primary' : ''}" data-act="fk-hantei" data-s="a">Aka</button><button class="${d.hantei === 'b' ? 'primary' : ''}" data-act="fk-hantei" data-s="b">Shiro</button></div>` : ''}</div>`;
+}
+function logAt(d, path) {
+  if (path === 'log') return (d.log = d.log || []);
+  if (path === 'daihyo') { d.daihyo = d.daihyo || { log: [] }; return (d.daihyo.log = d.daihyo.log || []); }
+  const i = +path.split('.')[1]; d.bouts = d.bouts || []; d.bouts[i] = d.bouts[i] || { log: [] }; return (d.bouts[i].log = d.bouts[i].log || []);
+}
+let liveT = null;
+function pushLive() {
+  const M = S.modal; if (!M || M.type !== 'score') return;
+  const dv = DC.divBy[M.did]; if (!dv || !S.d.rings[dv.ringId] || S.readOnly) return;
+  clearTimeout(liveT);
+  liveT = setTimeout(() => {
+    const out = evaluate(dv, loadDraft(M.key));
+    const phase = out.done ? out.method : out.phase === 'kettei' ? 'Kettei-sen' : out.phase === 'hantei' ? 'Hantei' : '';
+    S.store.set(P.live(S.evId, 'ringstate', dv.ringId), { did: M.did, mid: M.mid, score: out.pts || null, phase, at: new Date().toISOString(), by: S.myId || '' }).catch(e => console.warn(e));
+  }, 350);
+}
+function draftChanged() { const M = S.modal; saveDraft(M.key); renderScore(true); pushLive(); }
+async function saveResult() {
+  const M = S.modal; const dv = DC.divBy[M.did];
+  const r = DC.res[M.did][M.mid]; const out = evaluate(dv, loadDraft(M.key));
+  if (!out.done || r.status !== 'ready') return;
+  const winnerId = out.winner === 'a' ? r.a : r.b;
+  const rec = { winnerId, method: out.method, pts: out.pts || { a: 0, b: 0 }, detail: clone(out.detail || {}), at: new Date().toISOString(), by: S.myId || '' };
+  const ok = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { results: { [M.mid]: rec } }));
+  if (!ok) return;
+  dropDraft(M.key);
+  if (S.d.rings[dv.ringId]) S.store.set(P.live(S.evId, 'ringstate', dv.ringId), { did: '', mid: '', at: new Date().toISOString() }).catch(() => {});
+  toast(`${entName(winnerId)} wins · ${out.method}`);
+  closeModal();
+}
+/* ===== actions, subscriptions, init ===== */
+function subscribeEvents() {
+  S.store.watch('events', o => { S.events = o; S.loadedEvents = true; if (S.lastEv && !S.evId && o[S.lastEv]) { const id = S.lastEv; S.lastEv = null; openEvent(id); } render(); }, dbErr);
+}
+function dbErr(e) { console.warn('db', e); if (e && e.code === 'revoked') { S.readOnly = true; toast('Access changed. Reload the page to continue.', true); } }
+function openEvent(id) {
+  S.unsub.forEach(u => { try { u(); } catch (e) { /* ignore */ } }); S.unsub = [];
+  S.evId = id; S.d = { competitors: {}, pv: {}, teams: {}, divisions: {}, rings: {}, sessions: {}, brackets: {}, attendance: {}, ringstate: {} };
+  S.ui.tab = 'overview'; S.ui.bracketDiv = ''; S.ui.ring = ''; S.ui.session = ''; S.ui.q = ''; S.ui.filter = 'all';
+  saveUIPrefs();
+  if (!id) { render(); return; }
+  const w = (col, key) => S.unsub.push(S.store.watch(col, o => { S.d[key] = o; render(); }, dbErr));
+  ['competitors', 'teams', 'divisions', 'rings', 'sessions'].forEach(c => w(P.col(id, c), c));
+  ['brackets', 'attendance', 'ringstate'].forEach(c => w(P.liveCol(id, c), c));
+  if (isLocal() || S.isDirector) w(P.pvCol(id), 'pv');
+  window.scrollTo(0, 0);
+  render();
+}
+
+async function drawDivision(did) {
+  const dv = DC.divBy[did]; if (!dv) return;
+  const bs = bracketState(did);
+  if (bs.results) { toast('This bracket already has results. Clear them before redrawing.', true); return; }
+  const ents = divEntrants(did);
+  if (!ents.length) { toast('No entrants in this division.', true); return; }
+  if (bs.drawn && !(await confirmBox(`Redraw ${dv.name}? The current draw is replaced.`, 'Redraw'))) return;
+  const list = ents.map(id => ({ id, seed: (dv.seeds || {})[id] || 0, dojo: entDojo(id) }));
+  const br = KT.generateBracket(dv, list);
+  const ok = await guard(() => S.store.set(P.live(S.evId, 'brackets', did), br), `Drew ${dv.name}`);
+  if (ok) { S.ui.bracketDiv = did; }
+}
+async function drawAll() {
+  const ready = DC.divs.filter(d => !S.d.brackets[d.id] && divEntrants(d.id).length >= 1);
+  if (!ready.length) { toast('Every division with entrants is already drawn.'); return; }
+  if (!(await confirmBox(`Draw ${plural(ready.length, 'division')} now?`, 'Draw'))) return;
+  for (const d of ready) {
+    const list = divEntrants(d.id).map(id => ({ id, seed: (d.seeds || {})[id] || 0, dojo: entDojo(id) }));
+    if (!(await guard(() => S.store.set(P.live(S.evId, 'brackets', d.id), KT.generateBracket(d, list))))) return;
+  }
+  toast(`Drew ${plural(ready.length, 'division')}`);
+}
+async function deleteEvent(id) {
+  const ev = S.events[id];
+  if (!(await confirmBox(`Delete “${ev.name}” and everything in it? This cannot be undone.`, 'Delete event', true))) return;
+  const paths = [];
+  for (const c of ['competitors', 'teams', 'divisions', 'rings', 'sessions']) Object.keys(S.d[c]).forEach(x => paths.push(P.doc(id, c, x)));
+  Object.keys(S.d.pv).forEach(x => paths.push(P.pv(id, x)));
+  for (const c of ['brackets', 'attendance', 'ringstate']) Object.keys(S.d[c]).forEach(x => paths.push(P.live(id, c, x)));
+  closeModal();
+  for (const p of paths) await guard(() => S.store.del(p));
+  await guard(() => S.store.del(P.event(id)), 'Event deleted');
+  openEvent(null);
+}
+
+async function createDemo() {
+  const id = uid();
+  const start = todayISO();
+  const ev = { name: 'Riverside Invitational (demo)', kind: 'tournament', level: 'Regional', startDate: start, endDate: start, location: 'Demo Sports Hall', host: 'Demo Karate Association',
+    eventTypes: KT.EVENT_ORDER.slice(), defaultFormat: 'SE', bronze: 'two', demo: true, staffIds: [], createdAt: new Date().toISOString() };
+  toast('Creating demo tournament…');
+  if (!(await guard(() => S.store.set(P.event(id), ev)))) return;
+  const y = +start.slice(0, 4);
+  const dojos = ['North Wind Dojo', 'Cedar Hill Karate', 'Lakeside Budokan', 'Iron Pine Club'];
+  const first = { M: ['Alden', 'Bram', 'Caspian', 'Dorian', 'Emeric', 'Faris', 'Gideon', 'Hollis', 'Ivo', 'Jonah', 'Kellan', 'Lorcan'], F: ['Ada', 'Brielle', 'Celeste', 'Delphine', 'Elowen', 'Fenna', 'Greer', 'Hazel', 'Isolde', 'Juno'] };
+  const last = ['Ashby', 'Brandt', 'Corwin', 'Dale', 'Everly', 'Fairbanks', 'Garrow', 'Hale', 'Ingram', 'Joss', 'Kerr', 'Lowell', 'Marsh', 'Nye', 'Oakes', 'Pryor'];
+  const comps = [];
+  let n = 0;
+  const mk = (g, age, rank, events) => { const c = { id: uid() + n, g, age, rank, events }; n++; comps.push(c); return c; };
+  for (let i = 0; i < 8; i++) mk('M', 24 + i * 3, 'd' + (1 + (i % 4)), ['IKATA', 'IKUMITE', 'FUKUGO']);
+  for (let i = 0; i < 5; i++) mk('F', 22 + i * 4, 'd' + (1 + (i % 3)), ['IKATA', 'IKUMITE', 'TKATA']);
+  for (let i = 0; i < 4; i++) mk('M', 16 + (i % 3), 'd1', ['IKATA', 'IKUMITE', 'TKUMITE']);
+  for (let i = 0; i < 5; i++) mk('F', 30 + i, 'k' + (1 + (i % 3)), ['IKATA', 'ENBU']);
+  const fm = { M: 0, F: 0 };
+  const divs = KT.blackBeltDivisions(KT.EVENT_ORDER).concat(KT.kyuDivisions({ label: 'Adult', minRank: 'k5', maxRank: 'k1', minAge: 18, maxAge: null }, ['IKATA', 'ENBU']));
+  const rings = [{ id: uid() + 'r1', name: 'Ring 1', order: 1, managerIds: [] }, { id: uid() + 'r2', name: 'Ring 2', order: 2, managerIds: [] }];
+  for (const r of rings) await guard(() => S.store.set(P.doc(id, 'rings', r.id), r));
+  const ringFor = d => (d.eventType === 'IKATA' || d.eventType === 'TKATA' || d.eventType === 'ENBU') ? rings[0].id : rings[1].id;
+  let order = 0;
+  for (const d of divs) { d.ringId = ringFor(d); d.ringOrder = order++; d.bronze = 'two'; if (d.eventType === 'IKUMITE' && d.group === 'Senior') d.format = 'DE'; if (d.eventType === 'IKATA' && d.group === 'Junior') d.format = 'RR'; await guard(() => S.store.set(P.doc(id, 'divisions', uid() + order), d)); }
+  for (const c of comps) {
+    const f = first[c.g][fm[c.g]++ % first[c.g].length], l = last[(n = (n * 7 + 3) % last.length)];
+    const dob = `${y - c.age}-0${1 + (c.age % 8)}-1${c.age % 9}`;
+    c.first = f; c.last = l; c.dojo = dojos[comps.indexOf(c) % dojos.length];
+    await guard(async () => {
+      await S.store.set(P.doc(id, 'competitors', c.id), { firstName: f, lastName: l, gender: c.g, rank: c.rank, dojo: c.dojo, state: 'Demo', country: 'Example', waiver: true, feePaid: true, checkedIn: true, status: 'active', events: c.events, divOverride: {}, age: KT.ageOn(dob, start), createdAt: new Date().toISOString() });
+      await S.store.set(P.pv(id, c.id), { dob, email: '', phone: '', emergencyName: 'Demo contact', emergencyPhone: '000-000-0000', feeAmount: '', notes: 'Fictional demo record' });
+    });
+  }
+  const women = comps.filter(c => c.events.includes('TKATA')), juniors = comps.filter(c => c.events.includes('TKUMITE')), enbu = comps.filter(c => c.events.includes('ENBU'));
+  const teams = [
+    { name: 'Senior Women A', eventType: 'TKATA', memberIds: women.slice(0, 3).map(c => c.id) },
+    { name: 'Junior Men', eventType: 'TKUMITE', memberIds: juniors.slice(0, 3).map(c => c.id) },
+    { name: 'Enbu Pair 1', eventType: 'ENBU', memberIds: enbu.slice(0, 2).map(c => c.id) },
+    { name: 'Enbu Pair 2', eventType: 'ENBU', memberIds: enbu.slice(2, 4).map(c => c.id) },
+  ];
+  for (const t of teams) await guard(() => S.store.set(P.doc(id, 'teams', uid()), Object.assign({ dojo: '', divisionId: '', status: 'active', gender: 'F' }, t, { gender: t.eventType === 'TKUMITE' ? 'M' : 'F' })));
+  openEvent(id);
+  toast('Demo tournament ready. Draw brackets from the Divisions tab.');
+}
+
+/* ---------- event wiring ---------- */
+const ACT = {
+  home: () => { closeModal(); openEvent(null); },
+  'open-event': el => openEvent(el.dataset.id),
+  tab: (el, e) => { if (e) e.preventDefault(); S.ui.tab = el.dataset.v; if (el.dataset.filter) S.ui.filter = el.dataset.filter; window.scrollTo(0, 0); render(); },
+  'modal-close': () => closeModal(),
+  'modal-scrim': (el, e) => { if (e.target === el) closeModal(); },
+  'confirm-yes': () => confirmDone(true), 'confirm-no': () => confirmDone(false),
+  'copy-export': () => { const t = $('#export-text'); try { navigator.clipboard.writeText(t.value).then(() => toast('Copied'), () => { t.select(); }); } catch (e) { t.select(); } },
+  'event-new': () => eventForm(null),
+  'event-edit': () => eventForm(S.evId),
+  'event-delete': () => deleteEvent(S.evId),
+  demo: () => createDemo(),
+  'fb-signin': () => fbSignIn(), 'fb-signout': () => fbSignOut(), 'fb-claim': () => fbClaimDirector(), 'fb-access': () => accessForm(),
+  'comp-new': () => compForm(null),
+  'comp-edit': el => compForm(el.dataset.id),
+  'comp-delete': async () => {
+    const id = $('#f-comp').dataset.id, c = DC.compBy[id];
+    if (!(await confirmBox(`Delete ${c.firstName} ${c.lastName}? Consider marking them withdrawn instead if they already competed.`, 'Delete', true))) return;
+    closeModal(); await guard(async () => { await S.store.del(P.doc(S.evId, 'competitors', id)); await S.store.del(P.pv(S.evId, id)); }, 'Deleted');
+  },
+  checkin: (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { checkedIn: !c.checkedIn })); },
+  'import-open': () => importForm(),
+  'imp-preview': () => { const { recs, errors } = importRows($('#imp-text').value); $('#imp-preview').innerHTML = `${plural(recs.length, 'competitor')} ready to import.${errors.length ? '<br>' + errors.slice(0, 8).map(esc).join('<br>') + (errors.length > 8 ? '<br>…' : '') : ''}`; },
+  'imp-run': () => runImport(),
+  'export-comps': () => {
+    const dir = isDirector();
+    const rows = [['first_name', 'last_name', 'gender', 'dob', 'age', 'rank', 'dojo', 'state', 'country', 'email', 'phone', 'emergency_name', 'emergency_phone', 'waiver', 'paid', 'checked_in', 'status', 'events']];
+    for (const c of DC.comps) rows.push([c.firstName, c.lastName, c.gender, dir ? c.dob : '', KT.ageOf(c, DC.asOf), KT.rankLabel(c.rank), c.dojo, c.state, c.country, dir ? c.email : '', dir ? c.phone : '', dir ? c.emergencyName : '', dir ? c.emergencyPhone : '', c.waiver ? 'yes' : 'no', c.feePaid ? 'yes' : 'no', c.checkedIn ? 'yes' : 'no', c.status, (c.events || []).map(e => KT.EVENT_TYPES[e] ? KT.EVENT_TYPES[e].label : e).join('; ')]);
+    saveFile(`${curEvent().name} - competitors.csv`, KT.toCSV(rows));
+  },
+  'export-results': () => {
+    const rows = [['division', 'place', 'name', 'dojo']];
+    for (const d of DC.divs) {
+      const br = S.d.brackets[d.id]; const pl = br ? DC.pl[d.id] : (divEntrants(d.id).length === 1 ? { complete: true, gold: divEntrants(d.id)[0], bronze: [] } : null);
+      if (!pl || !pl.complete) continue;
+      if (pl.gold) rows.push([d.name, 1, entName(pl.gold), entDojo(pl.gold)]);
+      if (pl.silver) rows.push([d.name, 2, entName(pl.silver), entDojo(pl.silver)]);
+      (pl.bronze || []).forEach(b => rows.push([d.name, 3, entName(b), entDojo(b)]));
+    }
+    saveFile(`${curEvent().name} - results.csv`, KT.toCSV(rows));
+  },
+  'team-new': el => teamForm(null, el.dataset.et),
+  'team-edit': el => teamForm(el.dataset.id),
+  'team-delete': async () => { const id = $('#f-team').dataset.id; if (!(await confirmBox('Delete this team?', 'Delete', true))) return; closeModal(); guard(() => S.store.del(P.doc(S.evId, 'teams', id)), 'Team deleted'); },
+  'div-std': () => stdDivForm(false),
+  'div-kyu': () => stdDivForm(true),
+  'div-new': () => divForm(null),
+  'div-edit': el => divForm(el.dataset.id),
+  'div-delete': async () => {
+    const id = $('#f-div').dataset.id; const bs = bracketState(id);
+    if (!(await confirmBox(bs.drawn ? 'Delete this division and its bracket and results?' : 'Delete this division?', 'Delete', true))) return;
+    closeModal(); await guard(async () => { if (bs.drawn) await S.store.del(P.live(S.evId, 'brackets', id)); await S.store.del(P.doc(S.evId, 'divisions', id)); }, 'Division deleted');
+  },
+  'bracket-clear': async () => {
+    const id = $('#f-div').dataset.id; const bs = bracketState(id);
+    if (!(await confirmBox(bs.results ? 'Clear this bracket and ALL recorded results?' : 'Clear this bracket?', 'Clear bracket', true))) return;
+    await guard(() => S.store.del(P.live(S.evId, 'brackets', id)), 'Bracket cleared'); closeModal();
+  },
+  draw: async el => {
+    const form = $('#f-div');
+    if (form && form.dataset.id === el.dataset.id) { const id = await saveDiv(form, true); if (!id) return; setTimeout(() => drawDivision(id), 50); return; }
+    drawDivision(el.dataset.id);
+  },
+  'draw-all': () => drawAll(),
+  'view-bracket': el => { S.ui.bracketDiv = el.dataset.id; S.ui.tab = 'brackets'; render(); },
+  'ring-new': () => ringForm(null),
+  'ring-edit': el => ringForm(el.dataset.id),
+  'ring-delete': async () => {
+    const id = $('#f-ring').dataset.id;
+    if (!(await confirmBox('Delete this ring? Its divisions become unassigned.', 'Delete', true))) return;
+    closeModal();
+    for (const d of DC.divs.filter(x => x.ringId === id)) await guard(() => S.store.update(P.doc(S.evId, 'divisions', d.id), { ringId: '' }));
+    guard(() => S.store.del(P.doc(S.evId, 'rings', id)), 'Ring deleted');
+  },
+  'ring-move': async el => {
+    const d = DC.divBy[el.dataset.id]; const list = DC.divs.filter(x => x.ringId === d.ringId).sort((a, b) => (a.ringOrder || 0) - (b.ringOrder || 0));
+    const i = list.indexOf(d), j = i + (+el.dataset.dir); if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    for (let k = 0; k < list.length; k++) if ((list[k].ringOrder || 0) !== k) await guard(() => S.store.update(P.doc(S.evId, 'divisions', list[k].id), { ringOrder: k }));
+  },
+  'ring-undiv': el => guard(() => S.store.update(P.doc(S.evId, 'divisions', el.dataset.id), { ringId: '' })),
+  'ring-manage': el => { const r = S.d.rings[el.dataset.ring]; const ids = [...new Set((r.managerIds || []).concat(el.dataset.uid))]; $$('.dd-list').forEach(x => { x.hidden = true; }); guard(() => S.store.update(P.doc(S.evId, 'rings', r.id), { managerIds: ids }), 'Manager added'); },
+  'ring-unmanage': el => { const r = S.d.rings[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'rings', r.id), { managerIds: (r.managerIds || []).filter(x => x !== el.dataset.uid) })); },
+  'staff-add': el => { const ev = curEvent(); $$('.dd-list').forEach(x => { x.hidden = true; }); guard(() => S.store.update(P.event(ev.id), { staffIds: [...new Set((ev.staffIds || []).concat(el.dataset.uid))] }), 'Staff added'); },
+  'staff-remove': el => { const ev = curEvent(); guard(() => S.store.update(P.event(ev.id), { staffIds: (ev.staffIds || []).filter(x => x !== el.dataset.uid) })); },
+  'session-new': () => sessionForm(null),
+  'session-edit': el => sessionForm(el.dataset.id),
+  'session-delete': async () => { const id = $('#f-sess').dataset.id; if (!(await confirmBox('Delete this session and its attendance?', 'Delete', true))) return; closeModal(); await guard(async () => { await S.store.del(P.doc(S.evId, 'sessions', id)); await S.store.del(P.live(S.evId, 'attendance', id)); }, 'Session deleted'); },
+  'att-all': async () => { const sid = S.ui.session, present = {}; DC.comps.filter(c => c.status !== 'withdrawn').forEach(c => { present[c.id] = true; }); await writeAttendance(sid, present); },
+  tiebreak: el => tiebreakForm(el.dataset.did, el.dataset.pool),
+  'tb-move': el => { const i = +el.dataset.i, j = i + (+el.dataset.dir); [S.tbOrder[i], S.tbOrder[j]] = [S.tbOrder[j], S.tbOrder[i]]; $('#tb-body').innerHTML = S.tbDraw(); },
+  'tb-save': async () => { const M = S.modal; const ok = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { tiebreak: { [M.P]: S.tbOrder.slice() } }), 'Order saved'); if (ok) closeModal(); },
+  /* scoring */
+  score: el => openScore(el.dataset.did, el.dataset.mid),
+  flag: el => { const d = loadDraft(S.modal.key), f = el.dataset.f; d[f] = d[f] || []; const i = +el.dataset.i; d[f][i] = d[f][i] === el.dataset.s ? null : el.dataset.s; draftChanged(); },
+  kiken: el => { const d = loadDraft(S.modal.key); d.kiken = d.kiken === el.dataset.s ? null : el.dataset.s; draftChanged(); },
+  'k-ev': el => {
+    const M = S.modal, d = loadDraft(M.key), dv = DC.divBy[M.did], sc = scoringOf(dv);
+    const log = logAt(d, el.dataset.p);
+    const ev = { t: el.dataset.t }; if (el.dataset.s) ev.s = el.dataset.s;
+    const before = KT.kumiteEval(log, { kettei: sc.ketteiTime > 0, allowDraw: el.dataset.p.startsWith('bouts') }).phase;
+    log.push(ev);
+    const after = KT.kumiteEval(log, { kettei: sc.ketteiTime > 0, allowDraw: el.dataset.p.startsWith('bouts') });
+    if (before !== 'kettei' && after.phase === 'kettei') setClock(sc.ketteiTime);
+    if (after.done) stopClock();
+    draftChanged();
+  },
+  'k-undo': el => { const M = S.modal, d = loadDraft(M.key); logAt(d, el.dataset.p).pop(); draftChanged(); },
+  clock: () => toggleClock(),
+  'clock-reset': el => { const M = S.modal, d = loadDraft(M.key), sc = scoringOf(DC.divBy[M.did]); const ph = KT.kumiteEval(logAt(d, el.dataset.p), { kettei: sc.ketteiTime > 0 }).phase; setClock(ph === 'kettei' ? sc.ketteiTime : sc.boutTime); },
+  'bout-sel': el => { S.boutSel = +el.dataset.i; const sc = scoringOf(DC.divBy[S.modal.did]); setClock(sc.boutTime); renderScore(true); },
+  'fk-hantei': el => { const d = loadDraft(S.modal.key); d.hantei = el.dataset.s; draftChanged(); },
+  'reset-draft': async () => { if (!(await confirmBox('Clear everything entered on this scoresheet?', 'Clear'))) return; const M = S.modal; dropDraft(M.key); S.boutSel = 0; setClock(scoringOf(DC.divBy[M.did]).boutTime); renderScore(true); pushLive(); },
+  'call-mat': () => { pushLive(); toast('Called to the mat'); },
+  'save-result': () => saveResult(),
+  'undo-result': async () => {
+    const M = S.modal; const br = S.d.brackets[M.did];
+    if (!KT.canEdit(br, M.mid, DC.res[M.did])) return;
+    if (!(await confirmBox('Undo this result? The match returns to “ready”.', 'Undo result', true))) return;
+    const ok = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { results: { [M.mid]: null } }), 'Result undone');
+    if (ok) closeModal();
+  },
+};
+const CHANGE = {
+  'sim-role': el => { S.ui.simRole = el.value; saveUIPrefs(); closeModal(); render(); },
+  'sim-ring': el => { S.ui.simRing = el.value; saveUIPrefs(); render(); },
+  filter: el => { S.ui.filter = el.value; render(); },
+  divFilter: el => { S.ui.divFilter = el.value; render(); },
+  ring: el => { S.ui.ring = el.value; render(); },
+  bracketDiv: el => { S.ui.bracketDiv = el.value; render(); },
+  session: el => { S.ui.session = el.value; render(); },
+  'ev-kind': el => { $$('.ev-t').forEach(x => { x.hidden = el.value !== 'tournament'; }); },
+  'div-et': el => { const g = $('#d-g'); const cur = g.value; g.innerHTML = KT.EVENT_TYPES[el.value].genders.map(x => opt(x, KT.GENDERS[x], cur)).join(''); },
+  'ring-adddiv': el => { if (!el.value) return; const rid = el.dataset.ring; const n = DC.divs.filter(d => d.ringId === rid).length; guard(() => S.store.update(P.doc(S.evId, 'divisions', el.value), { ringId: rid, ringOrder: n })); },
+  'ring-format': async el => {
+    const f = el.value; if (!f) return;
+    const list = DC.divs.filter(d => d.ringId === el.dataset.ring);
+    let n = 0, skipped = 0;
+    for (const d of list) { if (bracketState(d.id).drawn) { skipped++; continue; } if (d.format !== f) { await guard(() => S.store.update(P.doc(S.evId, 'divisions', d.id), { format: f })); n++; } }
+    toast(`${KT.FORMATS[f]} set on ${plural(n, 'division')}${skipped ? ` · ${skipped} already drawn (redraw to change)` : ''}`);
+  },
+  'fb-role': el => guard(() => el.checked ? FB.fs.doc('roles/' + el.dataset.uid).set({ role: 'director', at: new Date().toISOString() }) : FB.fs.doc('roles/' + el.dataset.uid).delete(), 'Access updated'),
+  awarded: el => guard(() => S.store.update(P.live(S.evId, 'brackets', el.dataset.did), { awarded: el.checked })),
+  att: el => writeAttendance(S.ui.session, { [el.dataset.id]: el.checked }),
+  'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = rd.result; ACT['imp-preview'](); }; rd.readAsText(f); },
+  kscore: el => { const d = loadDraft(S.modal.key), k = el.dataset.s === 'a' ? 'sa' : 'sb'; d[k] = d[k] || []; const v = el.value.replace(',', '.'); d[k][+el.dataset.i] = v === '' ? '' : v; draftChanged(); },
+  'bout-member': el => { const d = loadDraft(S.modal.key); const i = el.dataset.i; let b; if (i === 'd') { d.daihyo = d.daihyo || { log: [] }; b = d.daihyo; } else { d.bouts = d.bouts || []; d.bouts[+i] = d.bouts[+i] || { log: [] }; b = d.bouts[+i]; } b[el.dataset.s === 'a' ? 'ma' : 'mb'] = el.value; draftChanged(); },
+};
+async function writeAttendance(sid, present) {
+  const path = P.live(S.evId, 'attendance', sid);
+  if (S.d.attendance[sid]) await guard(() => S.store.update(path, { present }));
+  else await guard(() => S.store.set(path, { present }));
+}
+let searchT = null;
+const INPUT = {
+  q: el => { S.ui.q = el.value; render(); },
+  'mgr-search': el => personSearch(el, $('#mgr-dd-' + el.dataset.ring), id => `data-act="ring-manage" data-ring="${esc(el.dataset.ring)}" data-uid="${esc(id)}"`),
+  'staff-search': el => personSearch(el, $('#staff-dd'), id => `data-act="staff-add" data-uid="${esc(id)}"`),
+};
+function personSearch(input, dd, attrs) {
+  if (!S.user) return;
+  clearTimeout(searchT);
+  searchT = setTimeout(async () => {
+    const hits = await S.user.search(input.value);
+    hits.forEach(h => { S.profiles[h.id] = h; });
+    dd.innerHTML = hits.length ? hits.map(h => `<button type="button" ${attrs(h.id)}><img src="${esc(h.avatarUrl)}" alt="" width="20" height="20" style="border-radius:50%"> ${esc(h.name)}${h.email ? ` <span class="muted small">${esc(h.email)}</span>` : ''}</button>`).join('')
+      : `<div class="small muted" style="padding:10px">No people found. They need access to this page first — share it with them from claude.ai, then search again.</div>`;
+    dd.hidden = false;
+  }, 120);
+}
+
+function wire() {
+  document.addEventListener('click', e => {
+    const el = e.target.closest('[data-act]');
+    if (!e.target.closest('.dd')) $$('.dd-list').forEach(x => { x.hidden = true; });
+    if (!el) return;
+    const fn = ACT[el.dataset.act]; if (!fn) return;
+    if (el.tagName === 'A') e.preventDefault();
+    fn(el, e);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { if (!$('#confirm').hidden) confirmDone(false); else if (!$('#modal').hidden) closeModal(); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bm[role="button"]')) { e.preventDefault(); e.target.click(); }
+  });
+  document.addEventListener('change', e => { const el = e.target.closest('[data-change]'); if (el && CHANGE[el.dataset.change]) CHANGE[el.dataset.change](el, e); });
+  document.addEventListener('input', e => { const el = e.target.closest('[data-input]'); if (el && INPUT[el.dataset.input]) INPUT[el.dataset.input](el, e); });
+  document.addEventListener('focusin', e => { const el = e.target.closest('[data-input$="-search"]'); if (el && INPUT[el.dataset.input]) INPUT[el.dataset.input](el, e); });
+  document.addEventListener('submit', async e => {
+    const f = e.target.closest('[data-form]'); if (!f) return; e.preventDefault();
+    const k = f.dataset.form;
+    if (k === 'event') {
+      const v = fd(f), id = f.dataset.id || uid(), old = S.events[f.dataset.id] || {};
+      if (!v.name || !v.startDate) { toast('Name and start date are required.', true); return; }
+      if (v.kind === 'tournament' && !(v.eventTypes || []).length) { toast('Pick at least one event.', true); return; }
+      const ev = Object.assign({}, old, v, { id: undefined, staffIds: old.staffIds || [], createdAt: old.createdAt || new Date().toISOString() }); delete ev.id;
+      const ok = await guard(() => S.store.set(P.event(id), ev), f.dataset.id ? 'Event saved' : 'Event created');
+      if (!ok) return;
+      closeModal();
+      if (!f.dataset.id) openEvent(id);
+      else {
+        const asOf = v.ageAsOf || v.startDate, oldAsOf = old.ageAsOf || old.startDate;
+        if (asOf !== oldAsOf) for (const c of DC.comps) if (c.dob) await guard(() => S.store.update(P.doc(id, 'competitors', c.id), { age: KT.ageOn(c.dob, asOf) }));
+      }
+    }
+    else if (k === 'comp') saveComp(f);
+    else if (k === 'team') saveTeam(f);
+    else if (k === 'div') saveDiv(f);
+    else if (k === 'std') saveStd(f, false);
+    else if (k === 'kyu') saveStd(f, true);
+    else if (k === 'ring') {
+      const v = fd(f); if (!v.name) return;
+      const id = f.dataset.id; const ok = await guard(() => id ? S.store.update(P.doc(S.evId, 'rings', id), { name: v.name }) : S.store.set(P.doc(S.evId, 'rings', uid()), { name: v.name, order: DC.rings.length + 1, managerIds: [] }), 'Ring saved');
+      if (ok) closeModal();
+    }
+    else if (k === 'session') {
+      const v = fd(f); if (!v.title || !v.date) { toast('Title and date are required.', true); return; }
+      const ok = await guard(() => S.store.set(P.doc(S.evId, 'sessions', f.dataset.id || uid()), v), 'Session saved'); if (ok) closeModal();
+    }
+  });
+}
+
+async function init() {
+  readUIPrefs();
+  wire();
+  render();
+  if (window.KT_FIREBASE_CONFIG && window.firebase) {
+    try { if (!(await initFirebase(window.KT_FIREBASE_CONFIG))) return; }
+    catch (e) { console.error(e); S.store = LocalStore(); toast('Could not reach Firebase. Working in local mode.', true); }
+    subscribeEvents(); render(); return;
+  }
+  let db = null, user = null;
+  const cl = window.claude && typeof window.claude.use === 'function' ? window.claude : null;
+  if (cl) {
+    try { [db, user] = await Promise.all([cl.use('db'), cl.use('user')]); } catch (e) { db = null; }
+    cl.use('downloads').then(x => { S.downloads = x; }).catch(() => {});
+  }
+  if (db) {
+    S.store = CloudStore(db); S.user = user;
+    if (user) {
+      try {
+        const [me, canEd, canW] = await Promise.all([user.me(), user.canEdit(), user.can('data.write')]);
+        S.myId = me.id; S.isDirector = !!canEd; S.canWrite = canW;
+        if (canW === false && !canEd) S.readOnly = true;
+      } catch (e) { /* reads never reject */ }
+    }
+  } else {
+    S.store = LocalStore();
+  }
+  subscribeEvents();
+  render();
+}
+init();
+})();
+</script>
