@@ -161,6 +161,11 @@ function divEntrants(did) { return (DC.assign.byDiv[did] || []); }
 function bracketState(did) {
   const br = S.d.brackets[did];
   if (!br) return { drawn: false };
+  if (br.format === 'KP') {
+    const pg = KT.kpProgress(br);
+    const cur = divEntrants(did).slice().sort().join('|'), was = (br.entrants || []).slice().sort().join('|');
+    return { drawn: true, kp: true, fought: pg.done, playable: pg.total, complete: DC.pl[did] && DC.pl[did].complete, changed: cur !== was, results: Object.values(br.scores || {}).some(Boolean) };
+  }
   const res = DC.res[did] || {};
   const ids = Object.keys(br.matches || {});
   const fought = ids.filter(id => res[id] && res[id].status === 'done').length;
@@ -169,13 +174,14 @@ function bracketState(did) {
   return { drawn: true, fought, playable, complete: DC.pl[did] && DC.pl[did].complete, changed: cur !== was, results: Object.values(br.results || {}).some(Boolean) };
 }
 function kindOf(dv) { return (KT.EVENT_TYPES[dv.eventType] || {}).kind; }
-function scoringOf(dv) { return Object.assign(KT.defaultScoring(dv.eventType), dv.scoring || {}); }
+function scoringOf(dv) { return Object.assign(KT.defaultScoring(dv.eventType, dv.gender), dv.scoring || {}); }
 function scoringLabel(dv) {
   const s = scoringOf(dv), k = kindOf(dv);
+  if (dv.format === 'KP') return `Score pools · ${s.judges} judges`;
   if (k === 'kata') return s.method === 'scores' ? `Scores · ${s.judges} judges` : `Flags · ${s.judges} judges`;
-  if (k === 'kumite') return `Shobu ippon · ${fmtClock(s.boutTime)}`;
-  if (k === 'teamkumite') return `${s.bouts} bouts · ${fmtClock(s.boutTime)}`;
-  if (k === 'fukugo') return `Kata flags + kumite`;
+  if (k === 'kumite') return s.style === 'kogo' ? 'Ko-go Kumite · 6 exchanges' : `Shobu Ippon · ${fmtClock(s.boutTime)}`;
+  if (k === 'teamkumite') return `${s.bouts} rounds · team total · ${fmtClock(s.boutTime)}`;
+  if (k === 'fukugo') return `Kumite / Ki-tei alternating${s.style === 'kogo' ? ' (Ko-go)' : ''}`;
   return '';
 }
 function fmtClock(sec) { sec = Math.max(0, Math.round(sec)); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }

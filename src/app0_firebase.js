@@ -35,7 +35,7 @@ function fbUserShim(fs) {
       return out;
     },
     async search(q) {
-      if (!FB.users || Date.now() - FB.usersAt > 30000) {
+      if (!FB.users || Date.now() - FB.usersAt > 3000) {
         try { const s = await fs.collection('users').get(); FB.users = s.docs.map(d => Object.assign({ id: d.id }, d.data())); FB.usersAt = Date.now(); FB.users.forEach(u => { FB.cache[u.id] = u; }); } catch (e) { FB.users = []; }
       }
       q = String(q || '').toLowerCase();

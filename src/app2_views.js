@@ -197,7 +197,7 @@ function divisionsHTML() {
   const rows = list.map(d => {
     const n = divEntrants(d.id).length, bs = bracketState(d.id), ring = S.d.rings[d.ringId];
     const st = !bs.drawn ? (n >= 2 ? '<span class="chip plain">Ready to draw</span>' : n === 1 ? '<span class="chip warn">1 entrant</span>' : '<span class="chip plain">Empty</span>')
-      : bs.complete ? '<span class="chip ok">Finished</span>' : `<span class="chip">${bs.fought}/${bs.playable} matches</span>${bs.changed ? ' <span class="chip warn">Entrants changed</span>' : ''}`;
+      : bs.complete ? '<span class="chip ok">Finished</span>' : `<span class="chip">${bs.fought}/${bs.playable} ${bs.kp ? 'performances' : 'matches'}</span>${bs.changed ? ' <span class="chip warn">Entrants changed</span>' : ''}`;
     return `<tr><td><button class="ghost sm" style="padding:0;min-height:0;text-align:left;justify-content:flex-start" data-act="div-edit" data-id="${esc(d.id)}"><span class="name">${esc(d.name)}</span></button>
         <div class="dojo">${d.belt === 'kyu' ? esc(KT.rankLabel(d.minRank) + ' – ' + KT.rankLabel(d.maxRank)) + ' · ' : ''}${ageRange(d)}</div></td>
       <td class="small">${esc(KT.FORMATS[d.format] || d.format)}<div class="dojo">${esc(scoringLabel(d))}</div></td>
@@ -237,32 +237,51 @@ function ringsHTML() {
 function ringQueue(rid) {
   const out = [];
   const divs = DC.divs.filter(d => d.ringId === rid).sort((a, b) => (a.ringOrder || 0) - (b.ringOrder || 0));
-  for (const d of divs) { const br = S.d.brackets[d.id]; if (!br) continue; for (const m of KT.readyMatches(br, DC.res[d.id])) out.push({ did: d.id, m, r: DC.res[d.id][m.id] }); }
+  for (const d of divs) {
+    const br = S.d.brackets[d.id]; if (!br) continue;
+    if (br.format === 'KP') { for (const p of KT.kpQueue(br)) out.push({ did: d.id, kp: p }); continue; }
+    for (const m of KT.readyMatches(br, DC.res[d.id])) out.push({ did: d.id, m, r: DC.res[d.id][m.id] });
+  }
   return out;
+}
+function nowHTML(rs) {
+  if (!rs || !rs.did || !S.d.brackets[rs.did]) return '';
+  const dv = DC.divBy[rs.did], br = S.d.brackets[rs.did];
+  if (rs.kp) {
+    const q = br.format === 'KP' ? KT.kpQueue(br).find(x => x.key === rs.kp) : null;
+    if (!q) return '';
+    return `<div class="label">${esc(dv ? dv.name : '')} · ${esc(q.label)}</div>
+      <div class="now" style="grid-template-columns:1fr auto"><div class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span style="min-width:0"><div class="name">${esc(entName(q.id))}</div><div class="dojo">${esc(entDojo(q.id))}${rs.kata ? ' · ' + esc(rs.kata) : ''}</div></span></div>
+      <div class="sc num">${rs.score != null && rs.score !== '' ? esc(rs.score) : ''}</div></div>`;
+  }
+  const res = (DC.res[rs.did] || {})[rs.mid];
+  if (!res || res.status !== 'ready') return '';
+  return `<div class="label">${esc(dv ? dv.name : '')} · ${esc(KT.matchLabel(br.matches[rs.mid], br))}</div>
+    <div class="now"><div class="side"><span class="belt a"></span><span style="min-width:0"><div class="name">${esc(entName(res.a))}</div><div class="dojo">${esc(entDojo(res.a))}</div></span></div>
+    <div class="sc num">${rs.score ? `${esc(rs.score.a)}–${esc(rs.score.b)}` : 'vs'}</div>
+    <div class="side" style="justify-content:flex-end;text-align:right"><span style="min-width:0"><div class="name">${esc(entName(res.b))}</div><div class="dojo">${esc(entDojo(res.b))}</div></span><span class="belt b"></span></div></div>
+    ${rs.phase ? `<div class="phase">${esc(rs.phase)}</div>` : ''}`;
 }
 function ringBoardHTML(rings, withActions) {
   if (!rings.length) return `<div class="card small muted">No rings set up yet.</div>`;
   return `<div class="grid2">${rings.map(r => {
     const rs = S.d.ringstate[r.id], q = ringQueue(r.id);
-    let now = '<div class="small muted">Nothing on the mat.</div>';
-    if (rs && rs.did && S.d.brackets[rs.did]) {
-      const dv = DC.divBy[rs.did], res = (DC.res[rs.did] || {})[rs.mid];
-      if (res && res.status === 'ready') {
-        now = `<div class="label">${esc(dv ? dv.name : '')} · ${esc(KT.matchLabel(S.d.brackets[rs.did].matches[rs.mid], S.d.brackets[rs.did]))}</div>
-        <div class="now"><div class="side"><span class="belt a"></span><span style="min-width:0"><div class="name">${esc(entName(res.a))}</div><div class="dojo">${esc(entDojo(res.a))}</div></span></div>
-        <div class="sc num">${rs.score ? `${esc(rs.score.a)}–${esc(rs.score.b)}` : 'vs'}</div>
-        <div class="side" style="justify-content:flex-end;text-align:right"><span style="min-width:0"><div class="name">${esc(entName(res.b))}</div><div class="dojo">${esc(entDojo(res.b))}</div></span><span class="belt b"></span></div></div>
-        ${rs.phase ? `<div class="phase">${esc(rs.phase)}</div>` : ''}`;
-      }
-    }
-    const next = q.filter(x => !(rs && x.did === rs.did && x.m.id === rs.mid)).slice(0, withActions ? 12 : 3);
-    const canR = canScoreDiv(DC.divs.find(d => d.ringId === r.id)?.id) || isDirector();
-    return `<div class="card ring-card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${q.length ? '' : 'plain'}">${plural(q.length, 'match', 'matches')} ready</span></div>
-      <div>${now}${withActions && rs && rs.did && canScoreDiv(rs.did) && DC.res[rs.did] && DC.res[rs.did][rs.mid] && DC.res[rs.did][rs.mid].status === 'ready' ? `<div class="row" style="margin-top:8px"><button class="primary" data-act="score" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}">Open scoresheet</button></div>` : ''}</div>
-      <div class="queue"><div class="label">Up next</div>${next.map(x => `<div class="q"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a))}</span></span>
-        <span class="vs">${withActions && canR && canScoreDiv(x.did) ? `<button class="sm" data-act="score" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}">Score</button>` : 'vs'}</span>
+    const now = nowHTML(rs);
+    const isNow = x => rs && x.did === rs.did && (x.kp ? rs.kp === x.kp.key : x.m.id === rs.mid);
+    const next = q.filter(x => !isNow(x)).slice(0, withActions ? 12 : 3);
+    const openBtn = withActions && now && canScoreDiv(rs.did) ? `<div class="row" style="margin-top:8px"><button class="primary" ${rs.kp ? `data-act="kp-score" data-did="${esc(rs.did)}" data-key="${esc(rs.kp)}"` : `data-act="score" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}"`}>Open scoresheet</button></div>` : '';
+    return `<div class="card ring-card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${q.length ? '' : 'plain'}">${q.length} waiting</span></div>
+      <div>${now || '<div class="small muted">Nothing on the mat.</div>'}${openBtn}</div>
+      <div class="queue"><div class="label">Up next</div>${next.map(x => {
+        const can = withActions && canScoreDiv(x.did);
+        if (x.kp) return `<div class="q" style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id))}</span></span>
+          <span class="vs">${can ? `<button class="sm" data-act="kp-score" data-did="${esc(x.did)}" data-key="${esc(x.kp.key)}">Score</button>` : 'kata'}</span></div>
+          <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(x.kp.label)}</div>`;
+        return `<div class="q"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a))}</span></span>
+        <span class="vs">${can ? `<button class="sm" data-act="score" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}">Score</button>` : 'vs'}</span>
         <span class="side" style="justify-content:flex-end"><span class="name">${esc(entName(x.r.b))}</span><span class="belt b"></span></span></div>
-        <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(KT.matchLabel(x.m, S.d.brackets[x.did]))}</div>`).join('') || '<div class="small muted">No matches waiting.</div>'}</div></div>`;
+        <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(KT.matchLabel(x.m, S.d.brackets[x.did]))}${kindOf(DC.divBy[x.did]) === 'fukugo' ? ' · ' + (KT.fukugoPart(x.m, S.d.brackets[x.did]) === 'kitei' ? 'Ki-tei' : 'Kumite') : ''}</div>`;
+      }).join('') || '<div class="small muted">Nothing waiting.</div>'}</div></div>`;
   }).join('')}</div>`;
 }
 function matHTML() {
@@ -311,10 +330,11 @@ function bmHTML(did, m, res, live) {
     return `<div class="ln ${side} ${cls}"><span class="strip"></span><span style="min-width:0"><div class="name">${id ? esc(entName(id)) : r.status === 'bye' ? 'Bye' : esc(hint || 'TBD')}</div>${id ? `<div class="dojo">${esc(entDojo(id))}</div>` : ''}</span><span class="sc">${sc === '' || sc == null ? '' : esc(sc)}</span></div>`;
   };
   return `<div class="bm ${r.status === 'ready' ? 'ready' : ''} ${live ? 'live' : ''} ${canS ? 'click' : ''}" ${canS ? `data-act="score" data-did="${esc(did)}" data-mid="${esc(m.id)}" tabindex="0" role="button"` : ''}>${ln('a')}${ln('b')}
-    <div class="meta"><span>${esc(m.id)}</span><span>${r.status === 'done' ? esc(res1.method || '') : r.status === 'bye' ? 'Bye' : r.status === 'ready' ? (live ? 'On the mat' : 'Ready') : ''}</span></div></div>`;
+    <div class="meta"><span>${esc(m.id)}${kindOf(DC.divBy[did]) === 'fukugo' ? ' · ' + (KT.fukugoPart(m, S.d.brackets[did]) === 'kitei' ? 'Ki-tei' : 'Kumite') : ''}</span><span>${r.status === 'done' ? esc(res1.method || '') : r.status === 'bye' ? 'Bye' : r.status === 'ready' ? (live ? 'On the mat' : 'Ready') : ''}</span></div></div>`;
 }
 function bracketViewHTML(did) {
   const br = S.d.brackets[did], res = DC.res[did] || {};
+  if (br.format === 'KP') return kpViewHTML(did);
   const ms = Object.values(br.matches || {});
   if (!ms.length) return `<div class="card small muted">Only one entrant — awarded automatically.</div>`;
   const live = Object.values(S.d.ringstate).find(x => x.did === did);
@@ -369,7 +389,7 @@ function resultsHTML() {
     const canAward = br && (isDirector() || canScoreDiv(d.id));
     return `<div class="card stack"><div class="row between"><div style="min-width:0"><h3>${esc(d.name)}</h3><div class="small muted">${S.d.rings[d.ringId] ? esc(S.d.rings[d.ringId].name) : 'No ring'}</div></div>
       ${pl.complete ? (br && br.awarded ? '<span class="chip ok">Awarded</span>' : '<span class="chip">Final</span>') : pl.tie ? `<span class="chip warn">Tie to resolve</span>` : `<span class="chip plain">In progress</span>`}</div>
-      ${pl.complete ? `<div class="podium">${cell(pl.gold, 'g', 1)}${cell(pl.silver, 's', 2)}${(pl.bronze || []).map(b => cell(b, 'b', 3)).join('')}</div>` : `<div class="small muted">${br ? `${bracketState(d.id).fought} of ${bracketState(d.id).playable} matches fought.` : ''}</div>`}
+      ${pl.complete ? `<div class="podium">${cell(pl.gold, 'g', 1)}${cell(pl.silver, 's', 2)}${(pl.bronze || []).map(b => cell(b, 'b', 3)).join('')}</div>` : `<div class="small muted">${br ? `${bracketState(d.id).fought} of ${bracketState(d.id).playable} ${bracketState(d.id).kp ? 'performances scored' : 'matches fought'}.` : ''}</div>`}
       ${pl.complete && canAward ? `<label class="check"><input type="checkbox" id="aw-${esc(d.id)}" data-change="awarded" data-did="${esc(d.id)}" ${br.awarded ? 'checked' : ''}> Medals presented</label>` : ''}</div>`;
   });
   const table = KT.medalTable(medals);
@@ -420,4 +440,46 @@ function staffHTML() {
   return eventHeader() + `<div class="card stack"><h3>Camp staff</h3><p class="small muted">Staff can take attendance for every session. Directors can do everything.</p>
     <div class="pill-list">${(ev.staffIds || []).map(id => `${personChip(id)}<button class="sm ghost" data-act="staff-remove" data-uid="${esc(id)}" aria-label="Remove">✕</button>`).join('') || '<span class="small muted">No staff assigned.</span>'}</div>
     ${isLocal() ? '<p class="tiny muted">People can be assigned once the tracker is shared from claude.ai.</p>' : `<div class="dd"><input id="staff-q" type="search" placeholder="Add staff by name or email…" data-input="staff-search" autocomplete="off"><div class="dd-list" id="staff-dd" hidden></div></div>`}</div>`;
+}
+
+/* ---------- kata score pools view ---------- */
+function kpTableHTML(did, title, rows, order, opts) {
+  const br = S.d.brackets[did], J = br.judges || 6, can = canScoreDiv(did), k = J >= 5 ? J - 2 : J;
+  const f = x => (x / k).toFixed(2);
+  const byId = Object.fromEntries(rows.map(r => [r.id, r]));
+  const seq = opts.byRank ? rows : order.map(id => byId[id]);
+  const sc = (r) => {
+    const e = (br.scores || {})[r.key]; if (!e) return '';
+    if (e.hansoku) return '<span class="chip bad">Han-soku</span>';
+    const v = e.s.map(Number), hi = Math.max(...v), lo = Math.min(...v); let dh = J >= 5, dl = J >= 5;
+    return v.map(x => { let cls = ''; if (dh && x === hi) { cls = 'dropped'; dh = false; } else if (dl && x === lo) { cls = 'dropped'; dl = false; } return `<span class="js ${cls}">${x.toFixed(1)}</span>`; }).join('');
+  };
+  return `<div class="card flush"><div class="card-h"><h3>${esc(title)}</h3>${opts.chip || ''}</div><div class="tw"><table class="kp"><thead><tr><th>#</th><th>${opts.byRank ? 'Place' : 'Order'}</th><th>Competitor</th><th>${br.kataRule ? 'Kata' : 'Notes'}</th><th>Judges</th>${opts.carry ? '<th class="n">Final elim.</th><th class="n">Final</th>' : ''}<th class="n">Score</th></tr></thead><tbody>
+    ${seq.map((r, i) => `<tr class="${can ? 'click' : ''} ${r.advance ? 'adv' : ''}" ${can ? `data-act="kp-score" data-did="${esc(did)}" data-key="${esc(r.key)}"` : ''}>
+      <td class="num">${i + 1}</td><td class="num">${r.rank ? (opts.medals && r.rank <= 3 ? `<span class="medal ${['g', 's', 'b'][r.rank - 1]}">${r.rank}</span>` : r.rank) : '—'}${r.advance ? ' <span class="chip ok" title="Advances">▸</span>' : ''}</td>
+      <td><div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div></td>
+      <td class="small">${esc(r.kata || '')}${r.appTotal != null ? `<div class="tiny muted">Kata ${f(r.kataOwn)} · Application ${f(r.appTotal)}</div>` : ''}${r.rpTotal != null ? `<div class="tiny muted">Kettei-sen ${f(r.rpTotal)}</div>` : ''}</td>
+      <td class="jcell">${sc(r)}</td>
+      ${opts.carry ? `<td class="n">${r.sheet ? f(r.carry) : ''}</td><td class="n">${r.sheet ? f(r.own) : ''}</td>` : ''}
+      <td class="n"><b>${r.sheet ? f(r.total) : ''}</b></td></tr>`).join('')}</tbody></table></div>
+    ${opts.needRp && opts.needRp.length ? `<div class="notice warn" style="margin:10px 16px">Tied even after adding back all six scores: ${opts.needRp.map(id => esc(entName(id))).join(', ')} — Kettei-sen${br.kataRule ? ' with a different kata' : ''}.</div>` : ''}</div>`;
+}
+function kpViewHTML(did) {
+  const br = S.d.brackets[did], st = KT.kpState(br);
+  let h = `<p class="small muted">ITKF kata system · pools of up to ${br.poolSize || 8} · ${br.judges || 6} judges score 0–10${(br.judges || 6) >= 5 ? ', highest and lowest dropped, average of the rest' : ''} · top 4 of each pool advance until 8 remain · final elimination and final each need a different kata${br.application ? ' · final adds Application (Bunkai)' : ''} · final score = final elimination + final · ties: all six scores added back, then Kettei-sen.</p>`;
+  for (const rd of st.rounds) {
+    h += `<div class="stage-h label">${esc(KT.kpRoundName(rd))}</div><div class="stack">`;
+    for (const P of Object.keys(rd.pools)) {
+      const p = rd.pools[P];
+      const chip = p.complete ? '<span class="chip ok">Complete</span>' : `<span class="chip plain">${p.rows.filter(r => r.sheet).length}/${p.rows.length} scored</span>`;
+      h += kpTableHTML(did, `${Object.keys(rd.pools).length > 1 ? 'Pool ' + P : KT.kpRoundName(rd)}`, p.rows, p.order, { byRank: p.scoredAll, chip, needRp: p.needRp });
+    }
+    h += '</div>';
+  }
+  if (st.final) {
+    const f = st.final;
+    h += `<div class="stage-h label">Final</div>` + kpTableHTML(did, 'Final', f.rows, f.order, { byRank: f.rows.every(r => r.sheet), carry: f.carried, medals: f.complete,
+      chip: f.complete ? '<span class="chip ok">Complete</span>' : `<span class="chip plain">${f.rows.filter(r => r.sheet).length}/${f.rows.length} scored</span>`, needRp: f.needRp });
+  }
+  return h;
 }

@@ -184,15 +184,16 @@ td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric
 #confirm .sheet { width: min(420px, 100%); }
 
 /* scoreboard */
-.board { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: stretch; }
-@media (max-width: 640px) { .board { grid-template-columns: 1fr 1fr; } .board .mid { grid-column: 1 / -1; order: -1; } }
+.board { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 230px) minmax(0, 1fr); gap: 10px; align-items: stretch; }
+@media (max-width: 640px) { .board { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .corner { padding: 8px; } .corner button { padding: 6px 4px; font-size: .74rem; } .corner .big { font-size: 2.4rem; } .board .mid { grid-column: 1 / -1; order: -1; } }
 .corner { border-radius: 12px; padding: 12px; display: grid; gap: 8px; align-content: start; min-width: 0; }
 .corner.a { background: var(--aka-bg); color: #fff; }
 .corner.b { background: var(--shiro); color: var(--shiro-ink); border: 2px solid var(--line-2); }
 .corner .who { font-weight: 700; font-family: var(--f-display); font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .corner .big { font: 700 3.2rem/1 var(--f-mono); font-variant-numeric: tabular-nums; }
 .corner .tally { font: 600 .78rem var(--f-mono); opacity: .85; }
-.corner .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.corner .btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.corner button { min-width: 0; overflow-wrap: anywhere; }
 .corner button { min-height: 42px; font-size: .82rem; background: rgba(255,255,255,.14); color: inherit; border-color: rgba(255,255,255,.4); }
 .corner.b button { background: rgba(0,0,0,.05); border-color: rgba(0,0,0,.22); color: var(--shiro-ink); }
 .corner button.pen { font-weight: 500; }
@@ -227,3 +228,13 @@ td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric
 .dd-list { position: absolute; left: 0; right: 0; top: 100%; background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; box-shadow: var(--shadow); z-index: 5; max-height: 240px; overflow: auto; }
 .dd-list button { width: 100%; justify-content: flex-start; border: 0; border-radius: 0; }
 @media (prefers-reduced-motion: no-preference) { .sheet { animation: rise .18s ease-out; } @keyframes rise { from { transform: translateY(12px); opacity: .6; } } }
+
+/* kata score pools */
+table.kp tr.adv td { background: color-mix(in srgb, var(--ok-soft) 55%, transparent); }
+.jcell { white-space: nowrap; }
+.js { display: inline-block; min-width: 2.6em; text-align: center; font: 500 .8rem var(--f-mono); color: var(--ink-2); }
+.js.dropped { color: var(--ink-3); text-decoration: line-through; }
+.kprow { display: grid; grid-template-columns: repeat(var(--j, 6), minmax(56px, 1fr)); gap: 6px; }
+.kprow input { text-align: center; font-family: var(--f-mono); }
+.kp-total { display: flex; gap: 18px; align-items: baseline; flex-wrap: wrap; }
+.kp-total b { font: 700 2rem var(--f-mono); }

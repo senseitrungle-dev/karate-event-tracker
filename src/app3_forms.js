@@ -202,18 +202,20 @@ function divForm(id) {
       <label class="f span"><span>Division name</span><input name="name" id="d-name" value="${esc(d.name || '')}" placeholder="Leave blank to name automatically"></label>
     </div>
     <fieldset><legend>Bracket</legend><div class="fgrid">
-      <label class="f"><span>Format</span><select name="format" id="d-fmt" ${bs.results ? 'disabled' : ''}>${Object.entries(KT.FORMATS).map(([x, l]) => opt(x, l, d.format)).join('')}</select></label>
+      <label class="f"><span>Format</span><select name="format" id="d-fmt" ${bs.results ? 'disabled' : ''}>${Object.entries(KT.FORMATS).filter(([x]) => x !== 'KP' || k === 'kata').map(([x, l]) => opt(x, l, d.format)).join('')}</select></label>
       <label class="f"><span>Third place (single elim. / playoff)</span><select name="bronze" id="d-bronze">${opt('two', 'Two bronzes', d.bronze)}${opt('match', 'Bronze match', d.bronze)}</select></label>
       <label class="f"><span>Double elim. grand final</span><select name="reset" id="d-reset">${opt('1', 'Reset match if needed', d.reset === false ? '0' : '1')}${opt('0', 'Single final', d.reset === false ? '0' : '1')}</select></label>
       <label class="f"><span>Round robin: advance per pool</span><select name="advance" id="d-adv">${opt('', 'Auto (2 if two pools, else 1)', d.advance || '')}${opt('1', '1', d.advance)}${opt('2', '2', d.advance)}</select></label>
       <label class="f"><span>Ring</span><select name="ringId" id="d-ring">${opt('', 'No ring yet', d.ringId)}${DC.rings.map(r => opt(r.id, r.name, d.ringId)).join('')}</select></label>
     </div>${bs.results ? '<p class="tiny muted">Format is locked because results exist.</p>' : ''}</fieldset>
-    <fieldset><legend>Scoring (WTKF)</legend><div class="fgrid">
+    <fieldset><legend>Scoring (ITKF 2009)</legend><div class="fgrid">
       ${k === 'kata' ? `<label class="f"><span>Decision</span><select name="method" id="d-method">${opt('flags', 'Flags (judges’ majority)', sc.method)}${opt('scores', 'Scores 0–10 (drop high & low with 5)', sc.method)}</select></label>` : ''}
-      ${k === 'kata' || k === 'fukugo' ? `<label class="f"><span>Judges</span><select name="judges" id="d-judges">${opt('3', '3', sc.judges)}${opt('5', '5', sc.judges)}</select></label>` : ''}
+      ${k === 'kata' ? `<label class="f"><span>Kata pools: max per pool</span><input type="number" name="poolSize" id="d-pool" min="4" max="12" value="${esc(d.poolSize || 8)}"><span class="tiny muted">Kata score pools only · ITKF allows up to 12</span></label>` : ''}
+      ${k === 'kumite' || k === 'teamkumite' || k === 'fukugo' ? `<label class="f"><span>Kumite style</span><select name="style" id="d-style">${opt('shobu', 'Shobu Ippon (1:30)', sc.style)}${opt('kogo', 'Ko-go Kumite (6 exchanges)', sc.style)}</select></label>` : ''}
+      ${k === 'kata' ? `<label class="f"><span>Judges</span><select name="judges" id="d-judges">${opt('3', '3', sc.judges)}${opt('5', '5', sc.judges)}${opt('6', '6 (Shu-shin + 5, scores only)', sc.judges)}${opt('7', '7', sc.judges)}</select></label>` : ''}
       ${k !== 'kata' ? `<label class="f"><span>Bout time (seconds)</span><input type="number" name="boutTime" id="d-bt" min="30" max="600" step="10" value="${esc(sc.boutTime)}"></label>
       <label class="f"><span>Kettei-sen (seconds, 0 = none)</span><input type="number" name="ketteiTime" id="d-kt" min="0" max="180" step="10" value="${esc(sc.ketteiTime)}"></label>` : ''}
-      ${k === 'teamkumite' ? `<label class="f"><span>Bouts per team match</span><select name="bouts" id="d-bouts">${opt('3', '3', sc.bouts)}${opt('5', '5', sc.bouts)}</select></label>` : ''}
+      ${k === 'teamkumite' ? `<label class="f"><span>Rounds per team match</span><select name="bouts" id="d-bouts">${opt('3', '3 (ITKF)', sc.bouts)}${opt('5', '5', sc.bouts)}</select></label>` : ''}
     </div></fieldset>
     ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${ents.length ? `<div class="stack" style="gap:6px">${ents.map(e => `<div class="row between small"><span style="min-width:0"><b>${esc(entName(e))}</b> <span class="muted">${esc(entDojo(e))}</span></span>
       <input type="number" min="1" max="64" name="seed_${esc(e)}" id="seed-${esc(e)}" value="${esc((d.seeds || {})[e] || '')}" placeholder="Seed" style="width:86px" aria-label="Seed"></div>`).join('')}</div>
@@ -227,10 +229,12 @@ async function saveDiv(form, thenDraw) {
   if (!T.genders.includes(v.gender)) v.gender = T.genders[0];
   const seeds = {}; for (const k of Object.keys(v)) if (k.startsWith('seed_')) { if (+v[k] > 0) seeds[k.slice(5)] = +v[k]; delete v[k]; }
   const kind = T.kind, base = Object.assign(KT.defaultScoring(v.eventType), old.scoring || {});
-  const scoring = { method: v.method || base.method, judges: +(v.judges || base.judges), boutTime: +(v.boutTime || base.boutTime), ketteiTime: v.ketteiTime === '' || v.ketteiTime == null ? base.ketteiTime : +v.ketteiTime, bouts: +(v.bouts || base.bouts) };
+  if (v.format === 'KP' && kind !== 'kata') { toast('Kata score pools are for kata, team kata and enbu divisions.', true); return false; }
+  const scoring = { method: v.format === 'KP' ? 'scores' : (v.method || base.method), judges: +(v.judges || base.judges), boutTime: +(v.boutTime || base.boutTime), ketteiTime: v.ketteiTime === '' || v.ketteiTime == null ? base.ketteiTime : +v.ketteiTime, bouts: +(v.bouts || base.bouts), style: v.style || base.style };
+  if (scoring.method === 'flags' && scoring.judges % 2 === 0) scoring.judges = 5;
   const dv = { eventType: v.eventType, gender: v.gender, belt: v.belt, group: v.group, minAge: v.minAge === '' ? null : +v.minAge, maxAge: v.maxAge === '' ? null : +v.maxAge,
     minRank: v.minRank || (v.belt === 'black' ? 'd1' : 'k10'), maxRank: v.maxRank || (v.belt === 'black' ? 'd10' : 'k1'), format: v.format || old.format || 'SE', bronze: v.bronze, reset: v.reset !== '0', advance: v.advance ? +v.advance : null,
-    ringId: v.ringId || '', ringOrder: old.ringOrder ?? Date.now(), scoring, seeds, order: old.order || 0 };
+    ringId: v.ringId || '', ringOrder: old.ringOrder ?? Date.now(), scoring, seeds, order: old.order || 0, poolSize: v.poolSize ? Math.min(12, Math.max(4, +v.poolSize)) : (old.poolSize || 8) };
   dv.name = v.name && v.name !== (old.eventType ? KT.divisionName(old) : '') ? v.name : KT.divisionName(dv);
   if (dv.minRank && dv.maxRank && KT.rankValue(dv.minRank) > KT.rankValue(dv.maxRank)) { toast('Lowest rank must be below highest rank.', true); return false; }
   const ok = await guard(() => S.store.set(P.doc(S.evId, 'divisions', id), dv), thenDraw ? null : 'Division saved');

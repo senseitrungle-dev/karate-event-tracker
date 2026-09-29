@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.0.0 Requirements & Design
+# Karate Event Tracker · v1.1.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -11,12 +11,12 @@ R7  Tournament events: Individual Kata (M/W), Individual Kumite (M/W), Team Kata
 R8  Black-belt divisions by age: Senior 21+, Youth 19–20, Junior 16–18, Cadet 14–15. Kyu divisions defined by director (rank range + age range).
 R9  Track competitors: entering (registration + required info), competing (check-in, ring calls), results, awards.
 R10 Manage rings, rounds, scores, competitor advancement.
-R11 Scoring per WTKF traditional rules (user choice).
+R11 Scoring per WTKF traditional rules (user choice); from v1.1.0 aligned to the ITKF Competition Rules 2009 supplied by the director (see §8).
 R12 Training camps: participants, sessions, attendance.
 R13 Database: Google Firebase; hosting: Vercel; source: GitHub (project instructions). Also runs as a claude.ai hosted page.
 R14 Development process: requirements → design → verify logic → code → test → fix → verify requirements → version bump.
 
-## 2. WTKF-style scoring as implemented
+## 2. v1.0.0 scoring (superseded by §8 in v1.1.0)
 - Kumite (Shobu Ippon): Ippon = 8 pts (ends bout), Waza-ari = 4 pts, two Waza-ari = Awasete Ippon (ends bout).
   Penalties to offender, points to opponent: Keikoku +2, Chui +4, Hansoku = disqualification. Kiken = withdrawal.
   Bout time default 2:00 (per division). Tie at time: Kettei-sen (default 0:30, first score wins) → fewer penalty points → Hantei (judges' flags).
@@ -63,5 +63,41 @@ Concurrency: each match result is merged as one nested key (`matches.{id}`) — 
 - Not yet verified: firestore.rules in the Firebase emulator (needs your Firebase project); real Vercel deploy.
 
 ## 7. Open questions for the director
-- Fukugo split decision (currently Hantei) and Enbu/Team Kata scoring defaults — confirm against the WTKF rulebook edition you use.
+- (v1.1.0) Fukugo now follows ITKF alternating Kumite/Ki-tei; Ko-go Ippon value (10, not ending) is an assumption to confirm.
 - Kumite penalty values (Keikoku 2, Chui 4) and bout/Kettei-sen times are editable per division.
+
+## 8. v1.1.0 — Kata score pools + ITKF Competition Rules (2009) alignment
+Sources: director's pool requirement (2026-09-28) and the ITKF Competition Rules 2009 PDF provided by the director.
+
+### Kata score pools (Individual Kata, Team Kata, Enbu — ITKF Kata Art. 1-6, 2-2, 2-4, 2-5, 3-2)
+- Pools of up to 8 (configurable 4–12; ITKF max 12). Every competitor performs once per round; 6 judges (Shu-shin + 5 Fuku-shin) score 0–10;
+  highest & lowest dropped; score = average of the remaining four (sums used internally, identical ordering).
+- Top 4 of each pool advance; pools continue until only 8 remain, then one final-elimination pool; its top 4 reach the final.
+- Final score = final elimination + final. Elimination rounds are not cumulative.
+- Kata change: final elimination and final each need a different kata than the previous round; Kettei-sen needs a kata different from the one that tied (enforced on save; Enbu exempt — choreography may repeat).
+- Team Kata final: Kata + Application (Bunkai) scores; tie → higher Application, then its six scores, then Kettei-sen.
+- Ties: add back all six scores; still tied (only where it matters: across the top-4 cut or among final places) → Kettei-sen, whose score only orders the tied competitors.
+- Performance order: R1 random with seeded competitors last in their pool; later rounds lowest score first (equal → lower pool letter → who competed earlier); final: lowest final-elimination score first.
+- Han-soku (zero card) → 0. Scores lock once the next round has a score.
+- Defaults: black-belt Individual Kata, Team Kata and Enbu use this format with 6 judges. Enbu teams are pairs (2).
+
+### Kumite — Shobu Ippon (Kumite Art. 1-6, 1-8, 2-3)
+- 1:30 action time; first Ippon or Awase-waza (2 Waza-ari) wins.
+- Time-up scoring: Waza-ari 4 · opponent Chui 4 · opponent Kei-koku 2 (2nd Kei-koku → Chui) · opponent Jo-gai 2 (2nd Jo-gai → Waza-ari awarded to the opponent, counts toward Awase-waza) · Ten-to not executed 1.
+- Second Chui → the sheet flags Han-soku for the Court Judges to confirm (not automatic).
+- Tie → Kettei-sen 1:30, no carry-over, first Waza-ari/Ippon wins; otherwise Court Judges decide (Hantei).
+### Ko-go Kumite (Women's individual kumite, and women's Fukugo kumite rounds)
+- Six exchanges: Aka attacks 1–3, Shiro 4–6. Jikan, Kakushi, Saki, Nige-tai 2 points to the opponent; Ten-to 1; Chui 4.
+- Tie → Kettei-sen of six alternating exchanges from Aka: first Waza-ari/Ippon wins, else total, else Court Judges.
+- Assumption: Ippon counts 10 points in Ko-go (ITKF team table value) and does not end the six exchanges — confirm.
+### Team Kumite (Art. 2-3-B)
+- 3 rounds of 1:30, all fought; round ends on Ippon/Awase-waza; team with the higher total wins (Ippon 10, Waza-ari 4, Jo-gai 2 each, Chui 4, Kei-koku 2 each, Ten-to 1).
+- Any member Han-soku → team Han-soku; any member Ki-ken → team forfeit; tie → Kettei-sen by Representative (individual Kettei-sen rules).
+### Fukugo (Fukugo Art. 1-3)
+- Single elimination (no repechage), rounds alternate: final = Kumite, semi-final = Ki-tei, quarter-final = Kumite … third-place match = Kumite.
+- Ki-tei: both perform the designated kata simultaneously; 5 judges each raise Aka or Shiro (no tie).
+
+### Not yet implemented from ITKF (candidates for later versions)
+- Sanbon Shobu option; kumite repechage system (Art. 1-13); detailed kata scoring forms (Basic/Skill point criteria and penalty deduction tables) — judges enter final numbers instead.
+
+Tests: 100 unit tests; E2E scores 95 matches/performances through the UI (Shobu Ippon, Ko-go, team kumite, Fukugo kumite/Ki-tei, kata pools incl. kata-change enforcement and Kettei-sen); multi-user and Firebase mocks pass.

@@ -66,7 +66,7 @@ async function createDemo() {
   const comps = [];
   let n = 0;
   const mk = (g, age, rank, events) => { const c = { id: uid() + n, g, age, rank, events }; n++; comps.push(c); return c; };
-  for (let i = 0; i < 8; i++) mk('M', 24 + i * 3, 'd' + (1 + (i % 4)), ['IKATA', 'IKUMITE', 'FUKUGO']);
+  for (let i = 0; i < 18; i++) mk('M', 22 + i * 2, 'd' + (1 + (i % 4)), i < 8 ? ['IKATA', 'IKUMITE', 'FUKUGO'] : ['IKATA']);
   for (let i = 0; i < 5; i++) mk('F', 22 + i * 4, 'd' + (1 + (i % 3)), ['IKATA', 'IKUMITE', 'TKATA']);
   for (let i = 0; i < 4; i++) mk('M', 16 + (i % 3), 'd1', ['IKATA', 'IKUMITE', 'TKUMITE']);
   for (let i = 0; i < 5; i++) mk('F', 30 + i, 'k' + (1 + (i % 3)), ['IKATA', 'ENBU']);
@@ -199,21 +199,31 @@ const ACT = {
     const M = S.modal, d = loadDraft(M.key), dv = DC.divBy[M.did], sc = scoringOf(dv);
     const log = logAt(d, el.dataset.p);
     const ev = { t: el.dataset.t }; if (el.dataset.s) ev.s = el.dataset.s;
-    const before = KT.kumiteEval(log, { kettei: sc.ketteiTime > 0, allowDraw: el.dataset.p.startsWith('bouts') }).phase;
+    const o = { kettei: sc.ketteiTime > 0, allowDraw: el.dataset.p.startsWith('bouts'), ketteiOnly: el.dataset.p === 'daihyo' };
+    const E = kumiteStyle(dv) === 'kogo' && el.dataset.p !== 'daihyo' ? KT.kogoEval : KT.kumiteEval;
+    const before = E(log, o).phase;
     log.push(ev);
-    const after = KT.kumiteEval(log, { kettei: sc.ketteiTime > 0, allowDraw: el.dataset.p.startsWith('bouts') });
-    if (before !== 'kettei' && after.phase === 'kettei') setClock(sc.ketteiTime);
+    const after = E(log, o);
+    if (E === KT.kumiteEval && before !== 'kettei' && after.phase === 'kettei') setClock(sc.ketteiTime);
     if (after.done) stopClock();
     draftChanged();
   },
   'k-undo': el => { const M = S.modal, d = loadDraft(M.key); logAt(d, el.dataset.p).pop(); draftChanged(); },
   clock: () => toggleClock(),
-  'clock-reset': el => { const M = S.modal, d = loadDraft(M.key), sc = scoringOf(DC.divBy[M.did]); const ph = KT.kumiteEval(logAt(d, el.dataset.p), { kettei: sc.ketteiTime > 0 }).phase; setClock(ph === 'kettei' ? sc.ketteiTime : sc.boutTime); },
-  'bout-sel': el => { S.boutSel = +el.dataset.i; const sc = scoringOf(DC.divBy[S.modal.did]); setClock(sc.boutTime); renderScore(true); },
+  'clock-reset': el => { const M = S.modal, d = loadDraft(M.key), sc = scoringOf(DC.divBy[M.did]); const ph = KT.kumiteEval(logAt(d, el.dataset.p), { kettei: sc.ketteiTime > 0, ketteiOnly: el.dataset.p === 'daihyo' }).phase; setClock(ph === 'kettei' ? sc.ketteiTime : sc.boutTime); },
+  'tie-side': el => { const d = loadDraft(S.modal.key); d.tieSide = d.tieSide === el.dataset.s ? null : el.dataset.s; draftChanged(); },
+  'bout-sel': el => { S.boutSel = +el.dataset.i; const sc = scoringOf(DC.divBy[S.modal.did]); setClock(+el.dataset.i >= sc.bouts ? sc.ketteiTime : sc.boutTime); renderScore(true); },
   'fk-hantei': el => { const d = loadDraft(S.modal.key); d.hantei = el.dataset.s; draftChanged(); },
   'reset-draft': async () => { if (!(await confirmBox('Clear everything entered on this scoresheet?', 'Clear'))) return; const M = S.modal; dropDraft(M.key); S.boutSel = 0; setClock(scoringOf(DC.divBy[M.did]).boutTime); renderScore(true); pushLive(); },
   'call-mat': () => { pushLive(); toast('Called to the mat'); },
   'save-result': () => saveResult(),
+  'kp-score': el => openKP(el.dataset.did, el.dataset.key),
+  'kp-save': () => kpSave(),
+  'kp-call': () => { kpPushLive(false); toast('Called to the mat'); },
+  'kp-clear': async () => {
+    const M = S.modal; if (!(await confirmBox(`Clear this score for ${entName(M.ctx.id)}?`, 'Clear score', true))) return;
+    const ok = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { scores: { [M.key]: null } }), 'Score cleared'); if (ok) { dropDraft(M.dkey); closeModal(); }
+  },
   'undo-result': async () => {
     const M = S.modal; const br = S.d.brackets[M.did];
     if (!KT.canEdit(br, M.mid, DC.res[M.did])) return;
@@ -237,10 +247,15 @@ const CHANGE = {
     const f = el.value; if (!f) return;
     const list = DC.divs.filter(d => d.ringId === el.dataset.ring);
     let n = 0, skipped = 0;
-    for (const d of list) { if (bracketState(d.id).drawn) { skipped++; continue; } if (d.format !== f) { await guard(() => S.store.update(P.doc(S.evId, 'divisions', d.id), { format: f })); n++; } }
-    toast(`${KT.FORMATS[f]} set on ${plural(n, 'division')}${skipped ? ` · ${skipped} already drawn (redraw to change)` : ''}`);
+    for (const d of list) {
+      if (bracketState(d.id).drawn) { skipped++; continue; }
+      if (f === 'KP' && kindOf(d) !== 'kata') { skipped++; continue; }
+      if (d.format !== f) { const up = { format: f }; if (f === 'KP') up.scoring = Object.assign({}, scoringOf(d), { method: 'scores', judges: Math.max(5, scoringOf(d).judges) }); await guard(() => S.store.update(P.doc(S.evId, 'divisions', d.id), up)); n++; }
+    }
+    toast(`${KT.FORMATS[f]} set on ${plural(n, 'division')}${skipped ? ` · ${skipped} skipped (already drawn${f === 'KP' ? ' or not kata' : ''})` : ''}`);
   },
   'fb-role': el => guard(() => el.checked ? FB.fs.doc('roles/' + el.dataset.uid).set({ role: 'director', at: new Date().toISOString() }) : FB.fs.doc('roles/' + el.dataset.uid).delete(), 'Access updated'),
+  'kp-hansoku': el => { const d = loadDraft(S.modal.dkey); d.hansoku = el.checked; saveDraft(S.modal.dkey); kpPaint(); },
   awarded: el => guard(() => S.store.update(P.live(S.evId, 'brackets', el.dataset.did), { awarded: el.checked })),
   att: el => writeAttendance(S.ui.session, { [el.dataset.id]: el.checked }),
   'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = rd.result; ACT['imp-preview'](); }; rd.readAsText(f); },
@@ -255,6 +270,8 @@ async function writeAttendance(sid, present) {
 let searchT = null;
 const INPUT = {
   q: el => { S.ui.q = el.value; render(); },
+  'kp-j': el => { const d = loadDraft(S.modal.dkey), f = el.dataset.f || 's'; d[f] = d[f] || []; d[f][+el.dataset.i] = el.value; saveDraft(S.modal.dkey); kpPaint(); },
+  'kp-kata': el => { const d = loadDraft(S.modal.dkey); d.kata = el.value; saveDraft(S.modal.dkey); kpPaint(); },
   'mgr-search': el => personSearch(el, $('#mgr-dd-' + el.dataset.ring), id => `data-act="ring-manage" data-ring="${esc(el.dataset.ring)}" data-uid="${esc(id)}"`),
   'staff-search': el => personSearch(el, $('#staff-dd'), id => `data-act="staff-add" data-uid="${esc(id)}"`),
 };

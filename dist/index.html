@@ -189,15 +189,16 @@ td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric
 #confirm .sheet { width: min(420px, 100%); }
 
 /* scoreboard */
-.board { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: stretch; }
-@media (max-width: 640px) { .board { grid-template-columns: 1fr 1fr; } .board .mid { grid-column: 1 / -1; order: -1; } }
+.board { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 230px) minmax(0, 1fr); gap: 10px; align-items: stretch; }
+@media (max-width: 640px) { .board { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .corner { padding: 8px; } .corner button { padding: 6px 4px; font-size: .74rem; } .corner .big { font-size: 2.4rem; } .board .mid { grid-column: 1 / -1; order: -1; } }
 .corner { border-radius: 12px; padding: 12px; display: grid; gap: 8px; align-content: start; min-width: 0; }
 .corner.a { background: var(--aka-bg); color: #fff; }
 .corner.b { background: var(--shiro); color: var(--shiro-ink); border: 2px solid var(--line-2); }
 .corner .who { font-weight: 700; font-family: var(--f-display); font-size: 1.02rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .corner .big { font: 700 3.2rem/1 var(--f-mono); font-variant-numeric: tabular-nums; }
 .corner .tally { font: 600 .78rem var(--f-mono); opacity: .85; }
-.corner .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.corner .btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.corner button { min-width: 0; overflow-wrap: anywhere; }
 .corner button { min-height: 42px; font-size: .82rem; background: rgba(255,255,255,.14); color: inherit; border-color: rgba(255,255,255,.4); }
 .corner.b button { background: rgba(0,0,0,.05); border-color: rgba(0,0,0,.22); color: var(--shiro-ink); }
 .corner button.pen { font-weight: 500; }
@@ -232,16 +233,26 @@ td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric
 .dd-list { position: absolute; left: 0; right: 0; top: 100%; background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; box-shadow: var(--shadow); z-index: 5; max-height: 240px; overflow: auto; }
 .dd-list button { width: 100%; justify-content: flex-start; border: 0; border-radius: 0; }
 @media (prefers-reduced-motion: no-preference) { .sheet { animation: rise .18s ease-out; } @keyframes rise { from { transform: translateY(12px); opacity: .6; } } }
+
+/* kata score pools */
+table.kp tr.adv td { background: color-mix(in srgb, var(--ok-soft) 55%, transparent); }
+.jcell { white-space: nowrap; }
+.js { display: inline-block; min-width: 2.6em; text-align: center; font: 500 .8rem var(--f-mono); color: var(--ink-2); }
+.js.dropped { color: var(--ink-3); text-decoration: line-through; }
+.kprow { display: grid; grid-template-columns: repeat(var(--j, 6), minmax(56px, 1fr)); gap: 6px; }
+.kprow input { text-align: center; font-family: var(--f-mono); }
+.kp-total { display: flex; gap: 18px; align-items: baseline; flex-wrap: wrap; }
+.kp-total b { font: 700 2rem var(--f-mono); }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.0.0 */
+<script>/* Karate Event Tracker v1.1.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
-   Brackets, divisions, WTKF-style scoring. Portable to native.
+   Brackets, divisions, ITKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -250,11 +261,12 @@ const KT = (function () {
     TKATA:   { label: 'Team Kata',         short: 'Team Kata',  team: true,  genders: ['M', 'F', 'X'], kind: 'kata',       defMethod: 'scores', size: [3, 3] },
     TKUMITE: { label: 'Team Kumite',       short: 'Team Kumite',team: true,  genders: ['M', 'F'],      kind: 'teamkumite', size: [3, 5] },
     FUKUGO:  { label: 'Fukugo',            short: 'Fukugo',     team: false, genders: ['M', 'F'],      kind: 'fukugo' },
-    ENBU:    { label: 'Enbu',              short: 'Enbu',       team: true,  genders: ['M', 'F', 'X'], kind: 'kata',       defMethod: 'scores', size: [2, 4] },
+    ENBU:    { label: 'Enbu',              short: 'Enbu',       team: true,  genders: ['M', 'F', 'X'], kind: 'kata',       defMethod: 'scores', size: [2, 2] },
   };
   const EVENT_ORDER = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'];
   const GENDERS = { M: 'Men', F: 'Women', X: 'Mixed' };
-  const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools of 4)', DE: 'Double elimination' };
+  const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools of 4)', DE: 'Double elimination', KP: 'Kata score pools (8 per pool)' };
+  const KP_POOL = 8, KP_ADV = 4;
   const LEVELS = ['Local', 'Regional', 'National', 'International'];
   const EVENT_KINDS = { tournament: 'Tournament', camp: 'Training camp', other: 'Other event' };
   const BLACK_AGE_GROUPS = [
@@ -290,16 +302,27 @@ const KT = (function () {
     const grp = dv.group ? ' ' + dv.group : '';
     return `${who}${grp} ${GENDERS[dv.gender] || ''} ${et ? et.label : ''}`.replace(/\s+/g, ' ').trim();
   }
-  function defaultScoring(eventType) {
-    const et = EVENT_TYPES[eventType];
-    return { method: et.defMethod || 'flags', judges: 5, boutTime: 120, ketteiTime: 30, bouts: 3 };
+  /** ITKF defaults: kumite 1:30 with 1:30 Kettei-sen; women's individual kumite (and fukugo kumite) = Ko-go. */
+  function defaultScoring(eventType, gender) {
+    const et = EVENT_TYPES[eventType] || {};
+    const kogo = gender === 'F' && (eventType === 'IKUMITE' || eventType === 'FUKUGO');
+    return { method: et.defMethod || 'flags', judges: 5, boutTime: 90, ketteiTime: 90, bouts: 3, style: kogo ? 'kogo' : 'shobu' };
+  }
+  /** Default bracket format per event (ITKF): kata-type events use score pools; fukugo single elimination. */
+  function defaultFormat(eventType, belt, fallback) {
+    if (eventType === 'FUKUGO') return 'SE';
+    if (belt === 'black' && (eventType === 'IKATA' || eventType === 'TKATA' || eventType === 'ENBU')) return 'KP';
+    if (fallback === 'KP' && EVENT_TYPES[eventType].kind !== 'kata') return 'SE';
+    return fallback || 'SE';
   }
   /** Standard black-belt divisions for the chosen event types. */
   function blackBeltDivisions(eventTypes, format) {
     const out = [];
     for (const et of eventTypes) for (const g of EVENT_TYPES[et].genders) for (const ag of BLACK_AGE_GROUPS) {
+      const fmt = defaultFormat(et, 'black', format);
       const dv = { eventType: et, gender: g, belt: 'black', group: ag.label, minAge: ag.min, maxAge: ag.max,
-        minRank: 'd1', maxRank: 'd10', format: format || 'SE', scoring: defaultScoring(et), bronze: 'two', reset: true };
+        minRank: 'd1', maxRank: 'd10', format: fmt, scoring: defaultScoring(et, g), bronze: 'two', reset: true };
+      if (fmt === 'KP') dv.scoring = Object.assign(dv.scoring, { method: 'scores', judges: 6 });
       dv.name = divisionName(dv); out.push(dv);
     }
     return out;
@@ -309,7 +332,8 @@ const KT = (function () {
     const out = [];
     for (const et of eventTypes) for (const g of EVENT_TYPES[et].genders) {
       const dv = { eventType: et, gender: g, belt: 'kyu', group: tpl.label, minAge: tpl.minAge ?? null, maxAge: tpl.maxAge ?? null,
-        minRank: tpl.minRank || 'k10', maxRank: tpl.maxRank || 'k1', format: format || 'SE', scoring: defaultScoring(et), bronze: 'two', reset: true };
+        minRank: tpl.minRank || 'k10', maxRank: tpl.maxRank || 'k1', format: defaultFormat(et, 'kyu', format), scoring: defaultScoring(et, g), bronze: 'two', reset: true };
+      if (dv.format === 'KP') dv.scoring = Object.assign(dv.scoring, { method: 'scores', judges: 6 });
       dv.name = divisionName(dv); out.push(dv);
     }
     return out;
@@ -479,8 +503,8 @@ const KT = (function () {
   }
 
   /** Split ordered entrants into balanced pools of at most 4 (snake order). */
-  function makePools(ordered) {
-    const n = ordered.length, np = Math.max(1, Math.ceil(n / 4));
+  function makePools(ordered, size) {
+    const n = ordered.length, np = Math.max(1, Math.ceil(n / (size || 4)));
     const pools = Array.from({ length: np }, () => []);
     ordered.forEach((e, i) => { const row = Math.floor(i / np), col = i % np; pools[row % 2 === 0 ? col : np - 1 - col].push(e); });
     // dojo spread across pools: swap unseeded same-dojo members with another pool
@@ -562,6 +586,18 @@ const KT = (function () {
     const ordered = orderEntrants(entrants, rnd);
     const br = { divisionId: division.id, format, entrants: ordered.map(e => e.id), bronze: division.bronze || 'two',
       reset: division.reset !== false, matches: {}, results: {}, pools: null, tiebreak: {}, createdAt: new Date().toISOString(), version: VERSION };
+    if (format === 'KP') {
+      br.judges = +((division.scoring || {}).judges) || 6;
+      br.scores = {};
+      br.poolSize = Math.min(12, Math.max(4, +division.poolSize || KP_POOL));
+      br.kataRule = division.eventType !== 'ENBU';           // ITKF Kata 2-2-B (Enbu may repeat choreography)
+      br.application = division.eventType === 'TKATA';      // Synchronized kata final adds Application (Bunkai)
+      // seeded competitors perform last in their pool (Kata 1-6-B)
+      const seedLast = pl => pl.filter(e => !e.seed).concat(pl.filter(e => e.seed).sort((x, y) => y.seed - x.seed));
+      if (ordered.length <= KP_ADV) br.kpFinal = seedLast(ordered).map(e => e.id);
+      else { const pools = makePools(ordered, br.poolSize); br.kpPools = {}; pools.forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(pl).map(e => e.id); }); }
+      return br;
+    }
     if (ordered.length < 2) return br;
     if (format === 'RR') {
       const g = genRR(ordered, { advance: division.advance, bronze: br.bronze });
@@ -572,6 +608,159 @@ const KT = (function () {
       br.matches = format === 'DE' ? genDE(slots, { reset: br.reset }) : genSE(slots, '', { bronze: br.bronze });
     }
     return br;
+  }
+
+
+  /* ---------- Kata score pools (KP) ----------
+     Pools of up to 8; every competitor performs once per round and is scored by N judges (0–10).
+     With 5+ judges the highest and lowest score are dropped from the total.
+     Top 4 of each pool advance; when a round has a single pool it is the semifinal and its top 4
+     reach the final. Final: must use a different kata than in the semifinal; semifinal total is
+     carried and added to the final total. Ties: add back the dropped scores (sum of all), then re-perform. */
+  function kpSheet(entry, judges) {
+    if (!entry) return null;
+    if (entry.hansoku) return { kata: entry.kata || '', total: 0, all: 0, avg: 0, hansoku: true };
+    if (!Array.isArray(entry.s)) return null;
+    const t = scoreTotal(entry.s, judges);
+    if (!t) return null;
+    const out = Object.assign({ kata: entry.kata || '', kataTotal: t.total, kataAll: t.all }, t);
+    if (Array.isArray(entry.app)) {
+      const a = scoreTotal(entry.app, judges); if (!a) return null;
+      out.appTotal = a.total; out.appAll = a.all;
+      out.total = Math.round((t.total + a.total) * 100) / 100; out.all = Math.round((t.all + a.all) * 100) / 100;
+    }
+    return out;
+  }
+  const kpKey = (n, id, rp) => `R${n}_${id}${rp ? '_rp' : ''}`;
+  // ties: (team kata final) higher Application, then its six scores; otherwise add back all six; then Kettei-sen
+  function kpCmp(a, b) {
+    const app = (a.appTotal != null && b.appTotal != null) ? ((b.appTotal - a.appTotal) || (b.appAll - a.appAll)) : 0;
+    return (b.total - a.total) || app || (b.all - a.all) || ((b.rpTotal ?? -1) - (a.rpTotal ?? -1)) || ((b.rpAll ?? -1) - (a.rpAll ?? -1));
+  }
+  function kpSame(a, b) { return kpCmp(a, b) === 0; }
+  /** rank a list of rows; cutAt = protected positions (ties across the cut or inside 1..cutAt need re-perform) */
+  function kpRank(rows, cutAt, needAllPlaces) {
+    const done = rows.every(r => r.sheet);
+    const scored = rows.filter(r => r.sheet).sort(kpCmp);
+    const unscored = rows.filter(r => !r.sheet);
+    const out = scored.concat(unscored);
+    let place = 0;
+    out.forEach((r, i) => { if (!r.sheet) { r.rank = null; return; } if (i === 0 || !kpSame(out[i - 1], r)) place = i + 1; r.rank = place; });
+    const needRp = [];
+    if (done) {
+      for (let i = 1; i < scored.length; i++) {
+        const a = scored[i - 1], b = scored[i];
+        if (!kpSame(a, b)) continue;
+        const matters = needAllPlaces ? i < cutAt : (i === cutAt); // tie straddles the cut (positions cutAt and cutAt+1)
+        if (matters) { for (const r of scored) if (kpSame(r, a) && !needRp.includes(r.id)) needRp.push(r.id); }
+      }
+    }
+    return { rows: out, complete: done && !needRp.length, scoredAll: done, needRp };
+  }
+  function kpRow(br, n, id, carry) {
+    const J = br.judges || 6, S = br.scores || {};
+    const sheet = kpSheet(S[kpKey(n, id)], J), rp = kpSheet(S[kpKey(n, id, true)], J);
+    const row = { id, key: kpKey(n, id), sheet, kata: sheet ? sheet.kata : '', hansoku: !!(sheet && sheet.hansoku) };
+    if (!sheet) return row;
+    if (sheet.appTotal != null) { row.appTotal = sheet.appTotal; row.appAll = sheet.appAll; row.kataOwn = sheet.kataTotal; }
+    row.own = sheet.total; row.ownAll = sheet.all;
+    row.carry = carry ? carry.total : 0; row.carryAll = carry ? carry.all : 0;
+    row.total = Math.round((sheet.total + row.carry) * 100) / 100;
+    row.all = Math.round((sheet.all + row.carryAll) * 100) / 100;
+    if (rp) { row.rpTotal = rp.total; row.rpAll = rp.all; }
+    return row;
+  }
+  /** Derive every round of a KP bracket from the stored R1 pools + scores. */
+  function kpState(br) {
+    const rounds = [];
+    let pools = br.kpPools || null, n = 1, finalIds = br.kpFinal || null, semiRows = null;
+    while (pools) {
+      const names = Object.keys(pools);
+      const single = names.length === 1;
+      const rd = { n, type: single ? 'semi' : 'pool', pools: {}, complete: true, needRp: [] };
+      const adv = [];
+      for (const P of names) {
+        const rows = pools[P].map(id => kpRow(br, n, id, null));
+        const rk = kpRank(rows, KP_ADV, false);
+        rd.pools[P] = { order: pools[P], rows: rk.rows, complete: rk.complete, needRp: rk.needRp, scoredAll: rk.scoredAll };
+        rd.needRp.push(...rk.needRp.map(id => ({ id, pool: P })));
+        if (!rk.complete) rd.complete = false;
+        rk.rows.slice(0, KP_ADV).forEach((r, i) => { if (r.hansoku) return; r.advance = rk.complete; adv.push({ id: r.id, place: i, total: r.total, pool: P, seq: pools[P].indexOf(r.id) }); });
+      }
+      rounds.push(rd);
+      if (!rd.complete) return { rounds, final: null, complete: false };
+      if (single) { finalIds = adv.map(a => a.id); semiRows = Object.fromEntries(rd.pools[names[0]].rows.map(r => [r.id, r])); break; }
+      // next round: re-pool advancers by placing (A1,B1,C1.. then A2,B2..) in snake order, <= 8 per pool
+      adv.sort((a, b) => a.place - b.place || b.total - a.total);
+      // continue with pools until only eight remain, then one final-elimination pool (Kata 1-6-A)
+      const np = adv.length <= 8 ? 1 : Math.max(2, Math.ceil(adv.length / (br.poolSize || KP_POOL)));
+      const next = Array.from({ length: np }, () => []);
+      adv.forEach((a, i) => { const row = Math.floor(i / np), col = i % np; next[row % 2 === 0 ? col : np - 1 - col].push(a); });
+      pools = {};
+      // performance order: lowest score first; equal → lower pool letter; same pool → who competed earlier (Kata 1-6-A remark 2)
+      next.forEach((pl, i) => { pools[POOL_NAMES[i]] = pl.slice().sort((x, y) => x.total - y.total || x.pool.localeCompare(y.pool) || x.seq - y.seq).map(a => a.id); });
+      n++;
+    }
+    if (!finalIds) return { rounds, final: null, complete: false };
+    const fr = br.kpPools ? n + 1 : 1;
+    // final order: lowest carried score first
+    const order = semiRows ? finalIds.slice().sort((a, b) => semiRows[a].total - semiRows[b].total || semiRows[a].all - semiRows[b].all) : finalIds.slice();
+    const rows = order.map(id => kpRow(br, fr, id, semiRows ? { total: semiRows[id].own, all: semiRows[id].ownAll } : null));
+    const rk = kpRank(rows, Math.min(4, rows.length), true);
+    const final = { n: fr, type: 'final', order, rows: rk.rows, complete: rk.complete, needRp: rk.needRp, carried: !!semiRows,
+      semiKata: semiRows ? Object.fromEntries(finalIds.map(id => [id, semiRows[id].kata])) : {} };
+    return { rounds, final, complete: final.complete };
+  }
+  function kpPlacings(br) {
+    const st = kpState(br), out = { complete: false, gold: null, silver: null, bronze: [], kp: true };
+    const n = (br.entrants || []).length;
+    if (n === 1) return Object.assign(out, { gold: br.entrants[0], complete: true });
+    if (!st.final || !st.final.complete) return out;
+    const r = st.final.rows;
+    return Object.assign(out, { complete: true, gold: r[0] && r[0].id, silver: r[1] && r[1].id, bronze: r[2] ? [r[2].id] : [], fourth: r[3] && r[3].id });
+  }
+  /** Performances waiting to be scored (current round), in performance order. */
+  function kpQueue(br) {
+    const st = kpState(br), out = [];
+    const add = (rd, P, order, rows, needRp, label) => {
+      const by = Object.fromEntries(rows.map(r => [r.id, r]));
+      for (const id of order) if (!by[id].sheet) out.push({ key: kpKey(rd, id), id, round: rd, pool: P, label });
+      for (const id of needRp) { const k = kpKey(rd, id, true); const again = !!(br.scores || {})[k]; out.push({ key: k, id, round: rd, pool: P, label: label + (again ? ' · Kettei-sen again' : ' · Kettei-sen'), rp: true, again }); }
+    };
+    const last = st.rounds[st.rounds.length - 1];
+    if (st.final) add(st.final.n, 'F', st.final.order, st.final.rows, st.final.needRp, 'Final');
+    else if (last) for (const P of Object.keys(last.pools)) add(last.n, P, last.pools[P].order, last.pools[P].rows, last.pools[P].needRp, `${kpRoundName(last)} · Pool ${P}`);
+    return out;
+  }
+  function kpRoundName(rd) { return rd.type === 'final' ? 'Final' : rd.type === 'semi' ? 'Final elimination' : `Elimination round ${rd.n}`; }
+  /** A score may be changed while no later round has any score. */
+  function kpCanEdit(br, key) {
+    const m = /^R(\d+)_/.exec(key); if (!m) return false;
+    const n = +m[1];
+    return !Object.keys(br.scores || {}).some(k => { const x = /^R(\d+)_/.exec(k); return x && +x[1] > n && br.scores[k]; });
+  }
+  /** ITKF Kata 2-2-B / 2-5-C: final elimination and finals need a kata different from the previous round;
+   *  a Kettei-sen (re-perform) needs a kata different from the one that tied. Returns an error text or ''. */
+  function kpKataCheck(br, key, kata) {
+    if (!br.kataRule) return '';
+    const norm = x => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!norm(kata)) return 'Enter the kata name.';
+    const m = /^R(\d+)_(.+?)(_rp)?$/.exec(key); if (!m) return '';
+    const n = +m[1], id = m[2], S = br.scores || {};
+    if (m[3]) { const tied = S[kpKey(n, id)]; return tied && norm(tied.kata) === norm(kata) ? `Kettei-sen needs a different kata than ${tied.kata}.` : ''; }
+    const st = kpState(br);
+    const isFinal = st.final && st.final.n === n;
+    const rd = st.rounds.find(r => r.n === n);
+    if (!isFinal && !(rd && rd.type === 'semi')) return '';
+    const prev = S[kpKey(n - 1, id)];
+    if (prev && norm(prev.kata) === norm(kata)) return `${isFinal ? 'The final' : 'The final elimination'} needs a different kata than the previous round (${prev.kata}).`;
+    return '';
+  }
+  function kpProgress(br) {
+    const st = kpState(br); let done = 0, total = 0;
+    for (const rd of st.rounds) for (const P in rd.pools) { total += rd.pools[P].rows.length; done += rd.pools[P].rows.filter(r => r.sheet).length; }
+    if (st.final) { total += st.final.rows.length; done += st.final.rows.filter(r => r.sheet).length; }
+    return { done, total };
   }
 
   /* ---------- resolution ---------- */
@@ -671,6 +860,7 @@ const KT = (function () {
 
   /** Final placings of a bracket: {complete, gold, silver, bronze:[], fourth} */
   function placings(br, res) {
+    if (br.format === 'KP') return kpPlacings(br);
     res = res || resolve(br);
     const n = (br.entrants || []).length;
     const out = { complete: false, gold: null, silver: null, bronze: [] };
@@ -750,59 +940,105 @@ const KT = (function () {
     return `${pre}Round ${m.round}`;
   }
 
-  /* ---------- WTKF-style scoring ---------- */
-  const PTS = { ippon: 8, waza: 4, keikoku: 2, chui: 4 };
+  /* ---------- ITKF scoring (Competition Rules 2009) ---------- */
+  // Kumite scoring table at time-up (Kumite Art. 2-3-A-(4)); team table Art. 2-3-B (Ippon 10).
+  const PTS = { ippon: 10, waza: 4, chui: 4, keikoku: 2, jogai: 2, tento: 1, kogoPen: 2 };
   const OTHER = { a: 'b', b: 'a' };
+  const blank = () => ({ ippon: 0, waza: 0, jogai: 0, keikoku: 0, chui: 0, tento: 0 });
+  /** Points, awards and flags for one side from raw counts (own counts `m`, opponent counts `o`). */
+  function tally(m, o) {
+    const wazaAwarded = m.waza + Math.floor(o.jogai / 2);          // 2nd Jo-gai → opponent awarded Waza-ari (Art. 1-6-B)
+    const chuiAgainst = o.chui + Math.floor(o.keikoku / 2);         // 2nd Kei-koku → Chui (Art. 1-8-A)
+    const score = PTS.ippon * m.ippon + PTS.waza * wazaAwarded + PTS.jogai * (o.jogai % 2)
+      + PTS.chui * chuiAgainst + PTS.keikoku * (o.keikoku % 2) + PTS.tento * o.tento;
+    return { wazaAwarded, score, ippon: m.ippon };
+  }
   /**
-   * Evaluate a kumite bout from its event log.
-   * log: [{s:'a'|'b', t:'waza'|'ippon'|'keikoku'|'chui'|'hansoku'|'kiken'|'hantei'} | {t:'timeup'|'ketteiend'}]
-   * opts: {allowDraw, kettei:boolean}
+   * Evaluate an Ippon Shobu kumite bout from its event log.
+   * log items: {s:'a'|'b', t:'waza'|'ippon'|'jogai'|'keikoku'|'chui'|'tento'|'hansoku'|'kiken'|'hantei'} | {t:'timeup'|'ketteiend'}
+   * opts: {allowDraw (team rounds: Hiki-wake allowed), kettei:boolean (Kettei-sen enabled), ketteiOnly (representative bout)}
    */
   function kumiteEval(log, opts) {
     opts = opts || {};
-    const st = { a: { ippon: 0, waza: 0, keikoku: 0, chui: 0 }, b: { ippon: 0, waza: 0, keikoku: 0, chui: 0 } };
-    let phase = 'regular', done = false, winner = null, method = null;
-    const tech = s => st[s].ippon * PTS.ippon + st[s].waza * PTS.waza;
-    const pen = s => st[s].keikoku * PTS.keikoku + st[s].chui * PTS.chui;
-    const score = s => tech(s) + pen(OTHER[s]);
+    let phase = opts.ketteiOnly ? 'kettei' : 'regular', done = false, winner = null, method = null;
+    let st = { a: blank(), b: blank() }, regular = null;
+    const T = () => ({ a: tally(st.a, st.b), b: tally(st.b, st.a) });
     const end = (w, how) => { done = true; winner = w; method = how; };
     for (const ev of log || []) {
       if (done) break;
       const s = ev.s;
       switch (ev.t) {
-        case 'waza': case 'ippon': case 'keikoku': case 'chui': {
+        case 'waza': case 'ippon': case 'jogai': case 'keikoku': case 'chui': case 'tento': {
           st[s][ev.t]++;
-          const scorer = (ev.t === 'waza' || ev.t === 'ippon') ? s : OTHER[s];
-          if (st[scorer].ippon >= 1) end(scorer, 'Ippon');
-          else if (st[scorer].waza >= 2) end(scorer, 'Awasete Ippon');
-          else if (phase === 'kettei') end(scorer, 'Kettei-sen');
+          const t = T();
+          for (const x of ['a', 'b']) {
+            if (t[x].ippon >= 1) { end(x, phase === 'kettei' ? 'Kettei-sen · Ippon' : 'Ippon'); break; }
+            if (t[x].wazaAwarded >= 2) { end(x, phase === 'kettei' ? 'Kettei-sen · Awase-waza' : 'Awase-waza'); break; }
+            if (phase === 'kettei' && t[x].wazaAwarded >= 1) { end(x, 'Kettei-sen · Waza-ari'); break; }
+          }
           break;
         }
-        case 'hansoku': end(OTHER[s], 'Hansoku'); break;
-        case 'kiken': end(OTHER[s], 'Kiken'); break;
-        case 'hantei': if (phase === 'hantei') end(s, 'Hantei'); break;
-        case 'timeup':
+        case 'hansoku': end(OTHER[s], 'Han-soku'); break;
+        case 'kiken': end(OTHER[s], 'Ki-ken'); break;
+        case 'hantei': if (phase === 'hantei') end(s, 'Hantei (Court Judges)'); break;
+        case 'timeup': {
           if (phase !== 'regular') break;
-          if (score('a') !== score('b')) end(score('a') > score('b') ? 'a' : 'b', 'Points');
-          else if (opts.allowDraw) { done = true; winner = null; method = 'Hikiwake (draw)'; }
-          else if (opts.kettei !== false) phase = 'kettei';
-          else if (pen('a') !== pen('b')) end(pen('a') < pen('b') ? 'a' : 'b', 'Fewer penalties');
+          const t = T();
+          regular = { a: t.a.score, b: t.b.score };
+          if (t.a.score !== t.b.score) end(t.a.score > t.b.score ? 'a' : 'b', 'Points');
+          else if (opts.allowDraw) { done = true; winner = null; method = 'Hiki-wake'; }
+          else if (opts.kettei !== false) { phase = 'kettei'; st = { a: blank(), b: blank() }; }  // no carry-over
           else phase = 'hantei';
           break;
-        case 'ketteiend':
-          if (phase !== 'kettei') break;
-          if (pen('a') !== pen('b')) end(pen('a') < pen('b') ? 'a' : 'b', 'Fewer penalties');
-          else phase = 'hantei';
-          break;
+        }
+        case 'ketteiend': if (phase === 'kettei') phase = 'hantei'; break;
       }
     }
-    return { done, winner, method, phase: done ? 'done' : phase, score: { a: score('a'), b: score('b') }, st };
+    const t = T();
+    const cur = { a: t.a.score, b: t.b.score };
+    const warn = [];
+    for (const x of ['a', 'b']) if (st[x].chui + Math.floor(st[x].keikoku / 2) >= 2 && !done) warn.push(x);
+    return { done, winner, method, phase: done ? 'done' : phase, score: regular && phase !== 'regular' ? regular : cur, cur, st, kettei: phase !== 'regular' && !opts.ketteiOnly, hansokuDue: warn };
+  }
+  /**
+   * Ko-go Kumite (ITKF Ko-go Rules): six exchanges, Aka attacks 1–3, Shiro 4–6; each exchange independent.
+   * Kettei-sen: six exchanges alternating from Aka; first Waza-ari/Ippon wins, else total, else Court Judges.
+   * log items: {s, t:'waza'|'ippon'|'jikan'|'kakushi'|'saki'|'nigetai'|'keikoku'|'chui'|'jogai'|'tento'|'hansoku'|'kiken'|'hantei'} | {t:'next'}
+   */
+  function kogoEval(log, opts) {
+    opts = opts || {};
+    let phase = opts.ketteiOnly ? 'kettei' : 'regular', ex = 1, done = false, winner = null, method = null, regular = null;
+    let sc = { a: 0, b: 0 };
+    const end = (w, how) => { done = true; winner = w; method = how; };
+    const pen = { jikan: 2, kakushi: 2, saki: 2, nigetai: 2, keikoku: 2, jogai: 2, chui: 4, tento: 1 };
+    for (const ev of log || []) {
+      if (done) break;
+      const s = ev.s;
+      if (ev.t === 'waza' || ev.t === 'ippon') {
+        sc[s] += ev.t === 'ippon' ? PTS.ippon : PTS.waza;
+        if (phase === 'kettei') end(s, 'Kettei-sen · ' + (ev.t === 'ippon' ? 'Ippon' : 'Waza-ari'));
+      } else if (pen[ev.t]) sc[OTHER[s]] += pen[ev.t];
+      else if (ev.t === 'hansoku') end(OTHER[s], 'Han-soku');
+      else if (ev.t === 'kiken') end(OTHER[s], 'Ki-ken');
+      else if (ev.t === 'hantei' && phase === 'hantei') end(s, 'Hantei (Court Judges)');
+      else if (ev.t === 'next') {
+        if (phase === 'hantei') continue;
+        if (ex < 6) { ex++; continue; }
+        // six exchanges finished
+        if (sc.a !== sc.b) { end(sc.a > sc.b ? 'a' : 'b', phase === 'kettei' ? 'Kettei-sen · Points' : 'Points'); if (phase === 'regular') regular = Object.assign({}, sc); continue; }
+        if (phase === 'regular') { regular = Object.assign({}, sc); if (opts.allowDraw) { done = true; method = 'Hiki-wake'; continue; } phase = 'kettei'; ex = 1; sc = { a: 0, b: 0 }; }
+        else phase = 'hantei';
+      }
+    }
+    const offense = phase === 'kettei' ? (ex % 2 === 1 ? 'a' : 'b') : (ex <= 3 ? 'a' : 'b');
+    return { done, winner, method, phase: done ? 'done' : phase, exchange: ex, offense, cur: sc, score: regular && phase !== 'regular' ? regular : (done && regular ? regular : sc), kettei: phase !== 'regular' };
   }
   function flagsEval(aFlags, judges) {
     const j = +judges || 5, a = +aFlags;
-    if (!(a >= 0 && a <= j) || j % 2 === 0) return { done: false };
+    if (!(a >= 0 && a <= j) || a * 2 === j) return { done: false };
     return { done: true, winner: a > j / 2 ? 'a' : 'b', method: `Flags ${Math.max(a, j - a)}–${Math.min(a, j - a)}`, score: { a, b: j - a } };
   }
+  /** Judges' scores: highest & lowest dropped (5+ judges); ITKF announces the average of the rest (Kata Art. 3-2-D). */
   function scoreTotal(arr, judges) {
     const v = (arr || []).slice(0, judges).map(Number);
     if (v.length !== +judges || v.some(x => !(x >= 0 && x <= 10))) return null;
@@ -810,50 +1046,57 @@ const KT = (function () {
     const kept = +judges >= 5 ? sorted.slice(1, -1) : sorted;
     const total = Math.round(kept.reduce((s, x) => s + x, 0) * 100) / 100;
     const all = Math.round(v.reduce((s, x) => s + x, 0) * 100) / 100;
-    return { total, all, hi: sorted[sorted.length - 1], lo: sorted[0] };
+    return { total, all, avg: Math.round(total / kept.length * 1000) / 1000, kept: kept.length, hi: sorted[sorted.length - 1], lo: sorted[0] };
   }
-  /** Compare two score sheets; tie → needs flags ('tieFlags' param as aFlags). */
-  function scoresEval(aArr, bArr, judges, tieFlags) {
+  /** Head-to-head score comparison; tie after adding back dropped scores → Court Judges decide (tieSide). */
+  function scoresEval(aArr, bArr, judges, tieSide) {
     const A = scoreTotal(aArr, judges), B = scoreTotal(bArr, judges);
     if (!A || !B) return { done: false };
-    const cmp = (A.total - B.total) || (A.all - B.all) || (A.hi - B.hi) || (A.lo - B.lo);
-    if (cmp !== 0) return { done: true, winner: cmp > 0 ? 'a' : 'b', method: `Score ${A.total.toFixed(1)}–${B.total.toFixed(1)}`, score: { a: A.total, b: B.total } };
-    if (tieFlags != null && tieFlags !== '') {
-      const f = flagsEval(tieFlags, judges);
-      if (f.done) return { done: true, winner: f.winner, method: `Tie ${A.total.toFixed(1)}, ${f.method}`, score: { a: A.total, b: B.total } };
-    }
-    return { done: false, tie: true, score: { a: A.total, b: B.total } };
+    const cmp = (A.total - B.total) || (A.all - B.all);
+    const f = x => x.avg.toFixed(2);
+    if (cmp !== 0) return { done: true, winner: cmp > 0 ? 'a' : 'b', method: `Score ${f(A)}–${f(B)}`, score: { a: A.avg, b: B.avg } };
+    if (tieSide === 'a' || tieSide === 'b') return { done: true, winner: tieSide, method: `Tie ${f(A)} · Court Judges`, score: { a: A.avg, b: B.avg } };
+    return { done: false, tie: true, score: { a: A.avg, b: B.avg } };
   }
-  /** Team kumite: bouts [{log}], daihyo {log} */
-  function teamKumiteEval(bouts, nBouts, daihyo) {
-    let wa = 0, wb = 0, pa = 0, pb = 0, complete = 0;
+  /** Team Kumite (ITKF Art. 2-3-B): 3 rounds, higher team total wins; tie → Kettei-sen by Representative.
+   *  Any member Han-soku → team Han-soku; any member Ki-ken → team forfeit. */
+  function teamKumiteEval(bouts, nBouts, daihyo, kogo) {
+    const E = kogo ? kogoEval : kumiteEval;
+    let pa = 0, pb = 0, complete = 0;
     const per = [];
+    const res = { per, pts: { a: 0, b: 0 }, done: false };
     for (let i = 0; i < nBouts; i++) {
-      const r = kumiteEval((bouts[i] || {}).log, { allowDraw: true });
+      const r = E((bouts[i] || {}).log, { allowDraw: true });
       per.push(r);
-      if (r.done) { complete++; pa += r.score.a; pb += r.score.b; if (r.winner === 'a') wa++; else if (r.winner === 'b') wb++; }
+      if (r.done && (r.method === 'Han-soku' || r.method === 'Ki-ken')) {
+        return Object.assign(res, { done: true, winner: r.winner, method: `${r.method} (team) · round ${i + 1}` });
+      }
+      const s = r.done ? r.score : r.cur;
+      pa += s.a; pb += s.b;
+      if (r.done) complete++;
     }
-    const res = { per, wins: { a: wa, b: wb }, pts: { a: pa, b: pb }, done: false };
-    // early decision: majority of bouts already won
-    const need = Math.floor(nBouts / 2) + 1;
-    if (wa >= need || wb >= need) return Object.assign(res, { done: true, winner: wa > wb ? 'a' : 'b', method: `Bouts ${Math.max(wa, wb)}–${Math.min(wa, wb)}` });
+    res.pts = { a: pa, b: pb };
     if (complete < nBouts) return res;
-    if (wa !== wb) return Object.assign(res, { done: true, winner: wa > wb ? 'a' : 'b', method: `Bouts ${Math.max(wa, wb)}–${Math.min(wa, wb)}` });
-    if (pa !== pb) return Object.assign(res, { done: true, winner: pa > pb ? 'a' : 'b', method: `Bouts ${wa}–${wb}, points ${Math.max(pa, pb)}–${Math.min(pa, pb)}` });
-    const d = kumiteEval((daihyo || {}).log, {});
+    if (pa !== pb) return Object.assign(res, { done: true, winner: pa > pb ? 'a' : 'b', method: `Team score ${Math.max(pa, pb)}–${Math.min(pa, pb)}` });
+    const d = kumiteEval((daihyo || {}).log, { ketteiOnly: true });
     res.daihyo = d; res.needDaihyo = true;
-    if (d.done) return Object.assign(res, { done: true, winner: d.winner, method: 'Daihyo-sen · ' + d.method });
+    if (d.done) return Object.assign(res, { done: true, winner: d.winner, method: 'Representative · ' + d.method });
     return res;
   }
-  /** Fukugo: kata flags + kumite log; split → hantei side. */
-  function fukugoEval(kataFlags, judges, kumiteLog, hanteiSide) {
-    const k = flagsEval(kataFlags, judges), c = kumiteEval(kumiteLog, {});
-    const res = { kata: k, kumite: c, done: false };
-    if (!k.done || !c.done) return res;
-    if (k.winner === c.winner) return Object.assign(res, { done: true, winner: k.winner, method: 'Won kata & kumite', score: { a: (k.winner === 'a' ? 2 : 0), b: (k.winner === 'b' ? 2 : 0) } });
-    res.split = true;
-    if (hanteiSide === 'a' || hanteiSide === 'b') return Object.assign(res, { done: true, winner: hanteiSide, method: 'Split · Hantei', score: { a: 1, b: 1 } });
-    return res;
+  /** Fukugo (ITKF Fukugo Art. 1-3): single elimination alternating Kumite and Ki-tei.
+   *  Final = Kumite, semi-final = Ki-tei, and so on back; third-place match = Kumite. */
+  function fukugoPart(m, br) {
+    if (!m) return 'kumite';
+    if (m.stage === 'B') return 'kumite';
+    const k = m.rounds || Math.max(...Object.values(br.matches).filter(x => x.stage === m.stage).map(x => x.round));
+    return (k - m.round) % 2 === 0 ? 'kumite' : 'kitei';
+  }
+  /** Ki-tei: both perform the designated kata; 5 judges each raise Aka or Shiro (no tie). */
+  function kiteiEval(flags, judges) {
+    const j = +judges || 5, fl = flags || [];
+    if (fl.filter(Boolean).length < j) return { done: false };
+    const r = flagsEval(fl.filter(x => x === 'a').length, j);
+    return r.done ? Object.assign(r, { method: 'Ki-tei · ' + r.method }) : r;
   }
 
   /* ---------- medals ---------- */
@@ -875,8 +1118,8 @@ const KT = (function () {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
-    seedOrder, nextPow2, orderEntrants, placeSlots, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
-    kumiteEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoEval, medalTable, toCSV, PTS,
+    seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpKataCheck, defaultFormat, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
+    kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS,
   };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = KT;
@@ -1045,6 +1288,11 @@ function divEntrants(did) { return (DC.assign.byDiv[did] || []); }
 function bracketState(did) {
   const br = S.d.brackets[did];
   if (!br) return { drawn: false };
+  if (br.format === 'KP') {
+    const pg = KT.kpProgress(br);
+    const cur = divEntrants(did).slice().sort().join('|'), was = (br.entrants || []).slice().sort().join('|');
+    return { drawn: true, kp: true, fought: pg.done, playable: pg.total, complete: DC.pl[did] && DC.pl[did].complete, changed: cur !== was, results: Object.values(br.scores || {}).some(Boolean) };
+  }
   const res = DC.res[did] || {};
   const ids = Object.keys(br.matches || {});
   const fought = ids.filter(id => res[id] && res[id].status === 'done').length;
@@ -1053,13 +1301,14 @@ function bracketState(did) {
   return { drawn: true, fought, playable, complete: DC.pl[did] && DC.pl[did].complete, changed: cur !== was, results: Object.values(br.results || {}).some(Boolean) };
 }
 function kindOf(dv) { return (KT.EVENT_TYPES[dv.eventType] || {}).kind; }
-function scoringOf(dv) { return Object.assign(KT.defaultScoring(dv.eventType), dv.scoring || {}); }
+function scoringOf(dv) { return Object.assign(KT.defaultScoring(dv.eventType, dv.gender), dv.scoring || {}); }
 function scoringLabel(dv) {
   const s = scoringOf(dv), k = kindOf(dv);
+  if (dv.format === 'KP') return `Score pools · ${s.judges} judges`;
   if (k === 'kata') return s.method === 'scores' ? `Scores · ${s.judges} judges` : `Flags · ${s.judges} judges`;
-  if (k === 'kumite') return `Shobu ippon · ${fmtClock(s.boutTime)}`;
-  if (k === 'teamkumite') return `${s.bouts} bouts · ${fmtClock(s.boutTime)}`;
-  if (k === 'fukugo') return `Kata flags + kumite`;
+  if (k === 'kumite') return s.style === 'kogo' ? 'Ko-go Kumite · 6 exchanges' : `Shobu Ippon · ${fmtClock(s.boutTime)}`;
+  if (k === 'teamkumite') return `${s.bouts} rounds · team total · ${fmtClock(s.boutTime)}`;
+  if (k === 'fukugo') return `Kumite / Ki-tei alternating${s.style === 'kogo' ? ' (Ko-go)' : ''}`;
   return '';
 }
 function fmtClock(sec) { sec = Math.max(0, Math.round(sec)); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
@@ -1182,7 +1431,7 @@ function fbUserShim(fs) {
       return out;
     },
     async search(q) {
-      if (!FB.users || Date.now() - FB.usersAt > 30000) {
+      if (!FB.users || Date.now() - FB.usersAt > 3000) {
         try { const s = await fs.collection('users').get(); FB.users = s.docs.map(d => Object.assign({ id: d.id }, d.data())); FB.usersAt = Date.now(); FB.users.forEach(u => { FB.cache[u.id] = u; }); } catch (e) { FB.users = []; }
       }
       q = String(q || '').toLowerCase();
@@ -1433,7 +1682,7 @@ function divisionsHTML() {
   const rows = list.map(d => {
     const n = divEntrants(d.id).length, bs = bracketState(d.id), ring = S.d.rings[d.ringId];
     const st = !bs.drawn ? (n >= 2 ? '<span class="chip plain">Ready to draw</span>' : n === 1 ? '<span class="chip warn">1 entrant</span>' : '<span class="chip plain">Empty</span>')
-      : bs.complete ? '<span class="chip ok">Finished</span>' : `<span class="chip">${bs.fought}/${bs.playable} matches</span>${bs.changed ? ' <span class="chip warn">Entrants changed</span>' : ''}`;
+      : bs.complete ? '<span class="chip ok">Finished</span>' : `<span class="chip">${bs.fought}/${bs.playable} ${bs.kp ? 'performances' : 'matches'}</span>${bs.changed ? ' <span class="chip warn">Entrants changed</span>' : ''}`;
     return `<tr><td><button class="ghost sm" style="padding:0;min-height:0;text-align:left;justify-content:flex-start" data-act="div-edit" data-id="${esc(d.id)}"><span class="name">${esc(d.name)}</span></button>
         <div class="dojo">${d.belt === 'kyu' ? esc(KT.rankLabel(d.minRank) + ' – ' + KT.rankLabel(d.maxRank)) + ' · ' : ''}${ageRange(d)}</div></td>
       <td class="small">${esc(KT.FORMATS[d.format] || d.format)}<div class="dojo">${esc(scoringLabel(d))}</div></td>
@@ -1473,32 +1722,51 @@ function ringsHTML() {
 function ringQueue(rid) {
   const out = [];
   const divs = DC.divs.filter(d => d.ringId === rid).sort((a, b) => (a.ringOrder || 0) - (b.ringOrder || 0));
-  for (const d of divs) { const br = S.d.brackets[d.id]; if (!br) continue; for (const m of KT.readyMatches(br, DC.res[d.id])) out.push({ did: d.id, m, r: DC.res[d.id][m.id] }); }
+  for (const d of divs) {
+    const br = S.d.brackets[d.id]; if (!br) continue;
+    if (br.format === 'KP') { for (const p of KT.kpQueue(br)) out.push({ did: d.id, kp: p }); continue; }
+    for (const m of KT.readyMatches(br, DC.res[d.id])) out.push({ did: d.id, m, r: DC.res[d.id][m.id] });
+  }
   return out;
+}
+function nowHTML(rs) {
+  if (!rs || !rs.did || !S.d.brackets[rs.did]) return '';
+  const dv = DC.divBy[rs.did], br = S.d.brackets[rs.did];
+  if (rs.kp) {
+    const q = br.format === 'KP' ? KT.kpQueue(br).find(x => x.key === rs.kp) : null;
+    if (!q) return '';
+    return `<div class="label">${esc(dv ? dv.name : '')} · ${esc(q.label)}</div>
+      <div class="now" style="grid-template-columns:1fr auto"><div class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span style="min-width:0"><div class="name">${esc(entName(q.id))}</div><div class="dojo">${esc(entDojo(q.id))}${rs.kata ? ' · ' + esc(rs.kata) : ''}</div></span></div>
+      <div class="sc num">${rs.score != null && rs.score !== '' ? esc(rs.score) : ''}</div></div>`;
+  }
+  const res = (DC.res[rs.did] || {})[rs.mid];
+  if (!res || res.status !== 'ready') return '';
+  return `<div class="label">${esc(dv ? dv.name : '')} · ${esc(KT.matchLabel(br.matches[rs.mid], br))}</div>
+    <div class="now"><div class="side"><span class="belt a"></span><span style="min-width:0"><div class="name">${esc(entName(res.a))}</div><div class="dojo">${esc(entDojo(res.a))}</div></span></div>
+    <div class="sc num">${rs.score ? `${esc(rs.score.a)}–${esc(rs.score.b)}` : 'vs'}</div>
+    <div class="side" style="justify-content:flex-end;text-align:right"><span style="min-width:0"><div class="name">${esc(entName(res.b))}</div><div class="dojo">${esc(entDojo(res.b))}</div></span><span class="belt b"></span></div></div>
+    ${rs.phase ? `<div class="phase">${esc(rs.phase)}</div>` : ''}`;
 }
 function ringBoardHTML(rings, withActions) {
   if (!rings.length) return `<div class="card small muted">No rings set up yet.</div>`;
   return `<div class="grid2">${rings.map(r => {
     const rs = S.d.ringstate[r.id], q = ringQueue(r.id);
-    let now = '<div class="small muted">Nothing on the mat.</div>';
-    if (rs && rs.did && S.d.brackets[rs.did]) {
-      const dv = DC.divBy[rs.did], res = (DC.res[rs.did] || {})[rs.mid];
-      if (res && res.status === 'ready') {
-        now = `<div class="label">${esc(dv ? dv.name : '')} · ${esc(KT.matchLabel(S.d.brackets[rs.did].matches[rs.mid], S.d.brackets[rs.did]))}</div>
-        <div class="now"><div class="side"><span class="belt a"></span><span style="min-width:0"><div class="name">${esc(entName(res.a))}</div><div class="dojo">${esc(entDojo(res.a))}</div></span></div>
-        <div class="sc num">${rs.score ? `${esc(rs.score.a)}–${esc(rs.score.b)}` : 'vs'}</div>
-        <div class="side" style="justify-content:flex-end;text-align:right"><span style="min-width:0"><div class="name">${esc(entName(res.b))}</div><div class="dojo">${esc(entDojo(res.b))}</div></span><span class="belt b"></span></div></div>
-        ${rs.phase ? `<div class="phase">${esc(rs.phase)}</div>` : ''}`;
-      }
-    }
-    const next = q.filter(x => !(rs && x.did === rs.did && x.m.id === rs.mid)).slice(0, withActions ? 12 : 3);
-    const canR = canScoreDiv(DC.divs.find(d => d.ringId === r.id)?.id) || isDirector();
-    return `<div class="card ring-card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${q.length ? '' : 'plain'}">${plural(q.length, 'match', 'matches')} ready</span></div>
-      <div>${now}${withActions && rs && rs.did && canScoreDiv(rs.did) && DC.res[rs.did] && DC.res[rs.did][rs.mid] && DC.res[rs.did][rs.mid].status === 'ready' ? `<div class="row" style="margin-top:8px"><button class="primary" data-act="score" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}">Open scoresheet</button></div>` : ''}</div>
-      <div class="queue"><div class="label">Up next</div>${next.map(x => `<div class="q"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a))}</span></span>
-        <span class="vs">${withActions && canR && canScoreDiv(x.did) ? `<button class="sm" data-act="score" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}">Score</button>` : 'vs'}</span>
+    const now = nowHTML(rs);
+    const isNow = x => rs && x.did === rs.did && (x.kp ? rs.kp === x.kp.key : x.m.id === rs.mid);
+    const next = q.filter(x => !isNow(x)).slice(0, withActions ? 12 : 3);
+    const openBtn = withActions && now && canScoreDiv(rs.did) ? `<div class="row" style="margin-top:8px"><button class="primary" ${rs.kp ? `data-act="kp-score" data-did="${esc(rs.did)}" data-key="${esc(rs.kp)}"` : `data-act="score" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}"`}>Open scoresheet</button></div>` : '';
+    return `<div class="card ring-card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${q.length ? '' : 'plain'}">${q.length} waiting</span></div>
+      <div>${now || '<div class="small muted">Nothing on the mat.</div>'}${openBtn}</div>
+      <div class="queue"><div class="label">Up next</div>${next.map(x => {
+        const can = withActions && canScoreDiv(x.did);
+        if (x.kp) return `<div class="q" style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id))}</span></span>
+          <span class="vs">${can ? `<button class="sm" data-act="kp-score" data-did="${esc(x.did)}" data-key="${esc(x.kp.key)}">Score</button>` : 'kata'}</span></div>
+          <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(x.kp.label)}</div>`;
+        return `<div class="q"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a))}</span></span>
+        <span class="vs">${can ? `<button class="sm" data-act="score" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}">Score</button>` : 'vs'}</span>
         <span class="side" style="justify-content:flex-end"><span class="name">${esc(entName(x.r.b))}</span><span class="belt b"></span></span></div>
-        <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(KT.matchLabel(x.m, S.d.brackets[x.did]))}</div>`).join('') || '<div class="small muted">No matches waiting.</div>'}</div></div>`;
+        <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(KT.matchLabel(x.m, S.d.brackets[x.did]))}${kindOf(DC.divBy[x.did]) === 'fukugo' ? ' · ' + (KT.fukugoPart(x.m, S.d.brackets[x.did]) === 'kitei' ? 'Ki-tei' : 'Kumite') : ''}</div>`;
+      }).join('') || '<div class="small muted">Nothing waiting.</div>'}</div></div>`;
   }).join('')}</div>`;
 }
 function matHTML() {
@@ -1547,10 +1815,11 @@ function bmHTML(did, m, res, live) {
     return `<div class="ln ${side} ${cls}"><span class="strip"></span><span style="min-width:0"><div class="name">${id ? esc(entName(id)) : r.status === 'bye' ? 'Bye' : esc(hint || 'TBD')}</div>${id ? `<div class="dojo">${esc(entDojo(id))}</div>` : ''}</span><span class="sc">${sc === '' || sc == null ? '' : esc(sc)}</span></div>`;
   };
   return `<div class="bm ${r.status === 'ready' ? 'ready' : ''} ${live ? 'live' : ''} ${canS ? 'click' : ''}" ${canS ? `data-act="score" data-did="${esc(did)}" data-mid="${esc(m.id)}" tabindex="0" role="button"` : ''}>${ln('a')}${ln('b')}
-    <div class="meta"><span>${esc(m.id)}</span><span>${r.status === 'done' ? esc(res1.method || '') : r.status === 'bye' ? 'Bye' : r.status === 'ready' ? (live ? 'On the mat' : 'Ready') : ''}</span></div></div>`;
+    <div class="meta"><span>${esc(m.id)}${kindOf(DC.divBy[did]) === 'fukugo' ? ' · ' + (KT.fukugoPart(m, S.d.brackets[did]) === 'kitei' ? 'Ki-tei' : 'Kumite') : ''}</span><span>${r.status === 'done' ? esc(res1.method || '') : r.status === 'bye' ? 'Bye' : r.status === 'ready' ? (live ? 'On the mat' : 'Ready') : ''}</span></div></div>`;
 }
 function bracketViewHTML(did) {
   const br = S.d.brackets[did], res = DC.res[did] || {};
+  if (br.format === 'KP') return kpViewHTML(did);
   const ms = Object.values(br.matches || {});
   if (!ms.length) return `<div class="card small muted">Only one entrant — awarded automatically.</div>`;
   const live = Object.values(S.d.ringstate).find(x => x.did === did);
@@ -1605,7 +1874,7 @@ function resultsHTML() {
     const canAward = br && (isDirector() || canScoreDiv(d.id));
     return `<div class="card stack"><div class="row between"><div style="min-width:0"><h3>${esc(d.name)}</h3><div class="small muted">${S.d.rings[d.ringId] ? esc(S.d.rings[d.ringId].name) : 'No ring'}</div></div>
       ${pl.complete ? (br && br.awarded ? '<span class="chip ok">Awarded</span>' : '<span class="chip">Final</span>') : pl.tie ? `<span class="chip warn">Tie to resolve</span>` : `<span class="chip plain">In progress</span>`}</div>
-      ${pl.complete ? `<div class="podium">${cell(pl.gold, 'g', 1)}${cell(pl.silver, 's', 2)}${(pl.bronze || []).map(b => cell(b, 'b', 3)).join('')}</div>` : `<div class="small muted">${br ? `${bracketState(d.id).fought} of ${bracketState(d.id).playable} matches fought.` : ''}</div>`}
+      ${pl.complete ? `<div class="podium">${cell(pl.gold, 'g', 1)}${cell(pl.silver, 's', 2)}${(pl.bronze || []).map(b => cell(b, 'b', 3)).join('')}</div>` : `<div class="small muted">${br ? `${bracketState(d.id).fought} of ${bracketState(d.id).playable} ${bracketState(d.id).kp ? 'performances scored' : 'matches fought'}.` : ''}</div>`}
       ${pl.complete && canAward ? `<label class="check"><input type="checkbox" id="aw-${esc(d.id)}" data-change="awarded" data-did="${esc(d.id)}" ${br.awarded ? 'checked' : ''}> Medals presented</label>` : ''}</div>`;
   });
   const table = KT.medalTable(medals);
@@ -1656,6 +1925,48 @@ function staffHTML() {
   return eventHeader() + `<div class="card stack"><h3>Camp staff</h3><p class="small muted">Staff can take attendance for every session. Directors can do everything.</p>
     <div class="pill-list">${(ev.staffIds || []).map(id => `${personChip(id)}<button class="sm ghost" data-act="staff-remove" data-uid="${esc(id)}" aria-label="Remove">✕</button>`).join('') || '<span class="small muted">No staff assigned.</span>'}</div>
     ${isLocal() ? '<p class="tiny muted">People can be assigned once the tracker is shared from claude.ai.</p>' : `<div class="dd"><input id="staff-q" type="search" placeholder="Add staff by name or email…" data-input="staff-search" autocomplete="off"><div class="dd-list" id="staff-dd" hidden></div></div>`}</div>`;
+}
+
+/* ---------- kata score pools view ---------- */
+function kpTableHTML(did, title, rows, order, opts) {
+  const br = S.d.brackets[did], J = br.judges || 6, can = canScoreDiv(did), k = J >= 5 ? J - 2 : J;
+  const f = x => (x / k).toFixed(2);
+  const byId = Object.fromEntries(rows.map(r => [r.id, r]));
+  const seq = opts.byRank ? rows : order.map(id => byId[id]);
+  const sc = (r) => {
+    const e = (br.scores || {})[r.key]; if (!e) return '';
+    if (e.hansoku) return '<span class="chip bad">Han-soku</span>';
+    const v = e.s.map(Number), hi = Math.max(...v), lo = Math.min(...v); let dh = J >= 5, dl = J >= 5;
+    return v.map(x => { let cls = ''; if (dh && x === hi) { cls = 'dropped'; dh = false; } else if (dl && x === lo) { cls = 'dropped'; dl = false; } return `<span class="js ${cls}">${x.toFixed(1)}</span>`; }).join('');
+  };
+  return `<div class="card flush"><div class="card-h"><h3>${esc(title)}</h3>${opts.chip || ''}</div><div class="tw"><table class="kp"><thead><tr><th>#</th><th>${opts.byRank ? 'Place' : 'Order'}</th><th>Competitor</th><th>${br.kataRule ? 'Kata' : 'Notes'}</th><th>Judges</th>${opts.carry ? '<th class="n">Final elim.</th><th class="n">Final</th>' : ''}<th class="n">Score</th></tr></thead><tbody>
+    ${seq.map((r, i) => `<tr class="${can ? 'click' : ''} ${r.advance ? 'adv' : ''}" ${can ? `data-act="kp-score" data-did="${esc(did)}" data-key="${esc(r.key)}"` : ''}>
+      <td class="num">${i + 1}</td><td class="num">${r.rank ? (opts.medals && r.rank <= 3 ? `<span class="medal ${['g', 's', 'b'][r.rank - 1]}">${r.rank}</span>` : r.rank) : '—'}${r.advance ? ' <span class="chip ok" title="Advances">▸</span>' : ''}</td>
+      <td><div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div></td>
+      <td class="small">${esc(r.kata || '')}${r.appTotal != null ? `<div class="tiny muted">Kata ${f(r.kataOwn)} · Application ${f(r.appTotal)}</div>` : ''}${r.rpTotal != null ? `<div class="tiny muted">Kettei-sen ${f(r.rpTotal)}</div>` : ''}</td>
+      <td class="jcell">${sc(r)}</td>
+      ${opts.carry ? `<td class="n">${r.sheet ? f(r.carry) : ''}</td><td class="n">${r.sheet ? f(r.own) : ''}</td>` : ''}
+      <td class="n"><b>${r.sheet ? f(r.total) : ''}</b></td></tr>`).join('')}</tbody></table></div>
+    ${opts.needRp && opts.needRp.length ? `<div class="notice warn" style="margin:10px 16px">Tied even after adding back all six scores: ${opts.needRp.map(id => esc(entName(id))).join(', ')} — Kettei-sen${br.kataRule ? ' with a different kata' : ''}.</div>` : ''}</div>`;
+}
+function kpViewHTML(did) {
+  const br = S.d.brackets[did], st = KT.kpState(br);
+  let h = `<p class="small muted">ITKF kata system · pools of up to ${br.poolSize || 8} · ${br.judges || 6} judges score 0–10${(br.judges || 6) >= 5 ? ', highest and lowest dropped, average of the rest' : ''} · top 4 of each pool advance until 8 remain · final elimination and final each need a different kata${br.application ? ' · final adds Application (Bunkai)' : ''} · final score = final elimination + final · ties: all six scores added back, then Kettei-sen.</p>`;
+  for (const rd of st.rounds) {
+    h += `<div class="stage-h label">${esc(KT.kpRoundName(rd))}</div><div class="stack">`;
+    for (const P of Object.keys(rd.pools)) {
+      const p = rd.pools[P];
+      const chip = p.complete ? '<span class="chip ok">Complete</span>' : `<span class="chip plain">${p.rows.filter(r => r.sheet).length}/${p.rows.length} scored</span>`;
+      h += kpTableHTML(did, `${Object.keys(rd.pools).length > 1 ? 'Pool ' + P : KT.kpRoundName(rd)}`, p.rows, p.order, { byRank: p.scoredAll, chip, needRp: p.needRp });
+    }
+    h += '</div>';
+  }
+  if (st.final) {
+    const f = st.final;
+    h += `<div class="stage-h label">Final</div>` + kpTableHTML(did, 'Final', f.rows, f.order, { byRank: f.rows.every(r => r.sheet), carry: f.carried, medals: f.complete,
+      chip: f.complete ? '<span class="chip ok">Complete</span>' : `<span class="chip plain">${f.rows.filter(r => r.sheet).length}/${f.rows.length} scored</span>`, needRp: f.needRp });
+  }
+  return h;
 }
 /* ===== forms & modals ===== */
 function eventForm(id) {
@@ -1861,18 +2172,20 @@ function divForm(id) {
       <label class="f span"><span>Division name</span><input name="name" id="d-name" value="${esc(d.name || '')}" placeholder="Leave blank to name automatically"></label>
     </div>
     <fieldset><legend>Bracket</legend><div class="fgrid">
-      <label class="f"><span>Format</span><select name="format" id="d-fmt" ${bs.results ? 'disabled' : ''}>${Object.entries(KT.FORMATS).map(([x, l]) => opt(x, l, d.format)).join('')}</select></label>
+      <label class="f"><span>Format</span><select name="format" id="d-fmt" ${bs.results ? 'disabled' : ''}>${Object.entries(KT.FORMATS).filter(([x]) => x !== 'KP' || k === 'kata').map(([x, l]) => opt(x, l, d.format)).join('')}</select></label>
       <label class="f"><span>Third place (single elim. / playoff)</span><select name="bronze" id="d-bronze">${opt('two', 'Two bronzes', d.bronze)}${opt('match', 'Bronze match', d.bronze)}</select></label>
       <label class="f"><span>Double elim. grand final</span><select name="reset" id="d-reset">${opt('1', 'Reset match if needed', d.reset === false ? '0' : '1')}${opt('0', 'Single final', d.reset === false ? '0' : '1')}</select></label>
       <label class="f"><span>Round robin: advance per pool</span><select name="advance" id="d-adv">${opt('', 'Auto (2 if two pools, else 1)', d.advance || '')}${opt('1', '1', d.advance)}${opt('2', '2', d.advance)}</select></label>
       <label class="f"><span>Ring</span><select name="ringId" id="d-ring">${opt('', 'No ring yet', d.ringId)}${DC.rings.map(r => opt(r.id, r.name, d.ringId)).join('')}</select></label>
     </div>${bs.results ? '<p class="tiny muted">Format is locked because results exist.</p>' : ''}</fieldset>
-    <fieldset><legend>Scoring (WTKF)</legend><div class="fgrid">
+    <fieldset><legend>Scoring (ITKF 2009)</legend><div class="fgrid">
       ${k === 'kata' ? `<label class="f"><span>Decision</span><select name="method" id="d-method">${opt('flags', 'Flags (judges’ majority)', sc.method)}${opt('scores', 'Scores 0–10 (drop high & low with 5)', sc.method)}</select></label>` : ''}
-      ${k === 'kata' || k === 'fukugo' ? `<label class="f"><span>Judges</span><select name="judges" id="d-judges">${opt('3', '3', sc.judges)}${opt('5', '5', sc.judges)}</select></label>` : ''}
+      ${k === 'kata' ? `<label class="f"><span>Kata pools: max per pool</span><input type="number" name="poolSize" id="d-pool" min="4" max="12" value="${esc(d.poolSize || 8)}"><span class="tiny muted">Kata score pools only · ITKF allows up to 12</span></label>` : ''}
+      ${k === 'kumite' || k === 'teamkumite' || k === 'fukugo' ? `<label class="f"><span>Kumite style</span><select name="style" id="d-style">${opt('shobu', 'Shobu Ippon (1:30)', sc.style)}${opt('kogo', 'Ko-go Kumite (6 exchanges)', sc.style)}</select></label>` : ''}
+      ${k === 'kata' ? `<label class="f"><span>Judges</span><select name="judges" id="d-judges">${opt('3', '3', sc.judges)}${opt('5', '5', sc.judges)}${opt('6', '6 (Shu-shin + 5, scores only)', sc.judges)}${opt('7', '7', sc.judges)}</select></label>` : ''}
       ${k !== 'kata' ? `<label class="f"><span>Bout time (seconds)</span><input type="number" name="boutTime" id="d-bt" min="30" max="600" step="10" value="${esc(sc.boutTime)}"></label>
       <label class="f"><span>Kettei-sen (seconds, 0 = none)</span><input type="number" name="ketteiTime" id="d-kt" min="0" max="180" step="10" value="${esc(sc.ketteiTime)}"></label>` : ''}
-      ${k === 'teamkumite' ? `<label class="f"><span>Bouts per team match</span><select name="bouts" id="d-bouts">${opt('3', '3', sc.bouts)}${opt('5', '5', sc.bouts)}</select></label>` : ''}
+      ${k === 'teamkumite' ? `<label class="f"><span>Rounds per team match</span><select name="bouts" id="d-bouts">${opt('3', '3 (ITKF)', sc.bouts)}${opt('5', '5', sc.bouts)}</select></label>` : ''}
     </div></fieldset>
     ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${ents.length ? `<div class="stack" style="gap:6px">${ents.map(e => `<div class="row between small"><span style="min-width:0"><b>${esc(entName(e))}</b> <span class="muted">${esc(entDojo(e))}</span></span>
       <input type="number" min="1" max="64" name="seed_${esc(e)}" id="seed-${esc(e)}" value="${esc((d.seeds || {})[e] || '')}" placeholder="Seed" style="width:86px" aria-label="Seed"></div>`).join('')}</div>
@@ -1886,10 +2199,12 @@ async function saveDiv(form, thenDraw) {
   if (!T.genders.includes(v.gender)) v.gender = T.genders[0];
   const seeds = {}; for (const k of Object.keys(v)) if (k.startsWith('seed_')) { if (+v[k] > 0) seeds[k.slice(5)] = +v[k]; delete v[k]; }
   const kind = T.kind, base = Object.assign(KT.defaultScoring(v.eventType), old.scoring || {});
-  const scoring = { method: v.method || base.method, judges: +(v.judges || base.judges), boutTime: +(v.boutTime || base.boutTime), ketteiTime: v.ketteiTime === '' || v.ketteiTime == null ? base.ketteiTime : +v.ketteiTime, bouts: +(v.bouts || base.bouts) };
+  if (v.format === 'KP' && kind !== 'kata') { toast('Kata score pools are for kata, team kata and enbu divisions.', true); return false; }
+  const scoring = { method: v.format === 'KP' ? 'scores' : (v.method || base.method), judges: +(v.judges || base.judges), boutTime: +(v.boutTime || base.boutTime), ketteiTime: v.ketteiTime === '' || v.ketteiTime == null ? base.ketteiTime : +v.ketteiTime, bouts: +(v.bouts || base.bouts), style: v.style || base.style };
+  if (scoring.method === 'flags' && scoring.judges % 2 === 0) scoring.judges = 5;
   const dv = { eventType: v.eventType, gender: v.gender, belt: v.belt, group: v.group, minAge: v.minAge === '' ? null : +v.minAge, maxAge: v.maxAge === '' ? null : +v.maxAge,
     minRank: v.minRank || (v.belt === 'black' ? 'd1' : 'k10'), maxRank: v.maxRank || (v.belt === 'black' ? 'd10' : 'k1'), format: v.format || old.format || 'SE', bronze: v.bronze, reset: v.reset !== '0', advance: v.advance ? +v.advance : null,
-    ringId: v.ringId || '', ringOrder: old.ringOrder ?? Date.now(), scoring, seeds, order: old.order || 0 };
+    ringId: v.ringId || '', ringOrder: old.ringOrder ?? Date.now(), scoring, seeds, order: old.order || 0, poolSize: v.poolSize ? Math.min(12, Math.max(4, +v.poolSize)) : (old.poolSize || 8) };
   dv.name = v.name && v.name !== (old.eventType ? KT.divisionName(old) : '') ? v.name : KT.divisionName(dv);
   if (dv.minRank && dv.maxRank && KT.rankValue(dv.minRank) > KT.rankValue(dv.maxRank)) { toast('Lowest rank must be below highest rank.', true); return false; }
   const ok = await guard(() => S.store.set(P.doc(S.evId, 'divisions', id), dv), thenDraw ? null : 'Division saved');
@@ -1956,7 +2271,7 @@ function tiebreakForm(did, P) {
   openModal(sheet(`Tiebreak · Pool ${esc(P)}`, `<div id="tb-body">${draw()}</div>`, `<button data-act="modal-close">Cancel</button><button class="primary" data-act="tb-save">Save order</button>`));
   S.modal = { type: 'tb', did, P };
 }
-/* ===== scoresheet (WTKF) ===== */
+/* ===== scoresheet (ITKF 2009) ===== */
 const CLOCK = { left: 0, running: false, t0: 0, base: 0, timer: null, key: '' };
 function stopClock() { if (CLOCK.timer) clearInterval(CLOCK.timer); CLOCK.timer = null; if (CLOCK.running) { CLOCK.left = Math.max(0, CLOCK.base - (Date.now() - CLOCK.t0) / 1000); CLOCK.running = false; } }
 function setClock(sec, key) { stopClock(); CLOCK.left = sec; CLOCK.base = sec; CLOCK.key = key || CLOCK.key; paintClock(); }
@@ -1988,14 +2303,19 @@ function openScore(did, mid) {
   openModal('<div id="score-root"></div>', { wide: true, nofocus: true });
   renderScore(true);
 }
-/** Evaluate the draft into an outcome {done, winner:'a'|'b', method, pts, detail, need} */
-function evaluate(dv, d) {
-  const k = kindOf(dv), sc = scoringOf(dv);
-  if (d.kiken) return { done: true, winner: d.kiken === 'a' ? 'b' : 'a', method: 'Kiken (withdrawal)', pts: { a: 0, b: 0 } };
+/** Evaluate the draft into an outcome {done, winner:'a'|'b', method, pts, detail} — ITKF 2009 rules */
+function kumiteStyle(dv) { return scoringOf(dv).style === 'kogo' ? 'kogo' : 'shobu'; }
+function partOf(dv, m, br) { return kindOf(dv) === 'fukugo' ? KT.fukugoPart(m, br) : null; }
+function evaluate(dv, d, m, br) {
+  const k = kindOf(dv), sc = scoringOf(dv), kogo = kumiteStyle(dv) === 'kogo';
+  if (d.kiken) return { done: true, winner: d.kiken === 'a' ? 'b' : 'a', method: 'Ki-ken', pts: { a: 0, b: 0 } };
+  const bout = (log, o) => {
+    const r = kogo ? KT.kogoEval(log || [], o) : KT.kumiteEval(log || [], Object.assign({ kettei: sc.ketteiTime > 0 }, o));
+    return { done: r.done, winner: r.winner, method: r.method, pts: r.score, phase: r.phase, detail: { log: log || [] } };
+  };
   if (k === 'kata') {
     if (sc.method === 'scores') {
-      const r = KT.scoresEval(d.sa || [], d.sb || [], sc.judges, d.tieFlags != null ? (d.tieFlags || []).filter(x => x === 'a').length : null);
-      if (d.tieFlags && d.tieFlags.filter(Boolean).length < sc.judges && r.done && r.method.startsWith('Tie')) return { done: false, tie: true, pts: r.score };
+      const r = KT.scoresEval(d.sa || [], d.sb || [], sc.judges, d.tieSide);
       return { done: r.done, winner: r.winner, method: r.method, pts: r.score, tie: r.tie, detail: { sa: d.sa, sb: d.sb } };
     }
     const fl = d.flags || [];
@@ -2003,21 +2323,96 @@ function evaluate(dv, d) {
     const r = KT.flagsEval(fl.filter(x => x === 'a').length, sc.judges);
     return { done: r.done, winner: r.winner, method: r.method, pts: r.score, detail: { flags: fl } };
   }
-  if (k === 'kumite') {
-    const r = KT.kumiteEval(d.log || [], { kettei: sc.ketteiTime > 0 });
-    return { done: r.done, winner: r.winner, method: r.method, pts: r.score, phase: r.phase, detail: { log: d.log } };
-  }
+  if (k === 'kumite') return bout(d.log);
   if (k === 'teamkumite') {
-    const r = KT.teamKumiteEval(d.bouts || [], sc.bouts, d.daihyo);
-    return { done: r.done, winner: r.winner, method: r.method, pts: r.wins, needDaihyo: r.needDaihyo, per: r.per, detail: { bouts: d.bouts, daihyo: d.daihyo || null } };
+    const r = KT.teamKumiteEval(d.bouts || [], sc.bouts, d.daihyo, kogo);
+    return { done: r.done, winner: r.winner, method: r.method, pts: r.pts, needDaihyo: r.needDaihyo, per: r.per, detail: { bouts: d.bouts, daihyo: d.daihyo || null } };
   }
   if (k === 'fukugo') {
-    const fl = d.flags || [];
-    const kf = fl.filter(Boolean).length === sc.judges ? fl.filter(x => x === 'a').length : null;
-    const r = KT.fukugoEval(kf, sc.judges, d.log || [], d.hantei);
-    return { done: r.done, winner: r.winner, method: r.method, pts: r.score || { a: 0, b: 0 }, split: r.split, kata: r.kata, kumite: r.kumite, detail: { flags: fl, log: d.log } };
+    if (partOf(dv, m, br) === 'kitei') { const r = KT.kiteiEval(d.flags, 5); return { done: r.done, winner: r.winner, method: r.method, pts: r.score, detail: { flags: d.flags } }; }
+    const r = bout(d.log); if (r.method) r.method = 'Kumite · ' + r.method; return r;
   }
   return { done: false };
+}
+function flagsPanel(d, sc, field, title) {
+  const fl = d[field] || [];
+  const n = fl.filter(x => x === 'a').length, m = fl.filter(x => x === 'b').length;
+  return `<div class="stack"><div class="row between"><h3>${title}</h3><span class="chip"><span class="num">${n}</span>&nbsp;Aka · <span class="num">${m}</span>&nbsp;Shiro</span></div><div class="judges">${Array.from({ length: sc.judges }, (_, i) => `<div class="jrow"><span class="label">${i === 0 ? 'Shu-shin' : 'J' + (i + 1)}</span>
+    <button class="${fl[i] === 'a' ? 'on a' : ''}" data-act="flag" data-f="${field}" data-i="${i}" data-s="a" aria-pressed="${fl[i] === 'a'}">Aka</button><button class="${fl[i] === 'b' ? 'on b' : ''}" data-act="flag" data-f="${field}" data-i="${i}" data-s="b" aria-pressed="${fl[i] === 'b'}">Shiro</button></div>`).join('')}</div></div>`;
+}
+function scoresPanel(d, sc, out) {
+  const J = sc.judges;
+  const row = (side, arr) => {
+    const t = KT.scoreTotal(arr || [], J);
+    return `<div class="srow" style="--j:${J}"><span class="side"><span class="belt ${side}"></span><b>${side === 'a' ? 'Aka' : 'Shiro'}</b></span>
+      ${Array.from({ length: J }, (_, i) => `<input id="sc-${side}-${i}" inputmode="decimal" data-change="kscore" data-s="${side}" data-i="${i}" value="${esc((arr || [])[i] ?? '')}" placeholder="0.0" aria-label="${side === 'a' ? 'Aka' : 'Shiro'} judge ${i + 1}">`).join('')}
+      <span class="tot">${t ? t.avg.toFixed(2) : '—'}</span></div>`;
+  };
+  return `<div class="stack"><div class="row between"><h3>Judges’ scores</h3><span class="small muted">0.0–10.0${J >= 5 ? ' · highest and lowest dropped, average of the rest' : ''}</span></div>
+    <div class="tw"><div class="stack" style="min-width:${120 + J * 60 + 80}px"><div class="srow" style="--j:${J}"><span></span>${Array.from({ length: J }, (_, i) => `<span class="label" style="text-align:center">J${i + 1}</span>`).join('')}<span class="label" style="text-align:right">Score</span></div>${row('a', d.sa)}${row('b', d.sb)}</div></div>
+    ${out.tie || d.tieSide ? `<div class="notice warn">Tied even after adding back the dropped scores. Court Judges decide (Kettei-sen):</div><div class="row"><button class="${d.tieSide === 'a' ? 'primary' : ''}" data-act="tie-side" data-s="a">Aka</button><button class="${d.tieSide === 'b' ? 'primary' : ''}" data-act="tie-side" data-s="b">Shiro</button></div>` : ''}</div>`;
+}
+const EV_LABEL = { waza: 'Waza-ari', ippon: 'Ippon', jogai: 'Jo-gai', keikoku: 'Kei-koku', chui: 'Chui', tento: 'Ten-to', hansoku: 'Han-soku', kiken: 'Ki-ken', timeup: 'Time up', ketteiend: 'Kettei-sen ended', hantei: 'Hantei',
+  jikan: 'Jikan', kakushi: 'Kakushi', saki: 'Saki', nigetai: 'Nige-tai', next: 'Next exchange' };
+function logHTML(log) { return `<div class="log">${log.slice(-6).map(e => esc((e.s ? (e.s === 'a' ? 'Aka ' : 'Shiro ') : '') + (EV_LABEL[e.t] || e.t))).join('<br>')}</div>`; }
+function kumitePanel(log, path, sc, r, opts) {
+  if (opts.kogo) return kogoPanel(log, path, r, opts);
+  const ev = KT.kumiteEval(log, opts);
+  const corner = (s) => {
+    const st = ev.st[s];
+    const name = s === 'a' ? entName(r.a) : entName(r.b);
+    const dis = ev.done ? 'disabled' : '';
+    const b = (t, l, cls) => `<button class="${cls || ''}" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="${t}" ${dis}>${l}</button>`;
+    return `<div class="corner ${s}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${ev.done && ev.winner === s ? '<span class="chip ok">Winner</span>' : ''}</div>
+      <div class="who">${esc(opts.names ? opts.names[s] || name : name)}</div><div class="big">${ev.cur[s]}</div>
+      <div class="tally">Waza-ari ${st.waza} · Jo-gai ${st.jogai} · K ${st.keikoku} · C ${st.chui}${st.tento ? ' · Ten-to ' + st.tento : ''}</div>
+      ${ev.hansokuDue.includes(s) ? '<div class="tally" style="font-weight:700">Second Chui — Court Judges decide Han-soku</div>' : ''}
+      <div class="btns">${b('waza', 'Waza-ari')}${b('ippon', 'Ippon')}${b('jogai', 'Jo-gai', 'pen')}${b('keikoku', 'Kei-koku', 'pen')}${b('chui', 'Chui', 'pen')}${b('tento', 'Ten-to', 'pen')}${b('hansoku', 'Han-soku', 'pen')}${ev.phase === 'hantei' ? `<button data-act="k-ev" data-p="${path}" data-s="${s}" data-t="hantei">Hantei</button>` : '<span></span>'}</div></div>`;
+  };
+  const phaseTxt = ev.done ? `${ev.winner ? (ev.winner === 'a' ? 'Aka' : 'Shiro') + ' · ' : ''}${ev.method}` : ev.phase === 'kettei' ? `Kettei-sen · no carry-over · first Waza-ari wins${ev.score ? ` (regular ${ev.score.a}–${ev.score.b})` : ''}` : ev.phase === 'hantei' ? 'Hantei · Court Judges decide' : opts.ketteiOnly ? 'Representative Kettei-sen' : 'Shobu Ippon';
+  return `<div class="board">${corner('a')}<div class="mid"><div class="phase">${esc(phaseTxt)}</div>
+      <div class="clock" id="clock">${fmtClock(clockLeft())}</div><div class="row" style="justify-content:center"><button id="clock-btn" data-act="clock" ${ev.done ? 'disabled' : ''}>${CLOCK.running ? 'Stop' : 'Start'}</button><button data-act="clock-reset" data-p="${path}" aria-label="Reset clock">↺</button></div>
+      ${ev.phase === 'regular' && !ev.done ? `<button data-act="k-ev" data-p="${path}" data-t="timeup">Time up</button>` : ''}
+      ${ev.phase === 'kettei' && !opts.ketteiOnly ? `<button data-act="k-ev" data-p="${path}" data-t="ketteiend">End Kettei-sen</button>` : ''}
+      ${ev.phase === 'kettei' && opts.ketteiOnly ? `<button data-act="k-ev" data-p="${path}" data-t="ketteiend">Time up · judges decide</button>` : ''}
+      <button data-act="k-undo" data-p="${path}" ${log.length ? '' : 'disabled'}>Undo last</button>${logHTML(log)}</div>${corner('b')}</div>`;
+}
+function kogoPanel(log, path, r, opts) {
+  const ev = KT.kogoEval(log, opts);
+  const corner = (s) => {
+    const name = s === 'a' ? entName(r.a) : entName(r.b);
+    const dis = ev.done ? 'disabled' : '';
+    const b = (t, l, cls) => `<button class="${cls || ''}" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="${t}" ${dis}>${l}</button>`;
+    const off = !ev.done && ev.phase !== 'hantei' && ev.offense === s;
+    return `<div class="corner ${s}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'} · ${off ? 'Offense' : 'Defense'}</span>${ev.done && ev.winner === s ? '<span class="chip ok">Winner</span>' : ''}</div>
+      <div class="who">${esc(opts.names ? opts.names[s] || name : name)}</div><div class="big">${ev.cur[s]}</div>
+      <div class="btns">${b('waza', 'Waza-ari')}${b('ippon', 'Ippon')}${b('jikan', 'Jikan', 'pen')}${b('kakushi', 'Kakushi', 'pen')}${b('saki', 'Saki', 'pen')}${b('nigetai', 'Nige-tai', 'pen')}${b('keikoku', 'Kei-koku', 'pen')}${b('chui', 'Chui', 'pen')}${b('jogai', 'Jo-gai', 'pen')}${b('tento', 'Ten-to', 'pen')}${b('hansoku', 'Han-soku', 'pen')}${ev.phase === 'hantei' ? `<button data-act="k-ev" data-p="${path}" data-s="${s}" data-t="hantei">Hantei</button>` : '<span></span>'}</div></div>`;
+  };
+  const phaseTxt = ev.done ? `${ev.winner ? (ev.winner === 'a' ? 'Aka' : 'Shiro') + ' · ' : ''}${ev.method}` : ev.phase === 'hantei' ? 'Hantei · Court Judges decide' : `${ev.phase === 'kettei' ? 'Kettei-sen' : 'Ko-go Kumite'} · Ko-geki ${ev.exchange} of 6`;
+  return `<div class="board">${corner('a')}<div class="mid"><div class="phase">${esc(phaseTxt)}</div>
+      ${!ev.done && ev.phase !== 'hantei' ? `<div class="clock" style="font-size:1.4rem">${ev.offense === 'a' ? 'Aka' : 'Shiro'} attacks</div><button class="primary" data-act="k-ev" data-p="${path}" data-t="next">${ev.exchange < 6 ? 'Next exchange' : 'End of exchanges'}</button>` : ''}
+      <p class="tiny muted">Offense must attack within 10 s (Jikan) · max 4 techniques. Penalties give 2 points to the opponent (Chui 4, Ten-to 1).</p>
+      <button data-act="k-undo" data-p="${path}" ${log.length ? '' : 'disabled'}>Undo last</button>${logHTML(log)}</div>${corner('b')}</div>`;
+}
+function teamPanel(d, sc, r, out, kogo) {
+  const ta = DC.teamBy[r.a] || {}, tb = DC.teamBy[r.b] || {};
+  const nm = (t, id) => { const c = DC.compBy[id]; return c ? `${c.firstName} ${c.lastName}` : ''; };
+  const sel = (t, side, i, v) => `<select id="tm-${side}-${i}" data-change="bout-member" data-s="${side}" data-i="${i}" aria-label="Competitor">${opt('', side === 'a' ? 'Aka competitor…' : 'Shiro competitor…', v)}${(t.memberIds || []).map(id => opt(id, nm(t, id), v)).join('')}</select>`;
+  const bouts = d.bouts || [];
+  const idx = Math.min(S.boutSel ?? 0, sc.bouts - 1 + (out.needDaihyo ? 1 : 0));
+  const tabs = Array.from({ length: sc.bouts }, (_, i) => { const p = out.per && out.per[i]; return `<button class="sm ${idx === i ? 'primary' : ''}" data-act="bout-sel" data-i="${i}">Round ${i + 1}${p && p.done ? ` · ${p.score.a}–${p.score.b}` : ''}</button>`; }).join('')
+    + (out.needDaihyo ? `<button class="sm ${idx === sc.bouts ? 'primary' : ''}" data-act="bout-sel" data-i="${sc.bouts}">Representative</button>` : '');
+  const isD = idx === sc.bouts, b = isD ? (d.daihyo || {}) : (bouts[idx] || {});
+  const path = isD ? 'daihyo' : `bouts.${idx}`;
+  return `<div class="stack"><div class="row between"><h3>Team match</h3><span class="chip">Team score <span class="num">&nbsp;${out.pts ? out.pts.a : 0}–${out.pts ? out.pts.b : 0}</span></span></div>
+    <p class="tiny muted">ITKF: every round is fought; the higher team total wins (Ippon 10). Han-soku or Ki-ken of any member decides the whole team match. Tie → Kettei-sen by Representative.</p>
+    <div class="row">${tabs}</div>
+    <div class="bout"><div class="bout-h"><b>${isD ? 'Kettei-sen by Representative' : `Round ${idx + 1}`}</b><div class="row">${sel(ta, 'a', isD ? 'd' : idx, b.ma)}${sel(tb, 'b', isD ? 'd' : idx, b.mb)}</div></div>
+    ${kumitePanel(b.log || [], path, sc, r, { kogo: kogo && !isD, allowDraw: !isD, ketteiOnly: isD, names: { a: b.ma ? nm(ta, b.ma) : entName(r.a), b: b.mb ? nm(tb, b.mb) : entName(r.b) } })}</div></div>`;
+}
+function fukugoPanel(d, sc, r, out, part, kogo) {
+  if (part === 'kitei') return `<p class="small muted">Ki-tei round: both competitors perform the designated kata together; five judges each choose a winner (no tie).</p>${flagsPanel(d, { judges: 5 }, 'flags', 'Ki-tei · judges’ flags')}`;
+  return `<p class="small muted">Kumite round of Fukugo${kogo ? ' (Ko-go Kumite)' : ''}.</p>${kumitePanel(d.log || [], 'log', sc, r, { kogo, kettei: sc.ketteiTime > 0 })}`;
 }
 function renderScore(force) {
   const M = S.modal; if (!M || M.type !== 'score') return;
@@ -2042,78 +2437,19 @@ function renderScore(force) {
   }
   if (r.status !== 'ready') { root.innerHTML = sheet(title, `${hdr}<p class="muted">Waiting for earlier matches.</p>`, '<button data-act="modal-close">Close</button>', sub); return; }
   if (!canScoreDiv(did)) { root.innerHTML = sheet(title, `${hdr}<p class="muted">Only the director or this ring’s manager can score this match.</p>`, '<button data-act="modal-close">Close</button>', sub); return; }
-  const d = loadDraft(key), out = evaluate(dv, d), k = kindOf(dv), sc = scoringOf(dv);
+  const d = loadDraft(key), out = evaluate(dv, d, m, br), k = kindOf(dv), sc = scoringOf(dv), kogo = kumiteStyle(dv) === 'kogo';
+  const part = partOf(dv, m, br);
   let body = '';
   if (k === 'kata') body = sc.method === 'scores' ? scoresPanel(d, sc, out) : flagsPanel(d, sc, 'flags', 'Judges’ flags');
-  else if (k === 'kumite') body = kumitePanel(d.log || [], 'log', sc, r, { kettei: sc.ketteiTime > 0 });
-  else if (k === 'teamkumite') body = teamPanel(d, sc, r, out);
-  else if (k === 'fukugo') body = fukugoPanel(d, sc, r, out);
+  else if (k === 'kumite') body = kumitePanel(d.log || [], 'log', sc, r, { kogo, kettei: sc.ketteiTime > 0 });
+  else if (k === 'teamkumite') body = teamPanel(d, sc, r, out, kogo);
+  else if (k === 'fukugo') body = fukugoPanel(d, sc, r, out, part, kogo);
   const kiken = `<div class="row small"><span class="muted">Withdrawal / no-show:</span><button class="sm ${d.kiken === 'a' ? 'danger' : ''}" data-act="kiken" data-s="a">Aka kiken</button><button class="sm ${d.kiken === 'b' ? 'danger' : ''}" data-act="kiken" data-s="b">Shiro kiken</button></div>`;
   const banner = out.done ? `<div class="result-banner">Result: ${esc(entName(out.winner === 'a' ? r.a : r.b))} wins · ${esc(out.method)}</div>` : '';
   const ring = S.d.rings[dv.ringId];
-  root.innerHTML = sheet(title, `${k === 'kumite' ? '' : hdr}${body}${banner}${kiken}`,
+  root.innerHTML = sheet(title + (part ? ` · ${part === 'kitei' ? 'Ki-tei' : 'Kumite'}` : ''), `${k === 'kumite' || (k === 'fukugo' && part === 'kumite') ? '' : hdr}${body}${banner}${kiken}`,
     `${ring ? `<button data-act="call-mat" style="margin-right:auto">Call to ${esc(ring.name)}</button>` : ''}<button data-act="reset-draft">Clear sheet</button><button data-act="modal-close">Close</button><button class="primary" data-act="save-result" ${out.done ? '' : 'disabled'}>Confirm result</button>`, sub);
   paintClock();
-}
-function flagsPanel(d, sc, field, title) {
-  const fl = d[field] || [];
-  const n = fl.filter(x => x === 'a').length, m = fl.filter(x => x === 'b').length;
-  return `<div class="stack"><div class="row between"><h3>${title}</h3><span class="chip"><span class="num">${n}</span>&nbsp;Aka · <span class="num">${m}</span>&nbsp;Shiro</span></div><div class="judges">${Array.from({ length: sc.judges }, (_, i) => `<div class="jrow"><span class="label">J${i + 1}</span>
-    <button class="${fl[i] === 'a' ? 'on a' : ''}" data-act="flag" data-f="${field}" data-i="${i}" data-s="a" aria-pressed="${fl[i] === 'a'}">Aka</button><button class="${fl[i] === 'b' ? 'on b' : ''}" data-act="flag" data-f="${field}" data-i="${i}" data-s="b" aria-pressed="${fl[i] === 'b'}">Shiro</button></div>`).join('')}</div></div>`;
-}
-function scoresPanel(d, sc, out) {
-  const J = sc.judges;
-  const row = (side, arr) => {
-    const t = KT.scoreTotal(arr || [], J);
-    return `<div class="srow" style="--j:${J}"><span class="side"><span class="belt ${side}"></span><b>${side === 'a' ? 'Aka' : 'Shiro'}</b></span>
-      ${Array.from({ length: J }, (_, i) => `<input id="sc-${side}-${i}" inputmode="decimal" data-change="kscore" data-s="${side}" data-i="${i}" value="${esc((arr || [])[i] ?? '')}" placeholder="0.0" aria-label="${side === 'a' ? 'Aka' : 'Shiro'} judge ${i + 1}">`).join('')}
-      <span class="tot">${t ? t.total.toFixed(1) : '—'}</span></div>`;
-  };
-  return `<div class="stack"><div class="row between"><h3>Judges’ scores</h3><span class="small muted">0.0–10.0${J >= 5 ? ' · highest and lowest dropped' : ''}</span></div>
-    <div class="tw"><div class="stack" style="min-width:${120 + J * 60 + 80}px"><div class="srow" style="--j:${J}"><span></span>${Array.from({ length: J }, (_, i) => `<span class="label" style="text-align:center">J${i + 1}</span>`).join('')}<span class="label" style="text-align:right">Total</span></div>${row('a', d.sa)}${row('b', d.sb)}</div></div>
-    ${out.tie ? `<div class="notice warn">Scores are tied on every tiebreak. Judges decide by flags.</div>${flagsPanel(d, sc, 'tieFlags', 'Tie decision')}` : ''}</div>`;
-}
-function kumitePanel(log, path, sc, r, opts) {
-  const ev = KT.kumiteEval(log, opts);
-  const corner = (s) => {
-    const st = ev.st[s];
-    const name = s === 'a' ? entName(r.a) : entName(r.b);
-    const dis = ev.done ? 'disabled' : '';
-    return `<div class="corner ${s}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${ev.done && ev.winner === s ? '<span class="chip ok">Winner</span>' : ''}</div>
-      <div class="who">${esc(opts.names ? opts.names[s] || name : name)}</div><div class="big">${ev.score[s]}</div>
-      <div class="tally">Ippon ${st.ippon} · Waza-ari ${st.waza}${st.keikoku || st.chui ? ` · <span title="Penalties">K${st.keikoku} C${st.chui}</span>` : ''}</div>
-      <div class="btns"><button data-act="k-ev" data-p="${path}" data-s="${s}" data-t="waza" ${dis}>Waza-ari</button><button data-act="k-ev" data-p="${path}" data-s="${s}" data-t="ippon" ${dis}>Ippon</button>
-      <button class="pen" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="keikoku" ${dis}>Keikoku</button><button class="pen" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="chui" ${dis}>Chui</button>
-      <button class="pen" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="hansoku" ${dis}>Hansoku</button>${ev.phase === 'hantei' ? `<button data-act="k-ev" data-p="${path}" data-s="${s}" data-t="hantei">Hantei</button>` : '<span></span>'}</div></div>`;
-  };
-  const phaseTxt = ev.done ? `${ev.winner ? (ev.winner === 'a' ? 'Aka' : 'Shiro') + ' · ' : ''}${ev.method}` : ev.phase === 'kettei' ? 'Kettei-sen · first score wins' : ev.phase === 'hantei' ? 'Hantei · judges decide' : 'Shobu ippon';
-  const main = path === S.activeClock || !S.activeClock;
-  return `<div class="board">${corner('a')}<div class="mid"><div class="phase">${esc(phaseTxt)}</div>
-      ${main ? `<div class="clock" id="clock">${fmtClock(clockLeft())}</div><div class="row" style="justify-content:center"><button id="clock-btn" data-act="clock" ${ev.done ? 'disabled' : ''}>${CLOCK.running ? 'Stop' : 'Start'}</button><button data-act="clock-reset" data-p="${path}" aria-label="Reset clock">↺</button></div>` : ''}
-      ${ev.phase === 'regular' && !ev.done ? `<button data-act="k-ev" data-p="${path}" data-t="timeup">Time up</button>` : ''}
-      ${ev.phase === 'kettei' ? `<button data-act="k-ev" data-p="${path}" data-t="ketteiend">End Kettei-sen</button>` : ''}
-      <button data-act="k-undo" data-p="${path}" ${log.length ? '' : 'disabled'}>Undo last</button>
-      <div class="log">${log.slice(-6).map(e => esc((e.s ? (e.s === 'a' ? 'Aka ' : 'Shiro ') : '') + ({ waza: 'Waza-ari', ippon: 'Ippon', keikoku: 'Keikoku', chui: 'Chui', hansoku: 'Hansoku', kiken: 'Kiken', timeup: 'Time up', ketteiend: 'Kettei-sen ended', hantei: 'Hantei' }[e.t] || e.t))).join('<br>')}</div></div>${corner('b')}</div>`;
-}
-function teamPanel(d, sc, r, out) {
-  const ta = DC.teamBy[r.a] || {}, tb = DC.teamBy[r.b] || {};
-  const nm = (t, id) => { const c = DC.compBy[id]; return c ? `${c.firstName} ${c.lastName}` : ''; };
-  const sel = (t, side, i, v) => `<select id="tm-${side}-${i}" data-change="bout-member" data-s="${side}" data-i="${i}" aria-label="Competitor">${opt('', side === 'a' ? 'Aka competitor…' : 'Shiro competitor…', v)}${(t.memberIds || []).map(id => opt(id, nm(t, id), v)).join('')}</select>`;
-  const bouts = d.bouts || [];
-  const idx = Math.min(S.boutSel ?? 0, sc.bouts - 1 + (out.needDaihyo ? 1 : 0));
-  const tabs = Array.from({ length: sc.bouts }, (_, i) => { const p = out.per[i]; return `<button class="sm ${idx === i ? 'primary' : ''}" data-act="bout-sel" data-i="${i}">Bout ${i + 1}${p && p.done ? (p.winner ? (p.winner === 'a' ? ' · Aka' : ' · Shiro') : ' · Draw') : ''}</button>`; }).join('')
-    + (out.needDaihyo ? `<button class="sm ${idx === sc.bouts ? 'primary' : ''}" data-act="bout-sel" data-i="${sc.bouts}">Daihyo-sen</button>` : '');
-  const isD = idx === sc.bouts, b = isD ? (d.daihyo || {}) : (bouts[idx] || {});
-  const path = isD ? 'daihyo' : `bouts.${idx}`;
-  return `<div class="stack"><div class="row between"><h3>Team match</h3><span class="chip">Bouts <span class="num">&nbsp;${out.pts ? out.pts.a : 0}–${out.pts ? out.pts.b : 0}</span></span></div>
-    <div class="row">${tabs}</div>
-    <div class="bout"><div class="bout-h"><b>${isD ? 'Daihyo-sen (representative bout)' : `Bout ${idx + 1}`}</b><div class="row">${sel(ta, 'a', isD ? 'd' : idx, b.ma)}${sel(tb, 'b', isD ? 'd' : idx, b.mb)}</div></div>
-    ${kumitePanel(b.log || [], path, sc, r, { allowDraw: !isD, names: { a: b.ma ? nm(ta, b.ma) : entName(r.a), b: b.mb ? nm(tb, b.mb) : entName(r.b) } })}</div></div>`;
-}
-function fukugoPanel(d, sc, r, out) {
-  return `<div class="stack">${flagsPanel(d, sc, 'flags', 'Part 1 · Kata (flags)')}
-    <div class="stack"><h3>Part 2 · Kumite</h3>${kumitePanel(d.log || [], 'log', sc, r, { kettei: sc.ketteiTime > 0 })}</div>
-    ${out.split ? `<div class="notice warn">Kata and kumite went to different competitors. Judges give an overall hantei:</div><div class="row"><button class="${d.hantei === 'a' ? 'primary' : ''}" data-act="fk-hantei" data-s="a">Aka</button><button class="${d.hantei === 'b' ? 'primary' : ''}" data-act="fk-hantei" data-s="b">Shiro</button></div>` : ''}</div>`;
 }
 function logAt(d, path) {
   if (path === 'log') return (d.log = d.log || []);
@@ -2126,7 +2462,7 @@ function pushLive() {
   const dv = DC.divBy[M.did]; if (!dv || !S.d.rings[dv.ringId] || S.readOnly) return;
   clearTimeout(liveT);
   liveT = setTimeout(() => {
-    const out = evaluate(dv, loadDraft(M.key));
+    const br = S.d.brackets[M.did]; const out = evaluate(dv, loadDraft(M.key), br && br.matches[M.mid], br);
     const phase = out.done ? out.method : out.phase === 'kettei' ? 'Kettei-sen' : out.phase === 'hantei' ? 'Hantei' : '';
     S.store.set(P.live(S.evId, 'ringstate', dv.ringId), { did: M.did, mid: M.mid, score: out.pts || null, phase, at: new Date().toISOString(), by: S.myId || '' }).catch(e => console.warn(e));
   }, 350);
@@ -2134,7 +2470,8 @@ function pushLive() {
 function draftChanged() { const M = S.modal; saveDraft(M.key); renderScore(true); pushLive(); }
 async function saveResult() {
   const M = S.modal; const dv = DC.divBy[M.did];
-  const r = DC.res[M.did][M.mid]; const out = evaluate(dv, loadDraft(M.key));
+  const br = S.d.brackets[M.did];
+  const r = DC.res[M.did][M.mid]; const out = evaluate(dv, loadDraft(M.key), br.matches[M.mid], br);
   if (!out.done || r.status !== 'ready') return;
   const winnerId = out.winner === 'a' ? r.a : r.b;
   const rec = { winnerId, method: out.method, pts: out.pts || { a: 0, b: 0 }, detail: clone(out.detail || {}), at: new Date().toISOString(), by: S.myId || '' };
@@ -2143,6 +2480,105 @@ async function saveResult() {
   dropDraft(M.key);
   if (S.d.rings[dv.ringId]) S.store.set(P.live(S.evId, 'ringstate', dv.ringId), { did: '', mid: '', at: new Date().toISOString() }).catch(() => {});
   toast(`${entName(winnerId)} wins · ${out.method}`);
+  closeModal();
+}
+
+/* ===== kata score pools: performance sheet ===== */
+function kpContext(br, key) {
+  const m = /^R(\d+)_(.+?)(_rp)?$/.exec(key); if (!m) return null;
+  const n = +m[1], id = m[2], rp = !!m[3];
+  const st = KT.kpState(br);
+  let label = '', isFinal = false, semiKata = '', carry = null, pool = '';
+  if (st.final && st.final.n === n) { isFinal = true; label = 'Final'; semiKata = st.final.semiKata[id] || ''; const r = st.final.rows.find(x => x.id === id); if (r && st.final.carried) carry = r.carry != null && r.sheet ? r.carry : null; }
+  else { const rd = st.rounds.find(r => r.n === n); if (rd) { label = KT.kpRoundName(rd); pool = Object.keys(rd.pools).find(P => rd.pools[P].order.includes(id)) || ''; if (Object.keys(rd.pools).length > 1) label += ' · Pool ' + pool; } }
+  if (isFinal && st.final.carried && carry == null) {
+    const semi = st.rounds[st.rounds.length - 1]; const P = Object.keys(semi.pools)[0]; const r = semi.pools[P].rows.find(x => x.id === id); carry = r ? r.own : null;
+  }
+  return { n, id, rp, label: label + (rp ? ' · Kettei-sen' : ''), isFinal, semiKata, carry };
+}
+function kpKept(br) { const J = br.judges || 6; return J >= 5 ? J - 2 : J; }
+const KATA_LIST = ['Heian Shodan', 'Heian Nidan', 'Heian Sandan', 'Heian Yondan', 'Heian Godan', 'Tekki Shodan', 'Tekki Nidan', 'Tekki Sandan', 'Bassai Dai', 'Bassai Sho', 'Chinte', 'Enpi', 'Gankaku', 'Gojushiho Dai', 'Gojushiho Sho', 'Hangetsu', 'Jiin', 'Jion', 'Jitte', 'Kanku Dai', 'Kanku Sho', 'Meikyo', 'Nijushiho', 'Sochin', 'Unsu', 'Wankan'];
+function openKP(did, key) {
+  const br = S.d.brackets[did]; if (!br) return;
+  const ctx = kpContext(br, key); if (!ctx) return;
+  const saved = (br.scores || {})[key];
+  const dkey = draftKey(did, key);
+  const d = loadDraft(dkey);
+  const J = br.judges || 6, dv = DC.divBy[did];
+  const withApp = !!br.application && ctx.isFinal && !ctx.rp;
+  if (!d.s) { d.s = saved && saved.s ? saved.s.map(String) : Array.from({ length: J }, () => ''); d.kata = saved ? saved.kata : ''; d.hansoku = !!(saved && saved.hansoku); }
+  if (withApp && !d.app) d.app = saved && saved.app ? saved.app.map(String) : Array.from({ length: J }, () => '');
+  S.modal = { type: 'kp', did, key, dkey, ctx, withApp, refresh: null };
+  const can = canScoreDiv(did), editable = can && (!saved || KT.kpCanEdit(br, key));
+  const dis = editable ? '' : 'disabled';
+  const row = (field, label) => `<div><div class="label" style="margin-bottom:6px">${label}</div><div class="kprow" style="--j:${J}">${Array.from({ length: J }, (_, i) => `<label class="f"><span style="text-align:center">${i === 0 ? 'Shu-shin' : 'J' + (i + 1)}</span><input id="kp-${field}${i}" data-input="kp-j" data-f="${field}" data-i="${i}" inputmode="decimal" value="${esc((d[field] || [])[i] ?? '')}" ${dis} aria-label="${label} judge ${i + 1}"></label>`).join('')}</div></div>`;
+  const kataLabel = br.kataRule ? 'Kata performed' : 'Choreography (optional)';
+  const body = `<div class="corner" style="background:var(--ai-soft);color:var(--ink)"><div class="label">${esc(ctx.label)}</div><div class="who">${esc(entName(ctx.id))}</div><div class="tiny muted">${esc(entDojo(ctx.id))}</div></div>
+    <label class="f ${br.kataRule ? 'req' : ''}"><span>${kataLabel}</span><input id="kp-kata" data-input="kp-kata" value="${esc(d.kata || '')}" placeholder="${br.kataRule ? 'e.g. Bassai Dai' : ''}" ${dis} list="kata-list">
+      <datalist id="kata-list">${br.kataRule ? KATA_LIST.map(k => `<option value="${k}">`).join('') : ''}</datalist></label>
+    ${ctx.rp ? `<p class="small">Kettei-sen: ${br.kataRule ? 'a different kata than the one that tied; ' : ''}this score only breaks the tie and is not added to the total.</p>` : ctx.isFinal && ctx.semiKata && br.kataRule ? `<p class="small">Final elimination kata: <b>${esc(ctx.semiKata)}</b> — the final needs a different kata.</p>` : ''}
+    ${row('s', withApp ? 'Kata scores (0.0–10.0)' : `Judges’ scores (0.0–10.0)${J >= 5 ? ' · highest and lowest dropped, average of the rest' : ''}`)}
+    ${withApp ? row('app', 'Application (Bunkai) scores') : ''}
+    <label class="check"><input type="checkbox" id="kp-hansoku" data-change="kp-hansoku" ${d.hansoku ? 'checked' : ''} ${dis}> Han-soku (zero card — scored 0)</label>
+    <div id="kp-sum" class="kp-total"></div><p id="kp-err" class="small" style="color:var(--bad)"></p>
+    ${saved && !editable && can ? '<p class="small muted">This score is locked because the next round has started.</p>' : ''}`;
+  const ring = S.d.rings[dv.ringId];
+  openModal(sheet(esc(entName(ctx.id)), body,
+    `${ring && editable ? `<button data-act="kp-call" style="margin-right:auto">Call to ${esc(ring.name)}</button>` : ''}${saved && editable ? '<button class="danger" data-act="kp-clear">Clear score</button>' : ''}<button data-act="modal-close">Close</button>${editable ? '<button class="primary" data-act="kp-save" id="kp-save">Save score</button>' : ''}`,
+    `${esc(dv.name)}${ring ? ' · ' + esc(ring.name) : ''}`));
+  kpPaint();
+}
+function kpEval() {
+  const M = S.modal, br = S.d.brackets[M.did], J = br.judges || 6, d = loadDraft(M.dkey), k = kpKept(br);
+  const num = arr => (arr || []).map(x => String(x).replace(',', '.').trim());
+  const vals = num(d.s), app = M.withApp ? num(d.app) : null;
+  const full = v => v.length === J && v.every(x => x !== '' && !isNaN(+x));
+  let err = '';
+  for (const v of [vals, app || []]) if (v.some(x => x !== '' && (isNaN(+x) || +x < 0 || +x > 10))) err = 'Scores must be between 0.0 and 10.0.';
+  const kataErr = KT.kpKataCheck(br, M.key, d.kata);
+  if (!err && kataErr && (d.kata || !d.hansoku)) err = kataErr === 'Enter the kata name.' && !d.kata ? '' : kataErr;
+  if (d.hansoku) {
+    const needKata = br.kataRule && !String(d.kata || '').trim();
+    return { t: { avg: 0, total: 0, all: 0 }, hansoku: true, err, ok: !err && !needKata, k };
+  }
+  const t = full(vals) ? KT.scoreTotal(vals.map(Number), J) : null;
+  const a = app ? (full(app) ? KT.scoreTotal(app.map(Number), J) : null) : undefined;
+  const needKata = br.kataRule && !String(d.kata || '').trim();
+  return { t, a, err, k, ok: !!t && a !== null && !err && !needKata };
+}
+function kpPaint() {
+  const M = S.modal; if (!M || M.type !== 'kp') return;
+  const { t, a, err, ok, k, hansoku } = kpEval();
+  const f = x => (x / k).toFixed(2);
+  const sum = $('#kp-sum');
+  let h = '<span class="small muted">Enter every judge’s score.</span>';
+  if (hansoku) h = '<span>Han-soku · score <b>0.00</b></span>';
+  else if (t) {
+    const own = t.total + (a ? a.total : 0);
+    h = `<span>${a ? 'Kata ' + f(t.total) + ' + Application ' + f(a.total) + ' = ' : 'Score '}<b>${f(own)}</b></span>`;
+    if (M.ctx.isFinal && M.ctx.carry != null && !M.ctx.rp) h += `<span class="small">+ final elimination ${f(M.ctx.carry)} = <b style="font-size:1.4rem">${f(own + M.ctx.carry)}</b></span>`;
+    h += `<span class="small muted">all six ${t.all.toFixed(1)} · dropped ${t.hi.toFixed(1)} / ${t.lo.toFixed(1)}</span>`;
+  }
+  if (sum) sum.innerHTML = h;
+  const e = $('#kp-err'); if (e) e.textContent = err;
+  const b = $('#kp-save'); if (b) b.disabled = !ok;
+}
+function kpPushLive(clear) {
+  const M = S.modal; const dv = DC.divBy[M.did]; if (!dv || !S.d.rings[dv.ringId] || S.readOnly) return;
+  const d = loadDraft(M.dkey), { t, a, k } = kpEval();
+  const doc = clear ? { did: '', mid: '', at: new Date().toISOString() } : { did: M.did, kp: M.key, kata: d.kata || '', score: t ? ((t.total + (a ? a.total : 0)) / k).toFixed(2) : '', at: new Date().toISOString(), by: S.myId || '' };
+  S.store.set(P.live(S.evId, 'ringstate', dv.ringId), doc).catch(e => console.warn(e));
+}
+async function kpSave() {
+  const M = S.modal, d = loadDraft(M.dkey), ev = kpEval(); if (!ev.ok) return;
+  const br = S.d.brackets[M.did];
+  const rec = d.hansoku ? { hansoku: true, kata: String(d.kata || '').trim(), at: new Date().toISOString(), by: S.myId || '' }
+    : { s: d.s.map(x => +String(x).replace(',', '.')), kata: String(d.kata || '').trim(), at: new Date().toISOString(), by: S.myId || '' };
+  if (!d.hansoku && M.withApp) rec.app = d.app.map(x => +String(x).replace(',', '.'));
+  const saved = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { scores: { [M.key]: rec } }));
+  if (!saved) return;
+  kpPushLive(true); dropDraft(M.dkey);
+  toast(`${entName(M.ctx.id)} · ${d.hansoku ? 'Han-soku' : ((ev.t.total + (ev.a ? ev.a.total : 0)) / kpKept(br)).toFixed(2)}`);
   closeModal();
 }
 /* ===== actions, subscriptions, init ===== */
@@ -2213,7 +2649,7 @@ async function createDemo() {
   const comps = [];
   let n = 0;
   const mk = (g, age, rank, events) => { const c = { id: uid() + n, g, age, rank, events }; n++; comps.push(c); return c; };
-  for (let i = 0; i < 8; i++) mk('M', 24 + i * 3, 'd' + (1 + (i % 4)), ['IKATA', 'IKUMITE', 'FUKUGO']);
+  for (let i = 0; i < 18; i++) mk('M', 22 + i * 2, 'd' + (1 + (i % 4)), i < 8 ? ['IKATA', 'IKUMITE', 'FUKUGO'] : ['IKATA']);
   for (let i = 0; i < 5; i++) mk('F', 22 + i * 4, 'd' + (1 + (i % 3)), ['IKATA', 'IKUMITE', 'TKATA']);
   for (let i = 0; i < 4; i++) mk('M', 16 + (i % 3), 'd1', ['IKATA', 'IKUMITE', 'TKUMITE']);
   for (let i = 0; i < 5; i++) mk('F', 30 + i, 'k' + (1 + (i % 3)), ['IKATA', 'ENBU']);
@@ -2346,21 +2782,31 @@ const ACT = {
     const M = S.modal, d = loadDraft(M.key), dv = DC.divBy[M.did], sc = scoringOf(dv);
     const log = logAt(d, el.dataset.p);
     const ev = { t: el.dataset.t }; if (el.dataset.s) ev.s = el.dataset.s;
-    const before = KT.kumiteEval(log, { kettei: sc.ketteiTime > 0, allowDraw: el.dataset.p.startsWith('bouts') }).phase;
+    const o = { kettei: sc.ketteiTime > 0, allowDraw: el.dataset.p.startsWith('bouts'), ketteiOnly: el.dataset.p === 'daihyo' };
+    const E = kumiteStyle(dv) === 'kogo' && el.dataset.p !== 'daihyo' ? KT.kogoEval : KT.kumiteEval;
+    const before = E(log, o).phase;
     log.push(ev);
-    const after = KT.kumiteEval(log, { kettei: sc.ketteiTime > 0, allowDraw: el.dataset.p.startsWith('bouts') });
-    if (before !== 'kettei' && after.phase === 'kettei') setClock(sc.ketteiTime);
+    const after = E(log, o);
+    if (E === KT.kumiteEval && before !== 'kettei' && after.phase === 'kettei') setClock(sc.ketteiTime);
     if (after.done) stopClock();
     draftChanged();
   },
   'k-undo': el => { const M = S.modal, d = loadDraft(M.key); logAt(d, el.dataset.p).pop(); draftChanged(); },
   clock: () => toggleClock(),
-  'clock-reset': el => { const M = S.modal, d = loadDraft(M.key), sc = scoringOf(DC.divBy[M.did]); const ph = KT.kumiteEval(logAt(d, el.dataset.p), { kettei: sc.ketteiTime > 0 }).phase; setClock(ph === 'kettei' ? sc.ketteiTime : sc.boutTime); },
-  'bout-sel': el => { S.boutSel = +el.dataset.i; const sc = scoringOf(DC.divBy[S.modal.did]); setClock(sc.boutTime); renderScore(true); },
+  'clock-reset': el => { const M = S.modal, d = loadDraft(M.key), sc = scoringOf(DC.divBy[M.did]); const ph = KT.kumiteEval(logAt(d, el.dataset.p), { kettei: sc.ketteiTime > 0, ketteiOnly: el.dataset.p === 'daihyo' }).phase; setClock(ph === 'kettei' ? sc.ketteiTime : sc.boutTime); },
+  'tie-side': el => { const d = loadDraft(S.modal.key); d.tieSide = d.tieSide === el.dataset.s ? null : el.dataset.s; draftChanged(); },
+  'bout-sel': el => { S.boutSel = +el.dataset.i; const sc = scoringOf(DC.divBy[S.modal.did]); setClock(+el.dataset.i >= sc.bouts ? sc.ketteiTime : sc.boutTime); renderScore(true); },
   'fk-hantei': el => { const d = loadDraft(S.modal.key); d.hantei = el.dataset.s; draftChanged(); },
   'reset-draft': async () => { if (!(await confirmBox('Clear everything entered on this scoresheet?', 'Clear'))) return; const M = S.modal; dropDraft(M.key); S.boutSel = 0; setClock(scoringOf(DC.divBy[M.did]).boutTime); renderScore(true); pushLive(); },
   'call-mat': () => { pushLive(); toast('Called to the mat'); },
   'save-result': () => saveResult(),
+  'kp-score': el => openKP(el.dataset.did, el.dataset.key),
+  'kp-save': () => kpSave(),
+  'kp-call': () => { kpPushLive(false); toast('Called to the mat'); },
+  'kp-clear': async () => {
+    const M = S.modal; if (!(await confirmBox(`Clear this score for ${entName(M.ctx.id)}?`, 'Clear score', true))) return;
+    const ok = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { scores: { [M.key]: null } }), 'Score cleared'); if (ok) { dropDraft(M.dkey); closeModal(); }
+  },
   'undo-result': async () => {
     const M = S.modal; const br = S.d.brackets[M.did];
     if (!KT.canEdit(br, M.mid, DC.res[M.did])) return;
@@ -2384,10 +2830,15 @@ const CHANGE = {
     const f = el.value; if (!f) return;
     const list = DC.divs.filter(d => d.ringId === el.dataset.ring);
     let n = 0, skipped = 0;
-    for (const d of list) { if (bracketState(d.id).drawn) { skipped++; continue; } if (d.format !== f) { await guard(() => S.store.update(P.doc(S.evId, 'divisions', d.id), { format: f })); n++; } }
-    toast(`${KT.FORMATS[f]} set on ${plural(n, 'division')}${skipped ? ` · ${skipped} already drawn (redraw to change)` : ''}`);
+    for (const d of list) {
+      if (bracketState(d.id).drawn) { skipped++; continue; }
+      if (f === 'KP' && kindOf(d) !== 'kata') { skipped++; continue; }
+      if (d.format !== f) { const up = { format: f }; if (f === 'KP') up.scoring = Object.assign({}, scoringOf(d), { method: 'scores', judges: Math.max(5, scoringOf(d).judges) }); await guard(() => S.store.update(P.doc(S.evId, 'divisions', d.id), up)); n++; }
+    }
+    toast(`${KT.FORMATS[f]} set on ${plural(n, 'division')}${skipped ? ` · ${skipped} skipped (already drawn${f === 'KP' ? ' or not kata' : ''})` : ''}`);
   },
   'fb-role': el => guard(() => el.checked ? FB.fs.doc('roles/' + el.dataset.uid).set({ role: 'director', at: new Date().toISOString() }) : FB.fs.doc('roles/' + el.dataset.uid).delete(), 'Access updated'),
+  'kp-hansoku': el => { const d = loadDraft(S.modal.dkey); d.hansoku = el.checked; saveDraft(S.modal.dkey); kpPaint(); },
   awarded: el => guard(() => S.store.update(P.live(S.evId, 'brackets', el.dataset.did), { awarded: el.checked })),
   att: el => writeAttendance(S.ui.session, { [el.dataset.id]: el.checked }),
   'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = rd.result; ACT['imp-preview'](); }; rd.readAsText(f); },
@@ -2402,6 +2853,8 @@ async function writeAttendance(sid, present) {
 let searchT = null;
 const INPUT = {
   q: el => { S.ui.q = el.value; render(); },
+  'kp-j': el => { const d = loadDraft(S.modal.dkey), f = el.dataset.f || 's'; d[f] = d[f] || []; d[f][+el.dataset.i] = el.value; saveDraft(S.modal.dkey); kpPaint(); },
+  'kp-kata': el => { const d = loadDraft(S.modal.dkey); d.kata = el.value; saveDraft(S.modal.dkey); kpPaint(); },
   'mgr-search': el => personSearch(el, $('#mgr-dd-' + el.dataset.ring), id => `data-act="ring-manage" data-ring="${esc(el.dataset.ring)}" data-uid="${esc(id)}"`),
   'staff-search': el => personSearch(el, $('#staff-dd'), id => `data-act="staff-add" data-uid="${esc(id)}"`),
 };
