@@ -180,11 +180,20 @@ t('Ko-go kumite: 6 exchanges, penalties 2, kettei alternating', () => {
   r = KT.kogoEval(nx(3)); assert.equal(r.offense, 'b');
   r = KT.kogoEval([{ s: 'a', t: 'waza' }, { s: 'a', t: 'jikan' }, ...nx(6)]); // a 4, b 2
   assert.equal(r.winner, 'a'); assert.deepEqual(r.score, { a: 4, b: 2 });
+  // no score from either → Kettei-sen, same as equal scores; first Waza-ari / Ippon wins
   r = KT.kogoEval([...nx(6)]); assert.equal(r.phase, 'kettei'); assert.equal(r.offense, 'a');
-  r = KT.kogoEval([...nx(6), { t: 'next' }]); assert.equal(r.offense, 'b');
-  r = KT.kogoEval([...nx(6), { s: 'b', t: 'waza' }]); assert.equal(r.winner, 'b');
-  r = KT.kogoEval([...nx(6), { s: 'a', t: 'saki' }, ...nx(6)]); assert.equal(r.winner, 'b'); // kettei total
-  r = KT.kogoEval([...nx(6), ...nx(6)]); assert.equal(r.phase, 'hantei');
+  r = KT.kogoEval([...nx(6), { s: 'b', t: 'waza' }]); assert.equal(r.winner, 'b'); assert.equal(r.method, 'Kettei-sen · Waza-ari');
+  r = KT.kogoEval([...nx(6), { t: 'next' }, { s: 'a', t: 'ippon' }]); assert.equal(r.winner, 'a'); assert.equal(r.method, 'Kettei-sen · Ippon');
+  // points from every exchange are added together
+  r = KT.kogoEval([{ s: 'a', t: 'waza' }, { t: 'next' }, { s: 'b', t: 'waza' }, { t: 'next' }, { s: 'b', t: 'waza' }, ...nx(4)]);
+  assert.equal(r.winner, 'b'); assert.deepEqual(r.score, { a: 4, b: 8 });
+  // tied with points → kettei-sen (alternating), first waza-ari wins; kettei total; then judges
+  const tied = [{ s: 'a', t: 'waza' }, { s: 'b', t: 'waza' }, ...nx(6)];
+  r = KT.kogoEval(tied); assert.equal(r.phase, 'kettei'); assert.equal(r.offense, 'a');
+  r = KT.kogoEval([...tied, { t: 'next' }]); assert.equal(r.offense, 'b');
+  r = KT.kogoEval([...tied, { s: 'b', t: 'waza' }]); assert.equal(r.winner, 'b');
+  r = KT.kogoEval([...tied, { s: 'a', t: 'saki' }, ...nx(6)]); assert.equal(r.winner, 'b');
+  r = KT.kogoEval([...tied, ...nx(6)]); assert.equal(r.phase, 'hantei');
   assert.equal(KT.kogoEval([{ s: 'a', t: 'hansoku' }]).winner, 'b');
 });
 t('flags & scores', () => {
@@ -221,6 +230,10 @@ t('fukugo alternates kumite / ki-tei; ki-tei by 5 flags', () => {
   assert.equal(KT.fukugoPart(br.matches.B, br), 'kumite');
   assert.equal(KT.kiteiEval(['a', 'a', 'b', 'b', 'a'], 5).winner, 'a');
   assert.ok(!KT.kiteiEval(['a', 'a'], 5).done);
+});
+t('ITKF kata list (Kata Rules 1-3)', () => {
+  assert.ok(KT.ITKF_KATA.length >= 26);
+  for (const k of ['A-Nan-Kun (A-Nan-Ku)', 'Kuru-Run-Ha', 'Supa-Rin-Pan (Becchu-Rin, Hyaku-Hachi-Ho)', 'Wan-Kan', 'Sei-En-Chin']) assert.ok(KT.ITKF_KATA.includes(k), k);
 });
 t('ITKF defaults', () => {
   const d = KT.blackBeltDivisions(KT.EVENT_ORDER);

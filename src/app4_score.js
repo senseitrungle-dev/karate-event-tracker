@@ -118,7 +118,7 @@ function kogoPanel(log, path, r, opts) {
   const phaseTxt = ev.done ? `${ev.winner ? (ev.winner === 'a' ? 'Aka' : 'Shiro') + ' · ' : ''}${ev.method}` : ev.phase === 'hantei' ? 'Hantei · Court Judges decide' : `${ev.phase === 'kettei' ? 'Kettei-sen' : 'Ko-go Kumite'} · Ko-geki ${ev.exchange} of 6`;
   return `<div class="board">${corner('a')}<div class="mid"><div class="phase">${esc(phaseTxt)}</div>
       ${!ev.done && ev.phase !== 'hantei' ? `<div class="clock" style="font-size:1.4rem">${ev.offense === 'a' ? 'Aka' : 'Shiro'} attacks</div><button class="primary" data-act="k-ev" data-p="${path}" data-t="next">${ev.exchange < 6 ? 'Next exchange' : 'End of exchanges'}</button>` : ''}
-      <p class="tiny muted">Offense must attack within 10 s (Jikan) · max 4 techniques. Penalties give 2 points to the opponent (Chui 4, Ten-to 1).</p>
+      <p class="tiny muted">Points from all six exchanges are added together. Equal scores (or no score) → Kettei-sen: first Waza-ari or Ippon wins. Offense must attack within 10 s (Jikan) · max 4 techniques. Penalties give 2 points to the opponent (Chui 4, Ten-to 1).</p>
       <button data-act="k-undo" data-p="${path}" ${log.length ? '' : 'disabled'}>Undo last</button>${logHTML(log)}</div>${corner('b')}</div>`;
 }
 function teamPanel(d, sc, r, out, kogo) {
@@ -224,7 +224,7 @@ function kpContext(br, key) {
   return { n, id, rp, label: label + (rp ? ' · Kettei-sen' : ''), isFinal, semiKata, carry };
 }
 function kpKept(br) { const J = br.judges || 6; return J >= 5 ? J - 2 : J; }
-const KATA_LIST = ['Heian Shodan', 'Heian Nidan', 'Heian Sandan', 'Heian Yondan', 'Heian Godan', 'Tekki Shodan', 'Tekki Nidan', 'Tekki Sandan', 'Bassai Dai', 'Bassai Sho', 'Chinte', 'Enpi', 'Gankaku', 'Gojushiho Dai', 'Gojushiho Sho', 'Hangetsu', 'Jiin', 'Jion', 'Jitte', 'Kanku Dai', 'Kanku Sho', 'Meikyo', 'Nijushiho', 'Sochin', 'Unsu', 'Wankan'];
+const KATA_LIST = KT.ITKF_KATA.concat(['Heian Shodan', 'Heian Nidan', 'Heian Sandan', 'Heian Yondan', 'Heian Godan', 'Tekki Shodan', 'Tekki Nidan', 'Tekki Sandan']);
 function openKP(did, key) {
   const br = S.d.brackets[did]; if (!br) return;
   const ctx = kpContext(br, key); if (!ctx) return;

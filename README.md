@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.1.0
+# Karate Event Tracker · v1.2.1
 
 Web app for karate tournaments, training camps and other events. Runs on phones, tablets and computers.
 Plain HTML/CSS/JS with the rules engine (`src/logic.js`) kept separate from the UI, so it can be reused in a native iOS/Android app later.

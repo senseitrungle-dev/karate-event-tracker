@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.1';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -19,6 +19,11 @@ const KT = (function () {
   const GENDERS = { M: 'Men', F: 'Women', X: 'Mixed' };
   const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools of 4)', DE: 'Double elimination', KP: 'Kata score pools (8 per pool)' };
   const KP_POOL = 8, KP_ADV = 4;
+  /** ITKF Competition Rules 2009, Kata Rules Art. 1-3 (pp. 62–63): permitted kata (Dai/Sho and series listed separately). */
+  const ITKF_KATA = ['A-Nan-Kun (A-Nan-Ku)', 'Bassai (Pasai) Dai', 'Bassai (Pasai) Sho', 'Chin-tei (Chinte)', 'En-pi (Wan-Shu)', 'Gan-Kaku (Chin-To)',
+    'Gojyu-Shi-Ho (U-Sei-Shi) Dai', 'Gojyu-Shi-Ho (U-Sei-Shi) Sho', 'Han-Getsu (Sei-San)', 'Ji-In', 'Ji-On', 'Jitte', 'Kan-Ku (Ku-Chan-Ku) Dai', 'Kan-Ku (Ku-Chan-Ku) Sho',
+    'Shi-Ho-Ku-Chan-Ku', 'Kan-Shiwa', 'Kuru-Run-Ha', 'Ni-Jyu-Shi-Ho (Ni-Sei-Shi)', 'Mei-Kyo', 'Roh-Hai Sho-Dan', 'Roh-Hai Ni-Dan', 'Roh-Hai San-Dan', 'Sai-Ha', 'San-Se-Ru',
+    'Se-San', 'Sei-En-Chin', 'Sei-Pai', 'Shi-So-Chin', 'So-Chin', 'Supa-Rin-Pan (Becchu-Rin, Hyaku-Hachi-Ho)', 'Un-Su (Un-Shu)', 'Wan-Kan'];
   const LEVELS = ['Local', 'Regional', 'National', 'International'];
   const EVENT_KINDS = { tournament: 'Tournament', camp: 'Training camp', other: 'Other event' };
   const BLACK_AGE_GROUPS = [
@@ -778,7 +783,12 @@ const KT = (function () {
         if (ex < 6) { ex++; continue; }
         // six exchanges finished
         if (sc.a !== sc.b) { end(sc.a > sc.b ? 'a' : 'b', phase === 'kettei' ? 'Kettei-sen · Points' : 'Points'); if (phase === 'regular') regular = Object.assign({}, sc); continue; }
-        if (phase === 'regular') { regular = Object.assign({}, sc); if (opts.allowDraw) { done = true; method = 'Hiki-wake'; continue; } phase = 'kettei'; ex = 1; sc = { a: 0, b: 0 }; }
+        if (phase === 'regular') {
+          regular = Object.assign({}, sc);
+          if (opts.allowDraw) { done = true; method = 'Hiki-wake'; continue; }
+          // equal scores, including no score at all → Kettei-sen; first Waza-ari or Ippon wins
+          phase = 'kettei'; ex = 1; sc = { a: 0, b: 0 };
+        }
         else phase = 'hantei';
       }
     }
@@ -870,7 +880,7 @@ const KT = (function () {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
-    seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpKataCheck, defaultFormat, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
+    seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpKataCheck, defaultFormat, ITKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS,
   };
 })();
