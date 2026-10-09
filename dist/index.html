@@ -520,14 +520,14 @@ details.logo-pick { margin-bottom: 14px; } details.logo-pick > summary { cursor:
 input.clash { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.13.0 */
+<script>/* Karate Event Tracker v1.13.1 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, ITKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.13.0';
+  const VERSION = '1.13.1';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -1978,7 +1978,20 @@ async function initFirebase(cfg) {
   S.store = FirestoreStore(FB.fs); S.user = fbUserShim(FB.fs); S.myId = user.uid; S.canWrite = null; S.myEmail = String(user.email || '').toLowerCase();
   return true;
 }
-async function fbSignIn() { try { await FB.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); location.reload(); } catch (e) { toast(e.message || 'Sign-in failed', true); } }
+/** Plain-language reasons for the usual Google sign-in failures. */
+function fbAuthHelp(e) {
+  const c = (e && e.code) || '', host = location.hostname;
+  if (/api-key-not-valid|invalid-api-key/.test(c)) return 'Sign-in failed: the Firebase API key is not valid. Check vercel/firebase-config.js (window.KT_FIREBASE_CONFIG) has your project\'s real values.';
+  if (c === 'auth/unauthorized-domain') return `Sign-in failed: ${host} is not authorized. Firebase → Authentication → Settings → Authorized domains → add ${host} (no https://).`;
+  if (c === 'auth/operation-not-allowed') return 'Sign-in failed: Google sign-in is turned off. Firebase → Authentication → Sign-in method → enable Google.';
+  if (c === 'auth/popup-blocked') return 'The sign-in window was blocked. Allow pop-ups for this site and try again.';
+  if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') return 'Sign-in window closed before finishing.';
+  if (/requests-from-referer|referer/.test(c + (e && e.message))) return `Sign-in failed: the API key's website restrictions block this site. Google Cloud → Credentials → Browser key → allow ${host}/* and ${(window.KT_FIREBASE_CONFIG || {}).authDomain}/*.`;
+  return 'Sign-in failed: ' + ((e && (e.code || e.message)) || 'unknown error');
+}
+async function fbSignIn() { try { await FB.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); location.reload(); } catch (e) { console.error(e); toast(fbAuthHelp(e), true); } }
+/** True when firebase-config.js still has the example placeholders. */
+function fbConfigBad(cfg) { return !cfg || !cfg.projectId || /YOUR_/.test(String(cfg.apiKey || '') + String(cfg.projectId)); }
 async function fbSignOut() { await FB.auth.signOut(); location.reload(); }
 async function fbClaimDirector() {
   const b = FB.fs.batch();
@@ -2006,7 +2019,7 @@ function fbHomeBits() {
   return h;
 }
 function fbSignInHTML() {
-  return `<div class="card empty" style="margin-top:40px"><div class="mark-lg"></div><h2>Sign in to continue</h2><p class="muted" style="max-width:48ch">Directors, ring managers and spectators sign in with a Google account. What you can change depends on the role the tournament director gives you.</p><button class="primary" data-act="fb-signin">Sign in with Google</button></div>`;
+  return `<div class="card empty" style="margin-top:40px"><div class="mark-lg"></div><h2>Sign in to continue</h2><p class="muted" style="max-width:48ch">Directors, ring managers and spectators sign in with a Google account. What you can change depends on the role the tournament director gives you.</p>${fbConfigBad(window.KT_FIREBASE_CONFIG) ? `<p class="notice bad small" id="cfg-bad" style="max-width:56ch">This site is not connected to your Firebase project yet: <b>vercel/firebase-config.js</b> still has the example values. Set <code>window.KT_FIREBASE_CONFIG</code> to your web app config (Firebase → Project settings → Your apps), commit and push.</p>` : ''}<button class="primary" data-act="fb-signin" ${fbConfigBad(window.KT_FIREBASE_CONFIG) ? 'disabled' : ''}>Sign in with Google</button></div>`;
 }
 /* ===== views ===== */
 let rq = false;

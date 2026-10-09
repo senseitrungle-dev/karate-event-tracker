@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.13.0 Requirements & Design
+# Karate Event Tracker · v1.13.1 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -266,3 +266,9 @@ Tests: unit test for auto-ending exchanges, Kettei-sen penalty vs Waza-ari, old 
   - Separation is "where possible": when one group is bigger than the number of halves / pools, they are spread as evenly as the numbers allow.
 - **Shobu Ippon clock Stop**: a physical mouse click (MacBook) on Stop could be lost because the clock repaint rewrote the button text every 200 ms while the button was held down. The clock now rewrites text only when it changes, and the Start / Stop button acts on press (pointerdown) — instant for the timekeeper — with the matching click ignored; keyboard Enter / Space still work.
 Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept; randomness; RR, DE and KP pools); test/v113.js (pop-up → bracket, seed clash UI and blocked save, slow mouse press on Start / Stop, quick click toggles once, keyboard); full regression.
+
+## 29. v1.13.1 — Google sign-in on Vercel failed (2026-10-08)
+- **Locate**: karate-event-tracker.vercel.app → "Sign in with Google" failed although the domain was authorized.
+- **Diagnose**: the deployed `vercel/firebase-config.js` still set `window.KT_FIREBASE_CONFIG` to the example placeholders (`YOUR_API_KEY`); the real config had been pasted below it as `const firebaseConfig = {…}` (the Firebase console snippet), which the app never reads. Firebase was initialised with an invalid API key, so every sign-in was rejected.
+- **Fix**: `firebase-config.js` now sets `window.KT_FIREBASE_CONFIG` to the project's values. The app now (a) detects placeholder values and says so on the sign-in screen with the button disabled, and (b) explains the common sign-in errors in plain language (invalid API key, unauthorized domain, Google provider off, pop-up blocked, API-key website restriction).
+- **Verify**: test/signin.js (placeholder config shows the notice and disables sign-in; real-looking config enables it; error messages for each code).
