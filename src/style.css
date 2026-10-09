@@ -1,3 +1,4 @@
+:root { --sat: env(safe-area-inset-top, 0px); }
 /* Layout: app bar + scrollable tab strip + single content column (max 1200px); modal sheets slide up on phones. */
 :root {
   --paper: #f2f3ee;      /* tatami-grey ground */
@@ -53,7 +54,7 @@ a { color: var(--ai); }
 .label { font-size: .7rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
 
 /* app bar */
-.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--ink); color: #fff; }
+.bar { position: sticky; top: 0; padding-top: var(--sat); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); z-index: 20; background: var(--ink); color: #fff; }
 :root[data-theme="dark"] .bar { background: #0b0c10; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bar { background: #0b0c10; } }
 .bar-in { max-width: 1200px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
@@ -74,7 +75,7 @@ a { color: var(--ai); }
 .bar select option { color: #000; }
 
 /* tabs */
-.tabs { background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--barh, 52px)); z-index: 15; }
+.tabs { background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: var(--barh, 52px); z-index: 15; }
 .tabs-in { max-width: 1200px; margin: 0 auto; padding: 0 16px; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
 .tabs-in::-webkit-scrollbar { display: none; }
 .tab { border: 0; background: none; padding: 12px 12px 10px; font: 600 .88rem var(--f-body); color: var(--ink-2); border-bottom: 3px solid transparent; cursor: pointer; white-space: nowrap; }
@@ -183,7 +184,7 @@ td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric
 .sheet-h { position: sticky; top: 0; background: var(--panel); z-index: 2; padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 .sheet-b { padding: 16px 18px; display: grid; gap: 14px; align-content: start; min-width: 0; }
 .sheet-f { position: sticky; bottom: 0; background: var(--panel); padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
-@media (max-width: 640px) { .scrim { padding: 0; place-items: end stretch; } .sheet { border-radius: 14px 14px 0 0; max-height: 94%; width: 100%; } }
+@media (max-width: 640px) { .scrim { padding: var(--sat) 0 0; place-items: end stretch; } .sheet { border-radius: 14px 14px 0 0; max-height: 94%; width: 100%; } }
 #confirm .sheet { width: min(420px, 100%); }
 
 /* scoreboard */
@@ -513,3 +514,7 @@ details.logo-pick { margin-bottom: 14px; } details.logo-pick > summary { cursor:
 .logo-opt .logo-seal svg { height: 56px; }
 
 input.clash { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
+
+/* iPhone home-screen app: the status bar overlays the page (viewport-fit=cover) — keep pop-ups below it */
+.scrim { padding-top: max(16px, calc(var(--sat) + 8px)); }
+@media (max-width: 640px) { .scrim { padding-top: var(--sat); } }
