@@ -56,6 +56,6 @@
   };
   const auth={ onAuthStateChanged(cb){ setTimeout(()=>cb(uid()?{uid:uid(),displayName:'User '+uid(),email:uid()+'@x.test',photoURL:''}:null),5); return ()=>{}; },
     async signInWithPopup(){ sessionStorage.setItem('fbuid', sessionStorage.getItem('nextuid')||'u1'); }, async signOut(){ sessionStorage.removeItem('fbuid'); } };
-  window.firebase={ initializeApp(){}, auth: Object.assign(()=>auth,{GoogleAuthProvider:function(){}}), firestore:()=>fs };
+  window.firebase={ initializeApp(){}, auth: Object.assign(()=>auth,{GoogleAuthProvider:function(){ this.setCustomParameters=function(o){ sessionStorage.setItem('fbprompt', o && o.prompt || ''); }; }}), firestore:()=>fs };
   window.KT_FIREBASE_CONFIG={projectId:'mock'};
 })();

@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.13.2 Requirements & Design
+# Karate Event Tracker · v1.13.3 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -278,3 +278,9 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Diagnose**: the page uses `viewport-fit=cover` with a translucent status bar, so the status bar overlays the page. The title bar was `position: sticky; top: env(safe-area-inset-top)` — a sticky offset applies even at the top of the page, so the bar was pushed down by the status-bar height and covered that much of the content beneath it; scrolled, content showed through above it. Phone pop-ups filled the screen from y = 0, under the status bar.
 - **Fix**: the title bar sticks at `top: 0` and pads its content down by the safe-area inset (its dark background fills behind the status bar); the desktop tab strip sticks right under the measured bar height; pop-ups (scrim) are padded by the inset; left/right insets respected in landscape. The inset is read once into `--sat`.
 - **Verify**: test/safearea.js simulates a 47 px status bar on a 390×844 phone: bar content below the status bar, first card below the bar, nothing shows through when scrolled, pop-up title below the status bar; mobile and e2e regression.
+
+## 31. v1.13.3 — choose the Google account when signing in (2026-10-08)
+- **Locate**: after Sign out, Sign in with Google went straight back into the previous account; no way to pick another.
+- **Diagnose**: signing out ends the tracker's Firebase session only; the browser stays signed in to Google, and Google's pop-up silently reuses that account unless asked to show the chooser.
+- **Fix**: the Google provider is created with `prompt: 'select_account'`, so the account chooser (with "Use another account") appears on every sign-in.
+- **Verify**: test/signin.js checks the provider asks for the account chooser; fb, access, people, public regression.

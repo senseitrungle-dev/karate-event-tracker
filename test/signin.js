@@ -21,6 +21,8 @@ const path = require('path'), fs = require('fs');
   p = await mk(real);
   ok('real config: no notice', !(await p.$('#cfg-bad')));
   ok('real config: sign-in enabled', !(await p.$eval('button[data-act="fb-signin"]', x => x.disabled)));
+  await p.click('button[data-act="fb-signin"]'); await p.waitForTimeout(400);
+  ok('Google is asked to show the account chooser', (await p.evaluate(() => sessionStorage.getItem('fbprompt'))) === 'select_account');
   await p.close();
   for (const [code, re] of [['auth/unauthorized-domain', /not authorized.*Authorized domains/], ['auth/api-key-not-valid.-please-pass-a-valid-api-key.', /API key is not valid/], ['auth/operation-not-allowed', /enable Google/], ['auth/popup-blocked', /Allow pop-ups/]]) {
     p = await mk(real, code); await p.click('button[data-act="fb-signin"]'); await p.waitForTimeout(300);

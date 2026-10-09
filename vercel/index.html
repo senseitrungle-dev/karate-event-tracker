@@ -529,14 +529,14 @@ input.clash { border-color: var(--bad); background: var(--bad-soft); color: var(
 @media (max-width: 640px) { .scrim { padding-top: var(--sat); } }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.13.2 */
+<script>/* Karate Event Tracker v1.13.3 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, ITKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.13.2';
+  const VERSION = '1.13.3';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -1998,7 +1998,9 @@ function fbAuthHelp(e) {
   if (/requests-from-referer|referer/.test(c + (e && e.message))) return `Sign-in failed: the API key's website restrictions block this site. Google Cloud → Credentials → Browser key → allow ${host}/* and ${(window.KT_FIREBASE_CONFIG || {}).authDomain}/*.`;
   return 'Sign-in failed: ' + ((e && (e.code || e.message)) || 'unknown error');
 }
-async function fbSignIn() { try { await FB.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); location.reload(); } catch (e) { console.error(e); toast(fbAuthHelp(e), true); } }
+/** Google always shows the account chooser, so a different account can be picked after signing out. */
+function fbProvider() { const pr = new firebase.auth.GoogleAuthProvider(); if (pr.setCustomParameters) pr.setCustomParameters({ prompt: 'select_account' }); return pr; }
+async function fbSignIn() { try { await FB.auth.signInWithPopup(fbProvider()); location.reload(); } catch (e) { console.error(e); toast(fbAuthHelp(e), true); } }
 /** True when firebase-config.js still has the example placeholders. */
 function fbConfigBad(cfg) { return !cfg || !cfg.projectId || /YOUR_/.test(String(cfg.apiKey || '') + String(cfg.projectId)); }
 async function fbSignOut() { await FB.auth.signOut(); location.reload(); }

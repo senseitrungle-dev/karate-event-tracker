@@ -74,7 +74,9 @@ function fbAuthHelp(e) {
   if (/requests-from-referer|referer/.test(c + (e && e.message))) return `Sign-in failed: the API key's website restrictions block this site. Google Cloud → Credentials → Browser key → allow ${host}/* and ${(window.KT_FIREBASE_CONFIG || {}).authDomain}/*.`;
   return 'Sign-in failed: ' + ((e && (e.code || e.message)) || 'unknown error');
 }
-async function fbSignIn() { try { await FB.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); location.reload(); } catch (e) { console.error(e); toast(fbAuthHelp(e), true); } }
+/** Google always shows the account chooser, so a different account can be picked after signing out. */
+function fbProvider() { const pr = new firebase.auth.GoogleAuthProvider(); if (pr.setCustomParameters) pr.setCustomParameters({ prompt: 'select_account' }); return pr; }
+async function fbSignIn() { try { await FB.auth.signInWithPopup(fbProvider()); location.reload(); } catch (e) { console.error(e); toast(fbAuthHelp(e), true); } }
 /** True when firebase-config.js still has the example placeholders. */
 function fbConfigBad(cfg) { return !cfg || !cfg.projectId || /YOUR_/.test(String(cfg.apiKey || '') + String(cfg.projectId)); }
 async function fbSignOut() { await FB.auth.signOut(); location.reload(); }
