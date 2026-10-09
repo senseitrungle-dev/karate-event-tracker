@@ -1,0 +1,32 @@
+// v1.12.2: Ko-go — each exchange is a stand-alone match; a score or penalty ends it automatically
+const { chromium } = require(require('child_process').execSync('npm root -g').toString().trim() + '/playwright');
+const path = require('path');
+(async () => {
+  const b = await chromium.launch(); const errors = [];
+  const ok = (name, v) => { console.log((v ? 'PASS ' : 'FAIL ') + name); if (!v) errors.push('assert: ' + name); };
+  const p = await b.newPage({ viewport: { width: 1280, height: 900 } }); p.on('pageerror', e => errors.push(e.message));
+  await p.route(/fonts\./, r => r.abort());
+  await p.goto('file://' + path.resolve('dist/karate-event-tracker.html'));
+  await p.click('button:has-text("Create demo tournament")'); await p.click('button[data-kind="local"]'); await p.waitForSelector('text=Director checklist', { timeout: 60000 });
+  await p.click('.tab:has-text("Divisions")'); await p.click('button:has-text("Draw all ready")'); await p.click('#confirm button:has-text("Draw")'); await p.waitForTimeout(800);
+  await p.click('.tab:has-text("Brackets")'); await p.waitForSelector('#br-div option', { timeout: 10000 }).catch(() => {}); await p.waitForTimeout(300);
+  const o = await p.$$eval('#br-div option', x => x.map(y => [y.value, y.textContent]));
+  console.log("  divisions:", o.map(x => x[1]).filter(t => /Kumite/.test(t)).join(" | ")); await p.selectOption("#br-div", o.find(x => /Junior.*Kumite|Kumite.*Junior/.test(x[1]))[0]); await p.waitForTimeout(200);
+  await p.click('.bm.click >> nth=0'); await p.waitForTimeout(200);
+  if (await p.$('#match-root button[data-act="score"]')) await p.click('#match-root button[data-act="score"]');
+  await p.waitForTimeout(200);
+  const phase = async () => p.textContent('#score-root .phase');
+  ok('Ko-go sheet opens on exchange 1', /Ko-geki 1 of 6/.test(await phase()));
+  await p.click('.corner.a button[data-t="waza"]'); await p.waitForTimeout(150);
+  ok('Waza-ari ends exchange 1 → exchange 2 starts automatically', /Ko-geki 2 of 6/.test(await phase()));
+  await p.click('.corner.b button[data-t="saki"]'); await p.waitForTimeout(150);
+  ok('a penalty (Saki) ends exchange 2 → exchange 3', /Ko-geki 3 of 6/.test(await phase()));
+  ok('log notes “exchange over”', /exchange over/.test(await p.textContent('#score-root .log')));
+  await p.click('button[data-t="next"]'); await p.waitForTimeout(150);
+  ok('“No score · next exchange” closes an exchange without a score', /Ko-geki 4 of 6/.test(await phase()));
+  await p.click('button[data-act="k-undo"]'); await p.click('button[data-act="k-undo"]'); await p.waitForTimeout(150);
+  ok('Undo reopens the exchange', /Ko-geki 2 of 6/.test(await phase()));
+  await p.screenshot({ path: 'test/shots/kogo-exchange.png' });
+  console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
+  await b.close(); process.exit(errors.length ? 1 : 0);
+})();

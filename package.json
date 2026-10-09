@@ -1,12 +1,12 @@
 {
   "name": "karate-event-tracker",
-  "version": "1.2.1",
+  "version": "1.13.0",
   "private": true,
   "description": "Karate tournament & training camp manager (WTKF scoring, brackets, rings, results)",
   "scripts": {
     "build": "bash build.sh",
     "test": "node test/logic.test.js",
-    "test:e2e": "node test/e2e.js && node test/cloud.js && node test/fb.js",
+    "test:e2e": "node test/e2e.js && node test/v15.js && node test/public.js && node test/people.js && node test/golive.js && node test/access.js && node test/demos.js && node test/judgeimport.js && node test/archive.js && node test/logo.js && node test/kogo.js && node test/cloud.js && node test/fb.js && node test/mobile.js && node test/ringdrag.js",
     "deploy:rules": "firebase deploy --only firestore:rules"
   }
 }

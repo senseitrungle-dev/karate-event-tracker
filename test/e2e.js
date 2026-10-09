@@ -13,7 +13,7 @@ const path = require('path');
   await page.waitForSelector('text=No events yet');
   await shot('01-empty');
   // demo
-  await click('button:has-text("Create demo tournament")');
+  await click('button:has-text("Create demo tournament")'); await click('button[data-kind="local"]');
   await page.waitForSelector('text=Director checklist', { timeout: 20000 });
   await page.waitForTimeout(300);
   await shot('02-overview');
@@ -38,7 +38,7 @@ const path = require('path');
   await page.selectOption('#mat-ring', { index: 0 });
   await page.selectOption('#sim-role', 'director'); await page.waitForTimeout(150);
   // Score every ready match via Mat tab for all divisions
-  let teamShot = false, kogoShot = false, fkShot = false; let scored = 0, kpShots = 0, kpFinalChecked = false, kpSemiChecked = false;
+  let kogoChecked = false, teamShot = false, kogoShot = false, fkShot = false; let scored = 0, kpShots = 0, kpFinalChecked = false, kpSemiChecked = false;
   for (let guard = 0; guard < 250; guard++) {
     await click('.tab:has-text("Mat")');
     const SEL = 'button[data-act="score"], button[data-act="kp-score"]';
@@ -47,13 +47,13 @@ const path = require('path');
     await page.waitForTimeout(100); await page.click(SEL + ' >> nth=0'); await page.waitForTimeout(80);
     if (await page.$('#kp-kata')) {
       const lbl = await page.textContent('.corner .label');
-      const fin = /^Final/.test(lbl.trim()) && !/elimination/.test(lbl), fe = /Final elimination/.test(lbl), kt = /Kettei/.test(lbl);
+      const fin = /^Final/.test(lbl.trim()) && !/elimination/.test(lbl), fe = /Semifinal/.test(lbl), kt = /Kettei/.test(lbl);
       await page.fill('#kp-kata', kt ? 'Jitte' : fin ? 'Kanku Dai' : fe ? 'Jion' : 'Bassai Dai');
       const J = await page.$$eval('input[data-input="kp-j"]', x => x.map(y => y.id));
       const base = 6 + Math.random() * 3.5;
       for (let i = 0; i < J.length; i++) await page.fill('#' + J[i], (base + (i % 4) * 0.1).toFixed(1));
       if (kpShots++ === 0) await shot('05b-kp-sheet');
-      if (fe && !kpSemiChecked) { kpSemiChecked = true; await page.fill('#kp-kata', 'bassai dai'); console.log('final-elimination same-kata blocked:', await page.$eval('#kp-save', b => b.disabled), await page.textContent('#kp-err')); await page.fill('#kp-kata', 'Jion'); }
+      if (fe && !kpSemiChecked) { kpSemiChecked = true; await page.fill('#kp-kata', 'bassai dai'); console.log('semifinal same-kata blocked:', await page.$eval('#kp-save', b => b.disabled), await page.textContent('#kp-err')); await page.fill('#kp-kata', 'Jion'); }
       if (fin && kpFinalChecked === false) { kpFinalChecked = true; await page.fill('#kp-kata', 'jion'); console.log('final same-kata blocked:', await page.$eval('#kp-save', b => b.disabled), await page.textContent('#kp-err')); await page.fill('#kp-kata', 'Kanku Dai'); if (J.length > 6) console.log('team kata final has application inputs'); }
       await page.click('#kp-save'); await page.waitForTimeout(120); scored++; continue;
     }
@@ -64,15 +64,16 @@ const path = require('path');
       for (let i = 0; i < n; i++) { await page.fill(`#sc-a-${i}`, String(7 + (i % 3) * 0.5)); await page.dispatchEvent(`#sc-a-${i}`, 'change'); await page.fill(`#sc-b-${i}`, String(6.5 + (i % 2) * 0.5)); await page.dispatchEvent(`#sc-b-${i}`, 'change'); }
     } else if (await root.$('.board .corner') && await root.$('text=Team match')) {
       // team kumite: bout 1 Aka ippon, bout 2 Aka ippon
-      for (let b = 0; b < 3; b++) { await click(`button[data-act="bout-sel"][data-i="${b}"]`); if (b < 2) await click('.corner.a button[data-t="ippon"]'); else await click('button[data-t="timeup"]'); }
+      for (let b = 0; b < 3; b++) { await click(`button[data-act="bout-sel"][data-i="${b}"]`); if (b < 2) await click('.corner.a button[data-t="ippon"]'); else if (await page.$('button[data-t="timeup"]')) await click('button[data-t="timeup"]'); else for (let i = 0; i < 8 && await page.$('button[data-t="next"]'); i++) await click('button[data-t="next"]'); }
       if (!teamShot) { teamShot = true; await shot('05c-team'); }
     } else if (await root.$('text=Ki-tei round')) {
       for (let i = 0; i < 5; i++) await click(`button[data-act="flag"][data-f="flags"][data-i="${i}"][data-s="${i < 2 ? 'b' : 'a'}"]`);
       if (!fkShot) { fkShot = true; await shot('05d-kitei'); }
     } else if (await root.$('button[data-t="next"]')) {
+      if (!kogoChecked) { kogoChecked = true; const dis = await page.$$eval('.corner button[disabled]', b => b.map(x => x.closest('.corner').classList.contains('a') ? 'a:' + x.dataset.t : 'b:' + x.dataset.t).sort()); console.log('kogo disabled (aka offense):', dis.join(',')); }
       await click('.corner.a button[data-t="waza"]'); await click('.corner.b button[data-t="saki"]');
       if (!kogoShot) { kogoShot = true; await shot('05e-kogo'); }
-      for (let i = 0; i < 6; i++) await click('button[data-t="next"]');
+      for (let i = 0; i < 8 && await page.$('button[data-t="next"]'); i++) await click('button[data-t="next"]');
     } else if (await root.$('.corner button[data-t="waza"]')) {
       // kumite: aka waza, shiro keikoku, time up
       await click('.corner.a button[data-t="waza"]'); await click('.corner.b button[data-t="keikoku"]');
@@ -104,8 +105,21 @@ const path = require('path');
   if (kpo) { await page.selectOption('#br-div', kpo[0]); await page.waitForTimeout(150); await page.screenshot({ path: 'test/shots/07b-kp.png', fullPage: true }); console.log('KP rounds shown:', await page.$$eval('.stage-h.label', x => x.map(y => y.textContent).join(','))); }
   const rr = opts.find(o => /Junior Men Individual Kata/.test(o[1]));
   if (rr) { await page.selectOption('#br-div', rr[0]); await page.waitForTimeout(150); await shot('08-rr'); }
+  // recorded-score detail on a completed kumite match
+  if (de) {
+    await page.selectOption('#br-div', de[0]); await page.waitForTimeout(150);
+    console.log('DE pools shown:', await page.$$eval('.card h3', x => x.map(y => y.textContent).filter(t => /^Pool/.test(t)).join(',')));
+    await click('.bm.click >> nth=0');
+    console.log('record detail shown:', !!(await page.$('details.rec')), (await page.$$eval('.rec-log tbody tr', r => r.length)), 'log rows');
+    await shot('07c-record');
+    await click('button[data-act="modal-close"] >> nth=0');
+  }
+  const des = opts.find(o => /Senior Women Individual Kumite/.test(o[1]));
+  if (des) { await page.selectOption('#br-div', des[0]); await page.waitForTimeout(150); console.log('DES placings:', await page.$$eval('.podium .medal', m => m.map(x => x.textContent).join(''))); await shot('07d-des'); }
+  if (kpo) { await page.selectOption('#br-div', kpo[0]); await page.waitForTimeout(150); await click('tr.click >> nth=0'); console.log('KP recorded block:', !!(await page.$('details.rec'))); await click('button[data-act="modal-close"] >> nth=0'); }
   // tiebreak on RR
-  if (rr) {
+  if (rr) { await page.selectOption('#br-div', rr[0]); await page.waitForTimeout(150); }
+  if (rr && await page.$('button[data-act="tiebreak"]')) {
     await click('button[data-act="tiebreak"] >> nth=0');
     await click('button[data-act="tb-move"][data-i="3"][data-dir="-1"]');
     await click('button[data-act="tb-save"]'); await page.waitForTimeout(200);
@@ -114,21 +128,23 @@ const path = require('path');
   // undo: open DE grand final (done) -> undo allowed? GF2 may exist
   if (de) {
     await page.selectOption('#br-div', de[0]); await page.waitForTimeout(150);
-    const gf2done = await page.$('.bm.click[data-mid="GF2"]');
-    const target = gf2done ? 'GF2' : 'GF';
+    const target = (await page.$('.bm[data-mid="PO-W2-0"]')) ? 'PO-W2-0' : 'GF';
     await click(`.bm[data-mid="${target}"]`);
+    console.log('match view opens for done match:', !!(await page.$('#match-root')));
+    if (await page.$('#match-root button[data-act="score"]')) await click('#match-root button[data-act="score"]');
     const undo = await page.$('button[data-act="undo-result"]');
     console.log('undo available on', target, !!undo);
     if (undo) { await undo.click(); await click('#confirm button:has-text("Undo result")'); await page.waitForTimeout(200); }
     console.log('DE placings after undo shows Placings so far:', !!(await page.$('text=Placings so far')));
     // early match should NOT be undoable
-    await click('.bm[data-mid="W1-0"]');
-    console.log('undo on W1-0 (expect false):', !!(await page.$('button[data-act="undo-result"]')));
+    await click('.bm.click[data-mid="EA-W1-1"]');
+    if (await page.$('#match-root button[data-act="score"]')) await click('#match-root button[data-act="score"]');
+    console.log('undo on pool match after playoff (expect false):', !!(await page.$('button[data-act="undo-result"]')));
     await click('button[data-act="modal-close"] >> nth=0');
   }
   // competitor form
   await click('.tab:has-text("Competitors")');
-  await click('button:has-text("Add competitor")');
+  await click('button:has-text("Add competitor"):visible:visible');
   await page.fill('#c-first', 'Test'); await page.fill('#c-last', 'Person'); await page.selectOption('#c-gender', 'F'); await page.fill('#c-dob', '2011-05-05'); await page.selectOption('#c-rank', 'd1'); await page.fill('#c-dojo', 'Test Dojo');
   await page.check('input[name="events"][value="IKATA"]');
   await shot('09-comp-form');
@@ -157,18 +173,18 @@ const path = require('path');
   await page.selectOption('#sim-role', 'director'); await page.waitForTimeout(150);
   // Camp
   await click('button.brand');
-  await click('button:has-text("New event")');
+  await click('button:has-text("New event"):visible:visible');
   await page.fill('#ev-name', 'Autumn Gasshuku'); await page.selectOption('#ev-kind', 'camp');
   await click('button[type="submit"][form="f-event"]'); await page.waitForTimeout(200);
-  await click('.tab:has-text("Sessions")'); await click('button:has-text("Add session")');
+  await click('.tab:has-text("Sessions")'); await click('button:has-text("Add session"):visible:visible');
   await page.fill('#s-title', 'Kihon & Heian'); await page.fill('#s-start', '09:00');
   await click('button[type="submit"][form="f-sess"]'); await page.waitForTimeout(150);
-  await click('.tab:has-text("Participants")'); await click('button:has-text("Add participant")');
+  await click('.tab:has-text("Participants")'); await click('button:has-text("Add participant"):visible:visible');
   await page.fill('#c-first', 'Camp'); await page.fill('#c-last', 'Goer'); await page.selectOption('#c-rank', 'k4'); await page.fill('#c-dojo', 'X');
   await click('button[type="submit"][form="f-comp"]'); await page.waitForTimeout(150);
   await click('.tab:has-text("Attendance")');
   await click('button:has-text("Mark all present")'); await page.waitForTimeout(150);
-  await click('.tab:has-text("Overview")');
+  await click('.tab:has-text("Dashboard")');
   console.log('camp attendance:', await page.textContent('.stats'));
   await shot('11-camp');
   // mobile
@@ -178,7 +194,7 @@ const path = require('path');
   const ov = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   console.log('mobile horizontal overflow:', ov);
   await shot('12-mobile');
-  await click('.tab:has-text("Brackets")'); await page.waitForTimeout(100);
+  await click('.bn[data-act="more-tabs"]'); await click('.menu-item:has-text("Brackets")'); await page.waitForTimeout(100);
   console.log('mobile overflow brackets:', await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1));
   await shot('13-mobile-bracket');
   console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');

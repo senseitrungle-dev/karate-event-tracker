@@ -16,11 +16,15 @@ function FirestoreStore(fs) {
     watch(col, cb, onErr) {
       return fs.collection(col).onSnapshot(s => { const o = {}; s.docs.forEach(d => { o[d.id] = Object.assign({}, d.data(), { id: d.id }); }); cb(o); }, e => { if (onErr) onErr(fbErr(e)); });
     },
+    watchWhere(col, field, val, cb, onErr) {
+      return fs.collection(col).where(field, '==', val).onSnapshot(s => { const o = {}; s.docs.forEach(d => { o[d.id] = Object.assign({}, d.data(), { id: d.id }); }); cb(o); }, e => { if (onErr) onErr(fbErr(e)); });
+    },
     set: (p, d) => run(p, () => wrap(fs.doc(p).set(d))),
     // Firestore update() replaces nested maps; set(merge) deep-merges like the claude.ai store
     update: (p, d) => run(p, () => wrap(fs.doc(p).set(d, { merge: true }))),
     del: p => run(p, () => wrap(fs.doc(p).delete())),
     async get(p) { const s = await fs.doc(p).get(); return s.exists ? s.data() : null; },
+    watchDoc(p, cb, onErr) { return fs.doc(p).onSnapshot(s => cb(s.exists ? s.data() : null), e => { if (onErr) onErr(fbErr(e)); }); },
   };
 }
 function fbUserShim(fs) {
@@ -48,13 +52,15 @@ async function initFirebase(cfg) {
   FB.on = true; FB.auth = firebase.auth(); FB.fs = firebase.firestore();
   try { FB.fs.settings({ ignoreUndefinedProperties: true }); } catch (e) { /* ignore */ }
   const user = await new Promise(res => { const off = FB.auth.onAuthStateChanged(u => { off(); res(u); }); });
+  if (!user && S.pub) { S.store = FirestoreStore(FB.fs); S.user = null; S.myId = null; S.readOnly = true; return true; } // public spectator link: no sign-in
   if (!user) { FB.needSignIn = true; S.store = { mode: 'firebase' }; render(); return false; }
   FB.user = user;
   await FB.fs.doc('users/' + user.uid).set({ name: user.displayName || '', email: user.email || '', photo: user.photoURL || '', seenAt: new Date().toISOString() }, { merge: true }).catch(() => {});
   const roleDoc = await FB.fs.doc('roles/' + user.uid).get().catch(() => null);
-  S.isDirector = !!(roleDoc && roleDoc.exists && roleDoc.data().role === 'director');
-  if (!S.isDirector) { const b = await FB.fs.doc('meta/bootstrap').get().catch(() => null); FB.bootstrapOpen = !(b && b.exists); }
-  S.store = FirestoreStore(FB.fs); S.user = fbUserShim(FB.fs); S.myId = user.uid; S.canWrite = null;
+  const rl = roleDoc && roleDoc.exists ? roleDoc.data().role : '';
+  S.isAdmin = rl === 'director' || rl === 'admin'; S.isOrganizer = S.isAdmin || rl === 'organizer';
+  if (!S.isAdmin) { const b = await FB.fs.doc('meta/bootstrap').get().catch(() => null); FB.bootstrapOpen = !(b && b.exists); }
+  S.store = FirestoreStore(FB.fs); S.user = fbUserShim(FB.fs); S.myId = user.uid; S.canWrite = null; S.myEmail = String(user.email || '').toLowerCase();
   return true;
 }
 async function fbSignIn() { try { await FB.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); location.reload(); } catch (e) { toast(e.message || 'Sign-in failed', true); } }
@@ -69,19 +75,19 @@ async function accessForm() {
   const users = await S.user.search('');
   const roles = {};
   await Promise.all(users.map(async u => { const r = await FB.fs.doc('roles/' + u.id).get().catch(() => null); roles[u.id] = r && r.exists ? r.data().role : ''; }));
-  openModal(sheet('Directors', `<p class="small muted">People appear here after they sign in once. Directors have full control of every event. Ring managers are assigned per ring on the Rings tab.</p>
+  openModal(sheet('App admins', `<p class="small muted">People appear here after they sign in once. App admins can open and manage every event and approve tournament directors. Event directors and ring managers are set per event on its People tab.</p>
     <div class="stack" style="gap:6px">${users.map(u => `<label class="row between"><span>${u.avatarUrl ? `<img src="${esc(u.avatarUrl)}" alt="" width="22" height="22" style="border-radius:50%;vertical-align:middle"> ` : ''}${esc(u.name)} <span class="muted small">${esc(u.email || '')}</span></span>
       <input type="checkbox" data-change="fb-role" data-uid="${esc(u.id)}" ${roles[u.id] === 'director' ? 'checked' : ''} ${u.id === FB.user.uid ? 'disabled' : ''} aria-label="Director"></label>`).join('')}</div>`, '<button class="primary" data-act="modal-close">Done</button>'));
 }
 function fbBarBits() {
-  if (!FB.on || !FB.user) return '';
+  if (!FB.on || !FB.user || S.pub) return '';
   return `<button class="sm ghost" style="color:#fff" data-act="fb-signout" title="${esc(FB.user.email || '')}">Sign out</button>`;
 }
 function fbHomeBits() {
   if (!FB.on) return '';
   let h = '';
-  if (FB.bootstrapOpen && !S.isDirector) h += `<div class="card stack"><h3>Set up this tracker</h3><p class="small muted">No director has been set up yet. The first person to claim the role becomes the tournament director and can add other directors later.</p><div><button class="primary" data-act="fb-claim">Become director</button></div></div>`;
-  if (S.isDirector) h += `<div class="row"><button class="sm" data-act="fb-access">Manage directors</button></div>`;
+  if (FB.bootstrapOpen && !S.isAdmin) h += `<div class="card stack"><h3>Set up this tracker</h3><p class="small muted">No director has been set up yet. The first person to claim the role becomes the tournament director and can add other directors later.</p><div><button class="primary" data-act="fb-claim">Become director</button></div></div>`;
+  if (S.isAdmin) h += `<div class="row" style="margin-bottom:10px"><button class="sm" data-act="fb-access">Manage access</button></div>`;
   return h;
 }
 function fbSignInHTML() {

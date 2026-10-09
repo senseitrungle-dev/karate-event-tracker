@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.2.1';
+  const VERSION = '1.13.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -17,7 +17,8 @@ const KT = (function () {
   };
   const EVENT_ORDER = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'];
   const GENDERS = { M: 'Men', F: 'Women', X: 'Mixed' };
-  const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools of 4)', DE: 'Double elimination', KP: 'Kata score pools (8 per pool)' };
+  const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools of 4)', DE: 'Double elimination', DES: 'Double elimination (simplified)', KP: 'Kata score pools (8 per pool)' };
+  const ELIM_POOL = 8;
   const KP_POOL = 8, KP_ADV = 4;
   /** ITKF Competition Rules 2009, Kata Rules Art. 1-3 (pp. 62–63): permitted kata (Dai/Sho and series listed separately). */
   const ITKF_KATA = ['A-Nan-Kun (A-Nan-Ku)', 'Bassai (Pasai) Dai', 'Bassai (Pasai) Sho', 'Chin-tei (Chinte)', 'En-pi (Wan-Shu)', 'Gan-Kaku (Chin-To)',
@@ -60,10 +61,23 @@ const KT = (function () {
     return `${who}${grp} ${GENDERS[dv.gender] || ''} ${et ? et.label : ''}`.replace(/\s+/g, ' ').trim();
   }
   /** ITKF defaults: kumite 1:30 with 1:30 Kettei-sen; women's individual kumite (and fukugo kumite) = Ko-go. */
-  function defaultScoring(eventType, gender) {
+  function defaultScoring(eventType) {
     const et = EVENT_TYPES[eventType] || {};
-    const kogo = gender === 'F' && (eventType === 'IKUMITE' || eventType === 'FUKUGO');
-    return { method: et.defMethod || 'flags', judges: 5, boutTime: 90, ketteiTime: 90, bouts: 3, style: kogo ? 'kogo' : 'shobu' };
+    return { method: et.defMethod || 'flags', judges: 5, boutTime: 90, ketteiTime: 90, bouts: 3, style: 'shobu' };
+  }
+  const KUMITE_EVENTS = { IKUMITE: 1, TKUMITE: 1, FUKUGO: 1 };
+  /** Default kumite style (director 2026-10-01): black belt Senior & Youth → regular (Shobu Ippon), Junior & Cadet (≤18) → Ko-go;
+   *  kyu divisions limited to brown belts (3rd–1st kyu) → Ko-go; other kyu divisions → regular until the director chooses. Gender does not matter. */
+  function defaultStyle(dv) {
+    if (!dv || !KUMITE_EVENTS[dv.eventType]) return 'shobu';
+    if (dv.belt === 'black') {
+      if (dv.group === 'Junior' || dv.group === 'Cadet') return 'kogo';
+      if (dv.maxAge != null && dv.maxAge !== '' && +dv.maxAge <= 18) return 'kogo';
+      return 'shobu';
+    }
+    const lo = rankValue(dv.minRank), hi = rankValue(dv.maxRank);
+    if (lo != null && hi != null && lo >= -3 && hi <= -1) return 'kogo';
+    return 'shobu';
   }
   /** Default bracket format per event (ITKF): kata-type events use score pools; fukugo single elimination. */
   function defaultFormat(eventType, belt, fallback) {
@@ -78,7 +92,8 @@ const KT = (function () {
     for (const et of eventTypes) for (const g of EVENT_TYPES[et].genders) for (const ag of BLACK_AGE_GROUPS) {
       const fmt = defaultFormat(et, 'black', format);
       const dv = { eventType: et, gender: g, belt: 'black', group: ag.label, minAge: ag.min, maxAge: ag.max,
-        minRank: 'd1', maxRank: 'd10', format: fmt, scoring: defaultScoring(et, g), bronze: 'two', reset: true };
+        minRank: 'd1', maxRank: 'd10', format: fmt, scoring: defaultScoring(et), bronze: 'two', reset: false };
+      dv.scoring.style = defaultStyle(dv);
       if (fmt === 'KP') dv.scoring = Object.assign(dv.scoring, { method: 'scores', judges: 6 });
       dv.name = divisionName(dv); out.push(dv);
     }
@@ -89,7 +104,8 @@ const KT = (function () {
     const out = [];
     for (const et of eventTypes) for (const g of EVENT_TYPES[et].genders) {
       const dv = { eventType: et, gender: g, belt: 'kyu', group: tpl.label, minAge: tpl.minAge ?? null, maxAge: tpl.maxAge ?? null,
-        minRank: tpl.minRank || 'k10', maxRank: tpl.maxRank || 'k1', format: defaultFormat(et, 'kyu', format), scoring: defaultScoring(et, g), bronze: 'two', reset: true };
+        minRank: tpl.minRank || 'k10', maxRank: tpl.maxRank || 'k1', format: defaultFormat(et, 'kyu', format), scoring: defaultScoring(et), bronze: 'two', reset: false };
+      dv.scoring.style = defaultStyle(dv);
       if (dv.format === 'KP') dv.scoring = Object.assign(dv.scoring, { method: 'scores', judges: 6 });
       dv.name = divisionName(dv); out.push(dv);
     }
@@ -186,23 +202,50 @@ const KT = (function () {
     const rest = shuffle(entrants.filter(e => !e.seed), rnd || Math.random);
     return seeded.concat(rest);
   }
-  /** Place ordered entrants into bracket slots (null = bye), then spread same-dojo first-round pairs. */
-  function placeSlots(ordered, size) {
-    const so = seedOrder(size);
-    const slots = so.map(s => ordered[s - 1] || null);
-    // dojo spread: swap unseeded entrants to break same-dojo first-round pairs
-    const conflict = (i) => { const a = slots[i - (i % 2)], b = slots[i - (i % 2) + 1]; return a && b && a.dojo && a.dojo === b.dojo; };
-    for (let pass = 0; pass < 2; pass++) {
-      for (let i = 0; i < size; i += 2) {
-        if (!conflict(i)) continue;
-        const victim = slots[i + 1] && !slots[i + 1].seed ? i + 1 : (slots[i] && !slots[i].seed ? i : -1);
-        if (victim < 0) continue;
-        for (let j = 0; j < size; j++) {
-          if ((j >> 1) === (i >> 1) || !slots[j] || slots[j].seed) continue;
-          const tmp = slots[j]; slots[j] = slots[victim]; slots[victim] = tmp;
-          if (!conflict(i) && !conflict(j)) break;
-          slots[victim] = slots[j]; slots[j] = tmp; // undo
-        }
+  /** Separation group of an entrant: country (International), region (National) or dojo (Regional/Local). */
+  const grp = e => (e && (e.group || e.dojo)) || '';
+  /** Seed numbers used by more than one entrant: {seed: [ids]} (empty when every seed is unique). */
+  function seedClashes(seeds) {
+    const by = {};
+    for (const [id, n] of Object.entries(seeds || {})) if (+n > 0) (by[+n] = by[+n] || []).push(id);
+    const out = {}; for (const [n, ids] of Object.entries(by)) if (ids.length > 1) out[n] = ids;
+    return out;
+  }
+  /** Round in which slots i and j of an elimination bracket would meet (1 = first round). */
+  const meetRound = (i, j) => Math.floor(Math.log2(i ^ j)) + 1;
+  /** How bad it is for two same-group entrants to sit in slots i and j: meeting earlier costs far more. */
+  const pairCost = (i, j, k) => Math.pow(4, k - meetRound(i, j));
+  /**
+   * Place ordered entrants into bracket slots (null = bye). Seeded entrants keep their seed positions and byes go to the
+   * top seeds; unseeded entrants are drawn at random but spread so that entrants of the same group (country / region /
+   * dojo) land in different halves, then quarters, … wherever the numbers allow.
+   */
+  function placeSlots(ordered, size, rnd) {
+    rnd = rnd || Math.random;
+    const so = seedOrder(size), k = Math.log2(size) || 1;
+    const nSeed = ordered.filter(e => e.seed).length;
+    const slots = so.map(s => (s <= nSeed ? ordered[s - 1] : null));
+    // open positions for unseeded entrants (seed numbers nSeed+1 … n; higher numbers are byes)
+    const open = []; so.forEach((s, i) => { if (s > nSeed && s <= ordered.length) open.push(i); });
+    const rest = ordered.slice(nSeed);
+    // biggest groups first (ties at random) so they get the widest spread
+    const cnt = {}; rest.forEach(e => { const g = grp(e); if (g) cnt[g] = (cnt[g] || 0) + 1; });
+    const queue = shuffle(rest, rnd).sort((a, b) => (cnt[grp(b)] || 0) - (cnt[grp(a)] || 0));
+    const costAt = (i, e) => { const g = grp(e); if (!g) return 0; let c = 0; slots.forEach((x, j) => { if (x && j !== i && grp(x) === g) c += pairCost(i, j, k); }); return c; };
+    for (const e of queue) {
+      let best = -1, bc = Infinity;
+      for (const i of shuffle(open.filter(i => !slots[i]), rnd)) { const c = costAt(i, e); if (c < bc) { bc = c; best = i; } }
+      slots[best] = e;
+    }
+    // improve: swap unseeded pairs while that lowers the total
+    for (let pass = 0, better = true; pass < 4 && better; pass++) {
+      better = false;
+      for (let x = 0; x < open.length; x++) for (let y = x + 1; y < open.length; y++) {
+        const i = open[x], j = open[y], a = slots[i], b = slots[j];
+        if (!a || !b || grp(a) === grp(b)) continue;
+        const before = costAt(i, a) + costAt(j, b);
+        slots[i] = b; slots[j] = a;
+        if (costAt(i, b) + costAt(j, a) < before) better = true; else { slots[i] = a; slots[j] = b; }
       }
     }
     return slots.map(e => (e ? e.id : null));
@@ -220,7 +263,8 @@ const KT = (function () {
       const cnt = size >> r;
       for (let i = 0; i < cnt; i++) {
         const id = `${P}W${r}-${i}`;
-        const m = { id, stage: P ? 'PO' : 'W', round: r, idx: i, rounds: k };
+        const m = { id, stage: (opts && opts.stage) || (P ? 'PO' : 'W'), round: r, idx: i, rounds: k };
+        if (opts && opts.pool) m.pool = opts.pool;
         if (r === 1) { m.a = slots[2 * i] && slots[2 * i].p ? slots[2 * i] : E(slots[2 * i]); m.b = slots[2 * i + 1] && slots[2 * i + 1].p ? slots[2 * i + 1] : E(slots[2 * i + 1]); }
         else { m.a = W(`${P}W${r - 1}-${2 * i}`); m.b = W(`${P}W${r - 1}-${2 * i + 1}`); }
         matches[id] = m;
@@ -233,56 +277,87 @@ const KT = (function () {
     return matches;
   }
 
+  /**
+   * Double elimination without a reset match. opts: {prefix, pool, simplified}
+   *  - DE:  winners bracket + repechage (losers) bracket + one grand final.
+   *  - DES (simplified): winners final decides 1st/2nd, losers-bracket final decides 3rd/4th (no grand final).
+   */
   function genDE(slots, opts) {
+    opts = opts || {};
+    const X = opts.prefix || '', pool = opts.pool, simp = !!opts.simplified;
     const size = slots.length, k = Math.log2(size);
-    const matches = genSE(slots, '', {});
-    if (k === 0) return matches;
-    if (k === 1) {
-      matches.GF = { id: 'GF', stage: 'GF', round: 1, idx: 0, a: W('W1-0'), b: L('W1-0') };
-    } else {
-      const lastL = 2 * (k - 1);
-      for (let i = 0; i < size / 4; i++) matches[`L1-${i}`] = { id: `L1-${i}`, stage: 'L', round: 1, idx: i, a: L(`W1-${2 * i}`), b: L(`W1-${2 * i + 1}`) };
-      for (let r = 1; r <= k - 1; r++) {
-        const cnt = size >> (r + 1), rr = 2 * r;
+    const matches = genSE(slots, X, { stage: 'W', pool });
+    if (k <= 1) return matches;                    // 2 entrants: one match decides 1st/2nd
+    const tag = m => { if (pool) m.pool = pool; return m; };
+    const add = (id, m) => { matches[X + id] = tag(Object.assign({ id: X + id }, m)); };
+    for (let i = 0; i < size / 4; i++) add(`L1-${i}`, { stage: 'L', round: 1, idx: i, a: L(`${X}W1-${2 * i}`), b: L(`${X}W1-${2 * i + 1}`) });
+    for (let r = 1; r <= k - 1; r++) {
+      const cnt = size >> (r + 1), rr = 2 * r;
+      if (!(simp && r === k - 1)) {                // simplified: the winners-final loser takes 2nd, no drop into repechage
         for (let i = 0; i < cnt; i++) {
           const j = r % 2 === 1 ? cnt - 1 - i : i;
-          matches[`L${rr}-${i}`] = { id: `L${rr}-${i}`, stage: 'L', round: rr, idx: i, a: W(`L${rr - 1}-${i}`), b: L(`W${r + 1}-${j}`) };
-        }
-        if (r <= k - 2) {
-          const c2 = size >> (r + 2), ro = 2 * r + 1;
-          for (let i = 0; i < c2; i++) matches[`L${ro}-${i}`] = { id: `L${ro}-${i}`, stage: 'L', round: ro, idx: i, a: W(`L${rr}-${2 * i}`), b: W(`L${rr}-${2 * i + 1}`) };
+          add(`L${rr}-${i}`, { stage: 'L', round: rr, idx: i, a: W(`${X}L${rr - 1}-${i}`), b: L(`${X}W${r + 1}-${j}`) });
         }
       }
-      matches.GF = { id: 'GF', stage: 'GF', round: 1, idx: 0, a: W(`W${k}-0`), b: W(`L${lastL}-0`) };
+      if (r <= k - 2) {
+        const c2 = size >> (r + 2), ro = 2 * r + 1;
+        for (let i = 0; i < c2; i++) add(`L${ro}-${i}`, { stage: 'L', round: ro, idx: i, a: W(`${X}L${rr}-${2 * i}`), b: W(`${X}L${rr}-${2 * i + 1}`) });
+      }
     }
-    if (!opts || opts.reset !== false) matches.GF2 = { id: 'GF2', stage: 'GF', round: 2, idx: 0, reset: 'GF' };
+    if (!simp) add('GF', { stage: 'GF', round: 1, idx: 0, a: W(`${X}W${k}-0`), b: W(`${X}L${2 * (k - 1)}-0`) });
     return matches;
   }
-
-  /** Split ordered entrants into balanced pools of at most 4 (snake order). */
-  function makePools(ordered, size) {
-    const n = ordered.length, np = Math.max(1, Math.ceil(n / (size || 4)));
-    const pools = Array.from({ length: np }, () => []);
-    ordered.forEach((e, i) => { const row = Math.floor(i / np), col = i % np; pools[row % 2 === 0 ? col : np - 1 - col].push(e); });
-    // dojo spread across pools: swap unseeded same-dojo members with another pool
-    for (let p = 0; p < np; p++) {
-      const seen = {};
-      for (let i = 0; i < pools[p].length; i++) {
-        const e = pools[p][i]; if (!e.dojo) continue;
-        if (seen[e.dojo] && !e.seed) {
-          outer: for (let q = 0; q < np; q++) {
-            if (q === p) continue;
-            for (let j = 0; j < pools[q].length; j++) {
-              const f = pools[q][j];
-              if (f.seed || f.dojo === e.dojo) continue;
-              if (pools[p].some((x, xi) => xi !== i && x.dojo === f.dojo)) continue;
-              if (pools[q].some((x, xj) => xj !== j && x.dojo === e.dojo)) continue;
-              pools[p][i] = f; pools[q][j] = e; break outer;
-            }
-          }
+  /** Last repechage match id (losers-bracket final) for a pool prefix. */
+  function lbFinal(br, X) {
+    const ls = Object.values(br.matches).filter(m => m.stage === 'L' && m.id.startsWith(X + 'L'));
+    if (!ls.length) return null;
+    const mr = Math.max(...ls.map(m => m.round));
+    return `${X}L${mr}-0`;
+  }
+  /** Single-elimination playoff for pool qualifiers (A1, B1, … then A2, B2, …), same-pool first-round meetings avoided. */
+  function genPlayoff(poolNames, poolSizes, advance, bronze) {
+    const qual = [];
+    for (let place = 1; place <= advance; place++) poolNames.forEach((P, i) => { if (poolSizes[i] >= place) qual.push({ p: P, place }); });
+    const size = nextPow2(qual.length);
+    const so = seedOrder(size);
+    const slots = so.map(s => qual[s - 1] || null);
+    for (let i = 0; i < size; i += 2) {
+      const a = slots[i], b = slots[i + 1];
+      if (a && b && a.p === b.p) {
+        for (let j = 0; j < size; j++) {
+          if ((j >> 1) === (i >> 1) || !slots[j] || slots[j].place !== b.place) continue;
+          const partner = slots[j ^ 1];
+          if (slots[j].p !== a.p && (!partner || partner.p !== b.p)) { const t = slots[j]; slots[j] = b; slots[i + 1] = t; break; }
         }
-        seen[pools[p][i].dojo] = true;
       }
+    }
+    return genSE(slots, 'PO-', { bronze });
+  }
+
+  /**
+   * Split ordered entrants into balanced pools (default at most 4). Seeded entrants are snaked across the pools; the
+   * unseeded are drawn at random into the pool with the fewest of their group (country / region / dojo), so a group is
+   * kept out of the same pool wherever possible.
+   */
+  function makePools(ordered, size, count, rnd) {
+    rnd = rnd || Math.random;
+    const n = ordered.length, np = count ? Math.max(1, Math.min(count, n)) : Math.max(1, Math.ceil(n / (size || 4)));
+    const pools = Array.from({ length: np }, () => []), cap = Array(np).fill(0);
+    ordered.forEach((e, i) => { const row = Math.floor(i / np), col = i % np; cap[row % 2 === 0 ? col : np - 1 - col]++; });
+    const seeded = ordered.filter(e => e.seed), rest = ordered.filter(e => !e.seed);
+    seeded.forEach((e, i) => { const row = Math.floor(i / np), col = i % np; pools[row % 2 === 0 ? col : np - 1 - col].push(e); });
+    const cnt = {}; rest.forEach(e => { const g = grp(e); if (g) cnt[g] = (cnt[g] || 0) + 1; });
+    const queue = shuffle(rest, rnd).sort((a, b) => (cnt[grp(b)] || 0) - (cnt[grp(a)] || 0));
+    for (const e of queue) {
+      const g = grp(e);
+      let best = -1, bk = null;
+      for (const p of shuffle(pools.map((_, i) => i), rnd)) {
+        if (pools[p].length >= cap[p]) continue;
+        const same = g ? pools[p].filter(x => grp(x) === g).length : 0;
+        const key = [same, pools[p].length - cap[p]];          // fewest same-group, then the emptiest pool
+        if (!bk || key[0] < bk[0] || (key[0] === bk[0] && key[1] < bk[1])) { bk = key; best = p; }
+      }
+      pools[best].push(e);
     }
     return pools;
   }
@@ -301,7 +376,7 @@ const KT = (function () {
     return rounds;
   }
   function genRR(ordered, opts) {
-    const pools = makePools(ordered), matches = {}, poolMap = {};
+    const pools = makePools(ordered, 4, 0, opts && opts.rnd), matches = {}, poolMap = {};
     pools.forEach((pl, p) => {
       const P = POOL_NAMES[p];
       poolMap[P] = pl.map(e => e.id);
@@ -313,23 +388,7 @@ const KT = (function () {
     let advance = 0;
     if (pools.length >= 2) {
       advance = opts && opts.advance ? opts.advance : (pools.length === 2 ? 2 : 1);
-      const qual = [];
-      for (let place = 1; place <= advance; place++) for (let p = 0; p < pools.length; p++) if (pools[p].length >= place) qual.push({ p: POOL_NAMES[p], place });
-      const size = nextPow2(qual.length);
-      const so = seedOrder(size);
-      const slots = so.map(s => qual[s - 1] || null);
-      // avoid same-pool first-round meeting (only possible when advance>1)
-      for (let i = 0; i < size; i += 2) {
-        const a = slots[i], b = slots[i + 1];
-        if (a && b && a.p === b.p) {
-          for (let j = 0; j < size; j++) {
-            if ((j >> 1) === (i >> 1) || !slots[j] || slots[j].place !== b.place) continue;
-            const partner = slots[j ^ 1];
-            if (slots[j].p !== a.p && (!partner || partner.p !== b.p)) { const t = slots[j]; slots[j] = b; slots[i + 1] = t; break; }
-          }
-        }
-      }
-      Object.assign(matches, genSE(slots, 'PO-', { bronze: opts && opts.bronze }));
+      Object.assign(matches, genPlayoff(pools.map((_, i) => POOL_NAMES[i]), pools.map(p => p.length), advance, opts && opts.bronze));
     }
     return { pools: poolMap, matches, advance };
   }
@@ -352,17 +411,35 @@ const KT = (function () {
       // seeded competitors perform last in their pool (Kata 1-6-B)
       const seedLast = pl => pl.filter(e => !e.seed).concat(pl.filter(e => e.seed).sort((x, y) => y.seed - x.seed));
       if (ordered.length <= KP_ADV) br.kpFinal = seedLast(ordered).map(e => e.id);
-      else { const pools = makePools(ordered, br.poolSize); br.kpPools = {}; pools.forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(pl).map(e => e.id); }); }
+      else { const pools = ordered.length <= 8 ? [ordered] : makePools(ordered, br.poolSize, Math.max(2, Math.ceil(ordered.length / br.poolSize)), rnd); br.kpPools = {}; pools.forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(pl).map(e => e.id); }); }
       return br;
     }
     if (ordered.length < 2) return br;
     if (format === 'RR') {
-      const g = genRR(ordered, { advance: division.advance, bronze: br.bronze });
+      const g = genRR(ordered, { advance: division.advance, bronze: br.bronze, rnd });
       br.pools = g.pools; br.matches = g.matches; br.advance = g.advance;
+    } else if (format === 'DE' || format === 'DES') {
+      br.reset = false;
+      const simplified = format === 'DES';
+      const n = ordered.length;
+      // pools of up to 8 by default; the director may set the pool count (each pool needs 2+ entrants)
+      let np = +division.poolCount > 0 ? +division.poolCount : Math.ceil(n / ELIM_POOL);
+      np = Math.max(1, Math.min(np, Math.floor(n / 2)));
+      if (np === 1) br.matches = genDE(placeSlots(ordered, nextPow2(n), rnd), { simplified });
+      else {
+        const pools = makePools(ordered, 0, np, rnd);
+        br.pools = {}; br.matches = {}; br.advance = 2; br.elimPools = true;
+        pools.forEach((pl, i) => {
+          const P = POOL_NAMES[i];
+          br.pools[P] = pl.map(e => e.id);
+          Object.assign(br.matches, genDE(placeSlots(pl, nextPow2(pl.length), rnd), { prefix: `E${P}-`, pool: P, simplified }));
+        });
+        Object.assign(br.matches, genPlayoff(Object.keys(br.pools), pools.map(p => p.length), 2, br.bronze));
+      }
     } else {
       const size = nextPow2(ordered.length);
-      const slots = placeSlots(ordered, size);
-      br.matches = format === 'DE' ? genDE(slots, { reset: br.reset }) : genSE(slots, '', { bronze: br.bronze });
+      const slots = placeSlots(ordered, size, rnd);
+      br.matches = genSE(slots, '', { bronze: br.bronze });
     }
     return br;
   }
@@ -481,15 +558,85 @@ const KT = (function () {
     const st = kpState(br), out = [];
     const add = (rd, P, order, rows, needRp, label) => {
       const by = Object.fromEntries(rows.map(r => [r.id, r]));
-      for (const id of order) if (!by[id].sheet) out.push({ key: kpKey(rd, id), id, round: rd, pool: P, label });
-      for (const id of needRp) { const k = kpKey(rd, id, true); const again = !!(br.scores || {})[k]; out.push({ key: k, id, round: rd, pool: P, label: label + (again ? ' · Kettei-sen again' : ' · Kettei-sen'), rp: true, again }); }
+      const seg = kpSegOfKey(br, kpKey(rd, order[0] || ''), st);
+      for (const id of order) if (!by[id].sheet) out.push({ key: kpKey(rd, id), id, round: rd, pool: P, label, seg });
+      for (const id of needRp) { const k = kpKey(rd, id, true); const again = !!(br.scores || {})[k]; out.push({ key: k, id, round: rd, pool: P, label: label + (again ? ' · Kettei-sen again' : ' · Kettei-sen'), rp: true, again, seg }); }
     };
     const last = st.rounds[st.rounds.length - 1];
     if (st.final) add(st.final.n, 'F', st.final.order, st.final.rows, st.final.needRp, 'Final');
     else if (last) for (const P of Object.keys(last.pools)) add(last.n, P, last.pools[P].order, last.pools[P].rows, last.pools[P].needRp, `${kpRoundName(last)} · Pool ${P}`);
     return out;
   }
-  function kpRoundName(rd) { return rd.type === 'final' ? 'Final' : rd.type === 'semi' ? 'Final elimination' : `Elimination round ${rd.n}`; }
+  /** Ring segment of a kata-pool performance: first-round pools 'P:A'…, semifinal 'SF', final 'F', other rounds '' (division ring). */
+  function kpSegOfKey(br, key, st) {
+    const m = /^R(\d+)_/.exec(key || ''); if (!m) return '';
+    const n = +m[1]; st = st || kpState(br);
+    if (st.final && st.final.n === n) return 'F';
+    const rd = st.rounds.find(r => r.n === n); if (!rd) return br.kpFinal ? 'F' : '';
+    if (rd.type === 'semi') return 'SF';
+    if (n === 1 && Object.keys(rd.pools).length > 1) { const id = /^R\d+_(.+?)(_rp)?$/.exec(key)[1]; const P = Object.keys(rd.pools).find(x => rd.pools[x].order.includes(id)); return P ? 'P:' + P : ''; }
+    return '';
+  }
+  /** Ring segment of a bracket match: pool matches 'P:A'…, semifinal round 'SF', final round / bronze / grand final 'F', otherwise ''. */
+  function segOf(br, m) {
+    if (!m) return '';
+    if (m.pool && (m.stage === 'P' || br.elimPools)) return 'P:' + m.pool;
+    if (m.stage === 'B' || m.stage === 'GF') return 'F';
+    if (m.stage === 'W' || m.stage === 'PO') {
+      const k = m.rounds || Math.max(...Object.values(br.matches).filter(x => x.stage === m.stage && x.pool === m.pool).map(x => x.round));
+      const left = k - m.round;
+      if (left === 0) return br.format === 'DE' && m.stage === 'W' && !br.elimPools ? 'SF' : 'F';
+      if (left === 1) return 'SF';
+    }
+    return '';
+  }
+  /** Segments of a drawn division the director can place on rings. */
+  function segList(br) {
+    if (!br) return [];
+    const out = [];
+    const pools = br.format === 'KP' ? (br.kpPools && Object.keys(br.kpPools).length > 1 ? Object.keys(br.kpPools) : []) : (br.pools && Object.keys(br.pools).length > 1 ? Object.keys(br.pools) : []);
+    for (const P of pools) out.push({ seg: 'P:' + P, label: 'Pool ' + P });
+    if (br.format === 'KP' || Object.keys(br.matches || {}).length > 1) { out.push({ seg: 'SF', label: 'Semifinal' }); out.push({ seg: 'F', label: 'Final' }); }
+    return out;
+  }
+  /** Ring that runs a segment (or a single match) of a division. */
+  function ringOf(dv, seg, mid) {
+    const sr = (dv && dv.segRings) || {};
+    return (mid && sr['M:' + mid]) || (seg && sr[seg]) || (dv && dv.ringId) || '';
+  }
+  /* ---------- judges ---------- */
+  /** Credential needed (ITKF levels 1–7): levels 3–7 for National/International, 1–2 enough for Regional/Local. */
+  function judgeNeed(eventLevel) { return eventLevel === 'National' || eventLevel === 'International' ? 3 : 1; }
+  function judgeLevelFor(j, kind) {
+    const ka = +j.kataLevel || 0, ku = +j.kumiteLevel || 0;
+    if (kind === 'kata') return ka;
+    if (kind === 'fukugo') return Math.min(ka, ku);
+    return ku;
+  }
+  function judgeEligible(j, kind, eventLevel) { return judgeLevelFor(j, kind) >= judgeNeed(eventLevel); }
+  /** Where a judge is from, by event level: International → country, National → region, Regional/Local → dojo. */
+  function judgeFrom(j, eventLevel) {
+    if (eventLevel === 'International') return j.country || '';
+    if (eventLevel === 'National') return j.region || '';
+    return j.dojo || '';
+  }
+  /** Officials' positions on a score sheet (ITKF): kata Shu-shin + Fuku-shin; kumite Shu-shin + 4 Fuku-shin + Kan-sa. */
+  function officialPositions(kind, judges) {
+    if (kind === 'kata' || kind === 'kitei') {
+      const n = +judges || 5;
+      return Array.from({ length: n }, (_, i) => ({ key: i === 0 ? 'shushin' : 'f' + i, label: i === 0 ? 'Shu-shin' : `Fuku-shin ${i}` }));
+    }
+    return [{ key: 'shushin', label: 'Shu-shin' }, { key: 'f1', label: 'Fuku-shin 1' }, { key: 'f2', label: 'Fuku-shin 2' }, { key: 'f3', label: 'Fuku-shin 3' }, { key: 'f4', label: 'Fuku-shin 4' }, { key: 'kansa', label: 'Kan-sa' }];
+  }
+  /** Officials check: required at National/International (all positions, no judge twice). Returns '' or an error. */
+  function officialsCheck(positions, officials, eventLevel) {
+    const o = officials || {};
+    const used = positions.map(p => o[p.key]).filter(Boolean);
+    if (new Set(used).size !== used.length) return 'A judge is assigned to two positions.';
+    if (judgeNeed(eventLevel) >= 3 && used.length < positions.length) return `Assign all ${positions.length} officials (required at ${eventLevel} events).`;
+    return '';
+  }
+  function kpRoundName(rd) { return rd.type === 'final' ? 'Final' : rd.type === 'semi' ? 'Semifinal' : `Elimination round ${rd.n}`; }
   /** A score may be changed while no later round has any score. */
   function kpCanEdit(br, key) {
     const m = /^R(\d+)_/.exec(key); if (!m) return false;
@@ -510,7 +657,7 @@ const KT = (function () {
     const rd = st.rounds.find(r => r.n === n);
     if (!isFinal && !(rd && rd.type === 'semi')) return '';
     const prev = S[kpKey(n - 1, id)];
-    if (prev && norm(prev.kata) === norm(kata)) return `${isFinal ? 'The final' : 'The final elimination'} needs a different kata than the previous round (${prev.kata}).`;
+    if (prev && norm(prev.kata) === norm(kata)) return `${isFinal ? 'The final' : 'The semifinal'} needs a different kata than the previous round (${prev.kata}).`;
     return '';
   }
   function kpProgress(br) {
@@ -528,7 +675,7 @@ const KT = (function () {
     const stack = new Set();
     function poolStanding(P) {
       if (poolCache[P]) return poolCache[P];
-      const st = standings(br, P, get);
+      const st = br.elimPools ? elimPoolPlaces(br, P, get) : standings(br, P, get);
       poolCache[P] = st; return st;
     }
     function side(src) {
@@ -615,6 +762,18 @@ const KT = (function () {
   }
   function tbIdx(tb, id) { const i = tb.indexOf(id); return i < 0 ? 999 : i; }
 
+  /** Top two of an elimination pool (DE: grand final; DES or 2 entrants: winners final). */
+  function elimPoolPlaces(br, P, getRes) {
+    const X = `E${P}-`, ids = (br.pools && br.pools[P]) || [];
+    if (ids.length === 1) return { complete: true, rows: [{ id: ids[0] }] };
+    const ws = Object.values(br.matches).filter(m => m.stage === 'W' && m.pool === P);
+    if (!ws.length) return { complete: false, rows: [] };
+    const k = Math.max(...ws.map(m => m.round));
+    const fid = br.matches[X + 'GF'] ? X + 'GF' : `${X}W${k}-0`;
+    const r = getRes(fid);
+    if (!r || !DONE[r.status]) return { complete: false, rows: [] };
+    return { complete: true, rows: [{ id: r.winner }, { id: r.loser }].filter(x => x.id) };
+  }
   /** Final placings of a bracket: {complete, gold, silver, bronze:[], fourth} */
   function placings(br, res) {
     if (br.format === 'KP') return kpPlacings(br);
@@ -636,21 +795,19 @@ const KT = (function () {
       out.tie = st.tie;
       return out;
     }
-    const P = br.format === 'RR' ? 'PO-' : '';
-    if (br.format === 'DE') {
+    const P = br.format === 'RR' || br.elimPools ? 'PO-' : '';
+    if ((br.format === 'DE' || br.format === 'DES') && !br.elimPools) {
+      const ws = Object.values(br.matches).filter(m => m.stage === 'W');
+      const k = Math.max(...ws.map(m => m.round));
       const gf2 = fin('GF2'), gf = fin('GF');
-      const last = gf2 && gf2.status === 'done' ? gf2 : gf;
-      if (last && (!br.matches.GF2 || gf2)) {
-        out.gold = last.winner; out.silver = last.loser;
-        const lids = Object.keys(br.matches).filter(id => br.matches[id].stage === 'L');
-        if (lids.length) {
-          const maxR = Math.max(...lids.map(id => br.matches[id].round));
-          const lf = fin(`L${maxR}-0`);
-          if (lf && lf.loser) out.bronze = [lf.loser];
-        }
-      }
+      const last = gf2 && gf2.status === 'done' ? gf2 : br.matches.GF ? gf : fin(`W${k}-0`);
+      if (last && (!br.matches.GF2 || gf2)) { out.gold = last.winner; out.silver = last.loser; }
+      const lid = lbFinal(br, '');
+      const lf = lid ? fin(lid) : null;
+      if (br.format === 'DES') { if (lf && lf.winner) { out.bronze = [lf.winner]; out.fourth = lf.loser || null; } }
+      else if (lf && lf.loser) out.bronze = [lf.loser];
     } else {
-      const ks = Object.values(br.matches).filter(m => (m.stage === 'W' || m.stage === 'PO'));
+      const ks = Object.values(br.matches).filter(m => (P ? m.stage === 'PO' : m.stage === 'W'));
       const k = Math.max(...ks.map(m => m.round));
       const f = fin(`${P}W${k}-0`);
       if (f) { out.gold = f.winner; out.silver = f.loser; }
@@ -677,7 +834,7 @@ const KT = (function () {
     const m0 = br.matches[matchId];
     for (const m of Object.values(br.matches)) {
       const uses = (m.a && m.a.m === matchId) || (m.b && m.b.m === matchId) || m.reset === matchId ||
-        (m0.stage === 'P' && ((m.a && m.a.p === m0.pool) || (m.b && m.b.p === m0.pool)));
+        (m0.pool && ((m.a && m.a.p === m0.pool) || (m.b && m.b.p === m0.pool)));
       if (uses && res[m.id] && (res[m.id].status === 'done')) return false;
     }
     return true;
@@ -685,13 +842,17 @@ const KT = (function () {
   function matchLabel(m, br) {
     if (!m) return '';
     if (m.stage === 'P') return `Pool ${m.pool} · Round ${m.round}`;
-    if (m.stage === 'GF') return m.reset ? 'Grand final (reset)' : 'Grand final';
+    const pp = m.pool && m.stage !== 'P' ? `Pool ${m.pool} · ` : '';
+    if (m.stage === 'GF') return pp + (m.reset ? 'Grand final (reset)' : 'Grand final');
     if (m.stage === 'B') return 'Bronze match';
-    if (m.stage === 'L') return `Repechage R${m.round}`;
+    if (m.stage === 'L') {
+      if (br.format === 'DES') { const lid = lbFinal(br, m.pool ? `E${m.pool}-` : ''); if (lid === m.id) return pp + 'Repechage final (3rd/4th)'; }
+      return pp + `Repechage R${m.round}`;
+    }
     const k = m.rounds || Math.max(...Object.values(br.matches).filter(x => x.stage === m.stage).map(x => x.round));
-    const pre = m.stage === 'PO' ? 'Playoff ' : '';
+    const pre = m.stage === 'PO' ? 'Playoff ' : pp;
     const left = k - m.round;
-    if (left === 0) return pre + (br.format === 'DE' ? 'Winners final' : 'Final');
+    if (left === 0) return pre + (m.stage === 'W' && br.format === 'DE' && Object.values(br.matches).some(x => x.stage === 'GF' && x.pool === m.pool) ? 'Winners final' : 'Final');
     if (left === 1) return pre + 'Semi-final';
     if (left === 2) return pre + 'Quarter-final';
     return `${pre}Round ${m.round}`;
@@ -701,7 +862,7 @@ const KT = (function () {
   // Kumite scoring table at time-up (Kumite Art. 2-3-A-(4)); team table Art. 2-3-B (Ippon 10).
   const PTS = { ippon: 10, waza: 4, chui: 4, keikoku: 2, jogai: 2, tento: 1, kogoPen: 2 };
   const OTHER = { a: 'b', b: 'a' };
-  const blank = () => ({ ippon: 0, waza: 0, jogai: 0, keikoku: 0, chui: 0, tento: 0 });
+  const blank = () => ({ ippon: 0, waza: 0, jogai: 0, keikoku: 0, chui: 0, tento: 0, tentoX: 0 });
   /** Points, awards and flags for one side from raw counts (own counts `m`, opponent counts `o`). */
   function tally(m, o) {
     const wazaAwarded = m.waza + Math.floor(o.jogai / 2);          // 2nd Jo-gai → opponent awarded Waza-ari (Art. 1-6-B)
@@ -726,6 +887,9 @@ const KT = (function () {
       const s = ev.s;
       switch (ev.t) {
         case 'waza': case 'ippon': case 'jogai': case 'keikoku': case 'chui': case 'tento': {
+          // Ten-to (Art. 1-6-I, 1-7): a penalty match is executed — no points. Only when it cannot be executed because
+          // time expired (fall at the end of the match) does the opponent receive 1 point. ev.exec marks an executed one.
+          if (ev.t === 'tento' && ev.exec) { st[s].tentoX++; break; }
           st[s][ev.t]++;
           const t = T();
           for (const x of ['a', 'b']) {
@@ -768,29 +932,32 @@ const KT = (function () {
     let sc = { a: 0, b: 0 };
     const end = (w, how) => { done = true; winner = w; method = how; };
     const pen = { jikan: 2, kakushi: 2, saki: 2, nigetai: 2, keikoku: 2, jogai: 2, chui: 4, tento: 1 };
+    // Each Ko-go exchange is a stand-alone match: it is over at the first score or penalty (incl. Jikan after 10 s),
+    // so a scored event marked `ae` (auto-end, v1.12.2) closes the exchange; "next" closes an exchange with no score.
+    const advance = () => {
+      if (phase === 'hantei') return;
+      if (ex < 6) { ex++; return; }
+      // six exchanges finished
+      if (sc.a !== sc.b) { if (phase === 'regular') regular = Object.assign({}, sc); end(sc.a > sc.b ? 'a' : 'b', phase === 'kettei' ? 'Kettei-sen · Points' : 'Points'); return; }
+      if (phase === 'regular') {
+        regular = Object.assign({}, sc);
+        if (opts.allowDraw) { done = true; method = 'Hiki-wake'; return; }
+        // equal scores, including no score at all → Kettei-sen; first Waza-ari or Ippon wins
+        phase = 'kettei'; ex = 1; sc = { a: 0, b: 0 };
+      } else phase = 'hantei';
+    };
     for (const ev of log || []) {
       if (done) break;
       const s = ev.s;
       if (ev.t === 'waza' || ev.t === 'ippon') {
         sc[s] += ev.t === 'ippon' ? PTS.ippon : PTS.waza;
-        if (phase === 'kettei') end(s, 'Kettei-sen · ' + (ev.t === 'ippon' ? 'Ippon' : 'Waza-ari'));
-      } else if (pen[ev.t]) sc[OTHER[s]] += pen[ev.t];
+        if (phase === 'kettei') { end(s, 'Kettei-sen · ' + (ev.t === 'ippon' ? 'Ippon' : 'Waza-ari')); break; }
+        if (ev.ae) advance();
+      } else if (pen[ev.t]) { sc[OTHER[s]] += pen[ev.t]; if (ev.ae) advance(); }
       else if (ev.t === 'hansoku') end(OTHER[s], 'Han-soku');
       else if (ev.t === 'kiken') end(OTHER[s], 'Ki-ken');
       else if (ev.t === 'hantei' && phase === 'hantei') end(s, 'Hantei (Court Judges)');
-      else if (ev.t === 'next') {
-        if (phase === 'hantei') continue;
-        if (ex < 6) { ex++; continue; }
-        // six exchanges finished
-        if (sc.a !== sc.b) { end(sc.a > sc.b ? 'a' : 'b', phase === 'kettei' ? 'Kettei-sen · Points' : 'Points'); if (phase === 'regular') regular = Object.assign({}, sc); continue; }
-        if (phase === 'regular') {
-          regular = Object.assign({}, sc);
-          if (opts.allowDraw) { done = true; method = 'Hiki-wake'; continue; }
-          // equal scores, including no score at all → Kettei-sen; first Waza-ari or Ippon wins
-          phase = 'kettei'; ex = 1; sc = { a: 0, b: 0 };
-        }
-        else phase = 'hantei';
-      }
+      else if (ev.t === 'next') advance();
     }
     const offense = phase === 'kettei' ? (ex % 2 === 1 ? 'a' : 'b') : (ex <= 3 ? 'a' : 'b');
     return { done, winner, method, phase: done ? 'done' : phase, exchange: ex, offense, cur: sc, score: regular && phase !== 'regular' ? regular : (done && regular ? regular : sc), kettei: phase !== 'regular' };
@@ -880,7 +1047,7 @@ const KT = (function () {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
-    seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpKataCheck, defaultFormat, ITKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
+    seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, ITKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS,
   };
 })();

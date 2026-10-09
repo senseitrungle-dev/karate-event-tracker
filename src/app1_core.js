@@ -39,6 +39,11 @@ function LocalStore() {
     async update(p, d) { if (!docs[p]) throw { code: 'invalid_argument', message: 'Document does not exist' }; docs[p] = deepMerge(Object.assign({}, docs[p]), d); save(); notify(); },
     async del(p) { delete docs[p]; save(); notify(); },
     async get(p) { return docs[p] ? clone(docs[p]) : null; },
+    watchDoc(p, cb) {
+      const l = { fire() { cb(docs[p] ? clone(docs[p]) : null); } };
+      listeners.add(l); setTimeout(() => l.fire(), 0);
+      return () => listeners.delete(l);
+    },
   };
 }
 function CloudStore(db) {
@@ -61,6 +66,7 @@ function CloudStore(db) {
     update: (p, d) => run(p, () => retry(() => db.doc(p).update(d))),
     del: p => run(p, () => retry(() => db.doc(p).delete())),
     async get(p) { const s = await db.doc(p).get(); return s.exists ? s.data() : null; },
+    watchDoc(p, cb, onErr) { return db.doc(p).onSnapshot(s => cb(s && s.exists ? s.data() : null), e => { if (onErr) onErr(e); }); },
   };
 }
 
@@ -68,10 +74,10 @@ function CloudStore(db) {
 const S = {
   store: null, user: null, downloads: null, myId: null, isDirector: false, canWrite: null, readOnly: false,
   events: {}, evId: null, loadedEvents: false,
-  d: { competitors: {}, pv: {}, teams: {}, divisions: {}, rings: {}, sessions: {}, brackets: {}, attendance: {}, ringstate: {} },
+  d: { competitors: {}, pv: {}, teams: {}, divisions: {}, rings: {}, sessions: {}, judges: {}, brackets: {}, attendance: {}, ringstate: {}, ringready: {} },
   loaded: {}, unsub: [],
   ui: { tab: 'overview', q: '', filter: 'all', bracketDiv: '', ring: '', session: '', divFilter: '', simRole: 'director', simRing: '' },
-  draft: {}, profiles: {},
+  draft: {}, profiles: {}, people: {}, access: null, invites: {}, fbRoles: {},
 };
 function readUIPrefs() { try { const p = JSON.parse(localStorage.getItem('kt-ui') || '{}'); if (p.simRole) S.ui.simRole = p.simRole; if (p.simRing) S.ui.simRing = p.simRing; if (p.evId) S.lastEv = p.evId; } catch (e) { /* ignore */ } }
 function saveUIPrefs() { try { localStorage.setItem('kt-ui', JSON.stringify({ simRole: S.ui.simRole, simRing: S.ui.simRing, evId: S.evId })); } catch (e) { /* ignore */ } }
@@ -88,9 +94,29 @@ const P = {
 
 /* ---------- roles ---------- */
 function isLocal() { return S.store && S.store.mode === 'local'; }
+/* v1.9: access per event. App admin = page owner (claude.ai) / roles admin (Firebase): every event.
+   Approved tournament directors (organizers) create events; each event lists its own directorIds and managerIds. */
+function evDirectors(ev) { return (ev && ev.directorIds) || []; }
+function isAdmin() { if (S.pub) return false; if (isLocal()) return S.ui.simRole === 'director'; return !!S.isAdmin; }
+function canCreateEvents() { if (S.pub) return false; if (isLocal()) return S.ui.simRole === 'director'; return isAdmin() || !!S.isOrganizer; }
+function isEventDirector(ev) {
+  ev = ev || curEvent(); if (!ev || S.pub) return false;
+  if (isLocal()) return S.ui.simRole === 'director';
+  return isAdmin() || (!!S.myId && evDirectors(ev).includes(S.myId));
+}
+function eventRoleOf(ev) {
+  if (!ev) return '';
+  if (isEventDirector(ev)) return 'director';
+  if (S.myId && ((ev.managerIds || []).includes(S.myId) || (ev.staffIds || []).includes(S.myId))) return 'manager';
+  return '';
+}
+/** May open the event: its directors and ring managers, app admins, or anyone while it is live (read-only). */
+function canOpenEvent(ev) { if (!ev) return false; if (S.pub || isLocal()) return true; return !!eventRoleOf(ev) || !!ev.live; }
 function role() {
+  if (S.pub) return 'viewer'; // public spectator link
+  if (curEvent() && curEvent().locked) return 'viewer'; // approved & archived: read-only for everyone
   if (isLocal()) return S.ui.simRole;
-  if (S.isDirector) return 'director';
+  if (isEventDirector()) return 'director';
   if (!S.myId) return 'viewer';
   if (myRingIds().length || isStaff()) return 'manager';
   return 'viewer';
@@ -101,20 +127,33 @@ function myRingIds() {
     if (S.ui.simRole === 'director') return Object.keys(S.d.rings);
     return S.ui.simRole === 'manager' && S.ui.simRing ? [S.ui.simRing] : [];
   }
-  if (S.isDirector) return Object.keys(S.d.rings);
+  if (isEventDirector()) return Object.keys(S.d.rings);
   return Object.values(S.d.rings).filter(r => (r.managerIds || []).includes(S.myId)).map(r => r.id);
 }
 function isStaff() {
   const ev = curEvent(); if (!ev) return false;
   if (isLocal()) return S.ui.simRole !== 'viewer';
-  return S.isDirector || (!!S.myId && (ev.staffIds || []).includes(S.myId));
+  return isEventDirector(ev) || (!!S.myId && (ev.staffIds || []).includes(S.myId));
 }
+/** Any part of the division runs on one of my rings (awards, tiebreaks, recorded detail). */
 function canScoreDiv(did) {
   if (S.readOnly) return false;
   if (isDirector()) return true;
   const dv = S.d.divisions[did];
-  return !!dv && role() === 'manager' && myRingIds().includes(dv.ringId);
+  if (!dv || role() !== 'manager') return false;
+  const mine = myRingIds();
+  return mine.includes(dv.ringId) || Object.values(dv.segRings || {}).some(r => mine.includes(r));
 }
+/** Score one segment / match: director, or the manager of the ring that runs it. */
+function canScoreSeg(did, seg, mid) {
+  if (S.readOnly) return false;
+  if (isDirector()) return true;
+  const dv = S.d.divisions[did];
+  return !!dv && role() === 'manager' && myRingIds().includes(KT.ringOf(dv, seg, mid));
+}
+function matchSeg(did, mid) { const br = S.d.brackets[did]; return br && br.matches[mid] ? KT.segOf(br, br.matches[mid]) : ''; }
+function canScoreMatch(did, mid) { return canScoreSeg(did, matchSeg(did, mid), mid); }
+function canScoreKP(did, key) { const br = S.d.brackets[did]; return canScoreSeg(did, br ? KT.kpSegOfKey(br, key) : ''); }
 function curEvent() { return S.evId ? S.events[S.evId] : null; }
 const ROLE_LABEL = { director: 'Director', manager: 'Ring manager', viewer: 'Spectator' };
 
@@ -157,6 +196,16 @@ function entDojo(id) {
   const ds = [...new Set((t.memberIds || []).map(m => DC.compBy[m] && DC.compBy[m].dojo).filter(Boolean))];
   return ds.length === 1 ? ds[0] : ds.length ? 'Combined team' : '';
 }
+/** Draw separation group by event level: International → country, National → state / region, Regional/Local → dojo. */
+function entGroup(id, level) {
+  level = level || ((curEvent() || {}).level);
+  const f = level === 'International' ? 'country' : level === 'National' ? 'state' : 'dojo';
+  const c = DC.compBy[id]; if (c) return (c[f] || '').trim().toLowerCase();
+  const t = DC.teamBy[id]; if (!t) return '';
+  if (f === 'dojo' && t.dojo) return t.dojo.trim().toLowerCase();
+  const ds = [...new Set((t.memberIds || []).map(m => DC.compBy[m] && (DC.compBy[m][f] || '').trim().toLowerCase()).filter(Boolean))];
+  return ds.length === 1 ? ds[0] : '';
+}
 function divEntrants(did) { return (DC.assign.byDiv[did] || []); }
 function bracketState(did) {
   const br = S.d.brackets[did];
@@ -174,7 +223,11 @@ function bracketState(did) {
   return { drawn: true, fought, playable, complete: DC.pl[did] && DC.pl[did].complete, changed: cur !== was, results: Object.values(br.results || {}).some(Boolean) };
 }
 function kindOf(dv) { return (KT.EVENT_TYPES[dv.eventType] || {}).kind; }
-function scoringOf(dv) { return Object.assign(KT.defaultScoring(dv.eventType, dv.gender), dv.scoring || {}); }
+function scoringOf(dv) {
+  const sc = Object.assign(KT.defaultScoring(dv.eventType), dv.scoring || {});
+  if (!(dv.scoring && dv.scoring.styleExplicit)) sc.style = KT.defaultStyle(dv);   // follow the default unless the director chose a style
+  return sc;
+}
 function scoringLabel(dv) {
   const s = scoringOf(dv), k = kindOf(dv);
   if (dv.format === 'KP') return `Score pools · ${s.judges} judges`;
@@ -260,7 +313,7 @@ const opt = (v, label, sel) => `<option value="${esc(v)}" ${String(v) === String
 const rankOptions = sel => `<option value="">Select rank…</option>` + KT.RANKS.map(r => opt(r.code, r.label, sel)).join('');
 function personChip(id) {
   const p = S.profiles[id] || {};
-  return `<span class="person">${p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" alt="">` : ''}<span>${esc(p.name || 'Team member')}</span></span>`;
+  return `<span class="person">${p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" alt="">` : ''}<span>${esc(p.name || ((S.people || {})[id] || {}).label || (typeof FB !== 'undefined' && FB.cache[id] && (FB.cache[id].name || FB.cache[id].email)) || 'Team member')}</span></span>`;
 }
 async function refreshProfiles(ids) {
   if (!S.user || !ids.length) return;

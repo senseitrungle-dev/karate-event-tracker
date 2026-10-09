@@ -1,21 +1,43 @@
 rules_version = '2';
-// Karate Event Tracker v1.0.0 — Firestore security rules
-// Director  = roles/{uid}.role == 'director' (full control)
-// Manager   = uid listed in events/{e}/rings/{r}.managerIds (scores only that ring's divisions)
-// Staff     = uid listed in events/{e}.staffIds (camp attendance)
-// Everyone signed in can read public event data; private competitor data (pv/) is director-only.
+// Karate Event Tracker v1.11.0 — Firestore security rules
+// App admin            = roles/{uid}.role in ['admin','director']  (every event; approves tournament directors)
+// Tournament director  = roles/{uid}.role == 'organizer'           (may create events)
+// Event director       = uid in events/{e}.directorIds              (full control of that event only)
+// Ring manager         = uid in events/{e}/rings/{r}.managerIds     (scores that ring; listed in events/{e}.managerIds)
+// Everyone signed in sees the event list (name, dates); only an event's directors / ring managers / staff (and app
+// admins) read its data — or anyone while the event is live and public. Private competitor data (pv/) is director-only.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function roleDoc() { return /databases/$(database)/documents/roles/$(request.auth.uid); }
-    function isDirector() { return signedIn() && exists(roleDoc()) && get(roleDoc()).data.role == 'director'; }
+    function myRole() { return signedIn() && exists(roleDoc()) ? get(roleDoc()).data.role : ''; }
+    function isAdmin() { return myRole() in ['admin', 'director']; }
+    function isOrganizer() { return isAdmin() || myRole() == 'organizer'; }
+    function ev(e) { return get(/databases/$(database)/documents/events/$(e)).data; }
+    function evDirector(e) { return isAdmin() || (signedIn() && request.auth.uid in ev(e).get('directorIds', [])); }
+    function evMember(e) {
+      return evDirector(e) || (signedIn() && (request.auth.uid in ev(e).get('managerIds', []) || request.auth.uid in ev(e).get('staffIds', [])));
+    }
+    // approved & archived events are read-only (only the event document itself can be changed, to reopen it)
+    function open_(e) { return ev(e).get('locked', false) != true; }
+    function isPublic(e) { return ev(e).get('public', false) == true; }
     function ring(e, rid) { return get(/databases/$(database)/documents/events/$(e)/rings/$(rid)).data; }
     function managesRing(e, rid) { return signedIn() && rid is string && rid != '' && request.auth.uid in ring(e, rid).get('managerIds', []); }
     function managesDiv(e, did) {
       let d = get(/databases/$(database)/documents/events/$(e)/divisions/$(did)).data;
-      return managesRing(e, d.get('ringId', ''));
+      return managesRing(e, d.get('ringId', '')) || (signedIn() && request.auth.uid in d.get('scorerIds', []));
     }
-    function isStaff(e) { return signedIn() && request.auth.uid in get(/databases/$(database)/documents/events/$(e)).data.get('staffIds', []); }
+    function isStaff(e) { return signedIn() && request.auth.uid in ev(e).get('staffIds', []); }
+    // invitations: invites/{email}; the invited person applies their own invite on first sign-in
+    function myEmail() { return signedIn() && request.auth.token.email != null ? request.auth.token.email.lower() : ''; }
+    function myInvite() { return /databases/$(database)/documents/invites/$(myEmail()); }
+    function invitedAs(role) { return myEmail() != '' && exists(myInvite()) && get(myInvite()).data.role == role; }
+    function addsOnlyMe(field) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([field])
+        && request.resource.data[field].hasAll(resource.data.get(field, []))
+        && request.resource.data[field].size() == resource.data.get(field, []).size() + 1
+        && request.auth.uid in request.resource.data[field];
+    }
 
     match /users/{uid} {
       allow read: if signedIn();
@@ -23,39 +45,78 @@ service cloud.firestore {
     }
     match /roles/{uid} {
       allow read: if signedIn();
-      // first director claims the role together with meta/bootstrap (one batch); afterwards only directors
-      allow create: if isDirector() || (signedIn() && request.auth.uid == uid && request.resource.data.role == 'director'
+      // the first person claims app admin together with meta/bootstrap (one batch); afterwards only app admins
+      allow create: if isAdmin() || (signedIn() && request.auth.uid == uid && request.resource.data.role == 'director'
         && !exists(/databases/$(database)/documents/meta/bootstrap)
         && existsAfter(/databases/$(database)/documents/meta/bootstrap));
-      allow update, delete: if isDirector() && uid != request.auth.uid;
+      allow update, delete: if isAdmin() && uid != request.auth.uid;
+    }
+    match /meta/branding {          // app logo choice (v1.12)
+      allow read: if true;
+      allow write: if isAdmin();
     }
     match /meta/bootstrap {
       allow read: if signedIn();
       allow create: if signedIn() && getAfter(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role == 'director';
     }
+    // "I'd like to run my own tournament" — each person writes only their own request; app admins decide
+    match /orgRequests/{uid} {
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow read, delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+    }
+    match /invites/{email} {
+      allow read: if isAdmin() || (myEmail() != '' && myEmail() == email) || (signedIn() && resource.data.get('by', '') == request.auth.uid);
+      allow create, update: if signedIn() && evDirector(request.resource.data.eventId);
+      allow delete: if isAdmin() || (myEmail() != '' && myEmail() == email) || (signedIn() && resource.data.get('by', '') == request.auth.uid);
+    }
+    match /share/{token} {
+      allow get: if true;          // a link holder can resolve their own token…
+      allow list: if false;        // …but nobody can enumerate shared events
+      allow create: if signedIn() && evDirector(request.resource.data.eventId);
+      allow delete: if signedIn() && evDirector(resource.data.eventId);
+    }
     match /events/{e} {
-      allow read: if signedIn();
-      allow write: if isDirector();
+      allow get: if signedIn() || resource.data.get('public', false) == true;
+      allow list: if signedIn();   // name and dates of every event; the event list is never public
+      allow create: if isOrganizer() && request.auth.uid in request.resource.data.get('directorIds', []);
+      allow update: if evDirector(e)
+        || (invitedAs('director') && get(myInvite()).data.eventId == e && addsOnlyMe('directorIds'))
+        || (invitedAs('manager') && get(myInvite()).data.eventId == e && addsOnlyMe('managerIds'));
+      allow delete: if evDirector(e);
       match /{sub=**} {
-        allow read: if signedIn();
-        allow write: if isDirector();
+        allow read: if evMember(e) || isPublic(e);
+        allow write: if evDirector(e) && open_(e);
+      }
+      // an invited ring manager adds only themself to the ring named in their invite
+      match /rings/{r} {
+        allow update: if open_(e) && invitedAs('manager') && get(myInvite()).data.eventId == e && get(myInvite()).data.ringId == r && addsOnlyMe('managerIds');
+      }
+      // access requests: anyone signed in asks for themself; the event's directors approve or decline
+      match /requests/{uid} {
+        allow create: if signedIn() && request.auth.uid == uid;
+        allow read, delete: if evDirector(e) || (signedIn() && request.auth.uid == uid);
       }
     }
-    match /pv/{rest=**} {
-      allow read, write: if isDirector();
+    match /pv/{e}/{rest=**} {
+      allow read: if evDirector(e);
+      allow write: if evDirector(e) && open_(e);
     }
     match /live/{e}/brackets/{did} {
-      allow read: if signedIn();
-      allow create, delete: if isDirector();
-      allow update: if isDirector() || managesDiv(e, did);
+      allow read: if evMember(e) || isPublic(e);
+      allow create, delete: if evDirector(e) && open_(e);
+      allow update: if open_(e) && (evDirector(e) || managesDiv(e, did));
     }
     match /live/{e}/ringstate/{rid} {
-      allow read: if signedIn();
-      allow write: if isDirector() || managesRing(e, rid);
+      allow read: if evMember(e) || isPublic(e);
+      allow write: if open_(e) && (evDirector(e) || managesRing(e, rid));
+    }
+    match /live/{e}/ringready/{rid} {
+      allow read: if evMember(e) || isPublic(e);
+      allow write: if open_(e) && (evDirector(e) || managesRing(e, rid));
     }
     match /live/{e}/attendance/{sid} {
-      allow read: if signedIn();
-      allow write: if isDirector() || isStaff(e);
+      allow read: if evMember(e) || isPublic(e);
+      allow write: if open_(e) && (evDirector(e) || isStaff(e));
     }
   }
 }

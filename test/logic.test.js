@@ -84,26 +84,27 @@ for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 16, 17, 32]) {
     assert.ok(pl.complete); assert.equal(pl.gold, 'c1');
     if (n >= 4) { assert.equal(pl.bronze.length, 1); assert.ok(pl.fourth); }
   });
-  t('DE n=' + n, () => {
-    const br = KT.generateBracket({ id: 'x', format: 'DE', reset: true }, ents(n).map((e, i) => Object.assign(e, { seed: i + 1 })), rng(n + 3));
+  for (const fmt of ['DE', 'DES']) t(fmt + ' n=' + n, () => {
+    const br = KT.generateBracket({ id: 'x', format: fmt }, ents(n).map((e, i) => Object.assign(e, { seed: i + 1 })), rng(n + 3));
+    assert.ok(!br.matches.GF2 && !br.matches['EA-GF2'], 'no reset match');
+    const np = n >= 2 ? Math.ceil(n / 8) : 1;
+    if (np > 1) { assert.equal(Object.keys(br.pools).length, np); assert.ok(Object.values(br.pools).every(p => p.length <= 8)); }
     const res = playAll(br); const pl = KT.placings(br, res);
     assert.ok(pl.complete, 'complete');
     assert.equal(pl.gold, 'c1');
-    if (n >= 2) assert.equal(pl.silver, 'c2', 'silver should be 2nd strongest in DE, got ' + pl.silver);
-    if (n >= 3) assert.equal(pl.bronze[0], 'c3', 'bronze should be c3, got ' + pl.bronze);
-    // each entrant (except champion) loses exactly twice? champion undefeated -> losses <=1 for silver in no-reset path
-    const losses = {};
-    for (const r of Object.values(res)) if (r.status === 'done') losses[r.loser] = (losses[r.loser] || 0) + 1;
-    for (let i = 3; i <= n; i++) assert.ok(losses['c' + i] === 2 || n < 3, 'c' + i + ' losses ' + losses['c' + i]);
-  });
-  t('DE reset path n=' + n, () => {
-    if (n < 2) return;
-    // LB side wins grand final once to force reset: pick b in GF
-    const br = KT.generateBracket({ id: 'x', format: 'DE', reset: true }, ents(n), rng(n + 5));
-    const strength = id => -parseInt(id.slice(1));
-    const res = playAll(br, (a, b, m) => m.id === 'GF' ? b : (strength(a) > strength(b) ? a : b));
-    const pl = KT.placings(br, res);
-    assert.ok(pl.complete); assert.equal(res.GF2.status, 'done'); assert.equal(pl.gold, 'c1');
+    if (np === 1 && n >= 2) assert.equal(pl.silver, 'c2', 'silver got ' + pl.silver);
+    if (np === 1 && n >= 3) assert.equal(pl.bronze[0], 'c3', 'bronze got ' + pl.bronze);
+    if (np === 1 && fmt === 'DES' && n >= 4) assert.equal(pl.fourth, 'c4', 'fourth got ' + pl.fourth);
+    if (np === 1 && fmt === 'DE' && n >= 3) {
+      const losses = {};
+      for (const r of Object.values(res)) if (r.status === 'done') losses[r.loser] = (losses[r.loser] || 0) + 1;
+      for (let i = 3; i <= n; i++) assert.equal(losses['c' + i], 2, 'c' + i + ' losses');
+    }
+    if (np > 1) { // playoff entrants = top 2 of each pool
+      const po = Object.values(res).filter((r, i) => Object.keys(res)[i].startsWith('PO-W1-'));
+      const inPO = new Set(po.flatMap(r => [r.a, r.b]).filter(Boolean));
+      assert.equal(inPO.size, Math.min(2 * np, n));
+    }
   });
   t('RR n=' + n, () => {
     const br = KT.generateBracket({ id: 'x', format: 'RR', bronze: 'two' }, ents(n), rng(n + 11));
@@ -131,6 +132,24 @@ t('RR 3-way tie flagged, tiebreak resolves', () => {
   br.tiebreak = { A: ['c3', 'c1', 'c2'] };
   pl = KT.placings(br);
   assert.ok(pl.complete); assert.equal(pl.gold, 'c3');
+});
+t('DE pools: director pool count; 2 pools → semis A1 v B2, B1 v A2', () => {
+  const br = KT.generateBracket({ id: 'x', format: 'DE', poolCount: 2 }, ents(8).map((e, i) => Object.assign(e, { seed: i + 1 })), rng(2));
+  assert.deepEqual(Object.keys(br.pools), ['A', 'B']);
+  const po = Object.values(br.matches).filter(m => m.stage === 'PO' && m.round === 1).map(m => [m.a.p + m.a.place, m.b.p + m.b.place].join(' v '));
+  assert.deepEqual(po.sort(), ['A1 v B2', 'B1 v A2'].sort());
+  const res = playAll(br); const pl = KT.placings(br, res);
+  assert.ok(pl.complete); assert.equal(pl.gold, 'c1'); assert.equal(pl.bronze.length, 2);
+  const one = KT.generateBracket({ id: 'y', format: 'DES', poolCount: 1 }, ents(12), rng(1));
+  assert.ok(!one.pools);
+  const many = KT.generateBracket({ id: 'z', format: 'DE', poolCount: 9 }, ents(6), rng(1));
+  assert.equal(Object.keys(many.pools).length, 3); // clamped: each pool needs 2+
+});
+t('DES labels: winners final = Final, repechage final = 3rd/4th', () => {
+  const br = KT.generateBracket({ id: 'x', format: 'DES' }, ents(8), rng(1));
+  assert.equal(KT.matchLabel(br.matches['W3-0'], br), 'Final');
+  assert.equal(KT.matchLabel(br.matches['L3-0'], br), 'Repechage final (3rd/4th)');
+  assert.ok(!br.matches.GF && !br.matches['L4-0']);
 });
 t('dojo spread in SE first round', () => {
   const e = ents(8, i => i < 4 ? 'Same' : 'D' + i);
@@ -237,8 +256,18 @@ t('ITKF kata list (Kata Rules 1-3)', () => {
 });
 t('ITKF defaults', () => {
   const d = KT.blackBeltDivisions(KT.EVENT_ORDER);
-  const f = (et, g) => d.find(x => x.eventType === et && x.gender === g);
-  assert.equal(f('IKUMITE', 'F').scoring.style, 'kogo'); assert.equal(f('IKUMITE', 'M').scoring.style, 'shobu');
+  const f = (et, g, grp) => d.find(x => x.eventType === et && x.gender === g && (!grp || x.group === grp));
+  // kumite style by age/rank, not gender (director 2026-10-01)
+  for (const g of ['M', 'F']) {
+    assert.equal(f('IKUMITE', g, 'Senior').scoring.style, 'shobu'); assert.equal(f('IKUMITE', g, 'Youth').scoring.style, 'shobu');
+    assert.equal(f('IKUMITE', g, 'Junior').scoring.style, 'kogo'); assert.equal(f('IKUMITE', g, 'Cadet').scoring.style, 'kogo');
+  }
+  assert.equal(f('TKUMITE', 'M', 'Cadet').scoring.style, 'kogo');
+  const brown = KT.kyuDivisions({ label: 'Brown', minRank: 'k3', maxRank: 'k1', minAge: 30 }, ['IKUMITE']);
+  assert.ok(brown.every(x => x.scoring.style === 'kogo'));
+  const low = KT.kyuDivisions({ label: 'Green', minRank: 'k6', maxRank: 'k4', minAge: 10, maxAge: 12 }, ['IKUMITE']);
+  assert.ok(low.every(x => x.scoring.style === 'shobu'));
+  assert.equal(f('IKUMITE', 'M').reset, false);
   assert.equal(f('IKUMITE', 'M').scoring.boutTime, 90);
   assert.equal(f('ENBU', 'X').format, 'KP'); assert.equal(f('FUKUGO', 'M').format, 'SE');
   assert.equal(KT.EVENT_TYPES.ENBU.size[1], 2);
@@ -366,6 +395,163 @@ t('black belt kata divisions default to KP with 6 judges', () => {
   const d = KT.blackBeltDivisions(['IKATA', 'TKATA', 'IKUMITE']);
   assert.ok(d.filter(x => x.eventType !== 'IKUMITE').every(x => x.format === 'KP' && x.scoring.judges === 6));
   assert.ok(d.filter(x => x.eventType === 'IKUMITE').every(x => x.format === 'SE'));
+});
+
+/* ===== v1.5: segments, rings, judges, officials ===== */
+t('segOf: SE final/semi/bronze', () => {
+  const br = KT.generateBracket({ id: 'x', format: 'SE', bronze: 'match' }, ents(8), rng(1));
+  const ms = Object.values(br.matches);
+  const maxR = Math.max(...ms.filter(m => m.stage === 'W').map(m => m.round));
+  assert.ok(ms.filter(m => m.stage === 'W' && m.round === maxR).every(m => KT.segOf(br, m) === 'F'));
+  assert.ok(ms.filter(m => m.stage === 'W' && m.round === maxR - 1).every(m => KT.segOf(br, m) === 'SF'));
+  assert.ok(ms.filter(m => m.stage === 'W' && m.round === 1).every(m => KT.segOf(br, m) === ''));
+  assert.ok(ms.filter(m => m.stage === 'B').every(m => KT.segOf(br, m) === 'F'));
+});
+t('segOf: RR pools and DE elimination pools', () => {
+  const rr = KT.generateBracket({ id: 'x', format: 'RR' }, ents(8), rng(2));
+  const pm = Object.values(rr.matches).filter(m => m.stage === 'P');
+  assert.ok(pm.length && pm.every(m => KT.segOf(rr, m) === 'P:' + m.pool));
+  const de = KT.generateBracket({ id: 'y', format: 'DE' }, ents(14), rng(2));
+  assert.ok(de.elimPools);
+  const segs = new Set(Object.values(de.matches).map(m => KT.segOf(de, m)));
+  assert.ok(segs.has('P:A') && segs.has('P:B') && segs.has('F'));
+  const list = KT.segList(de).map(s => s.seg);
+  assert.deepEqual(list, ['P:A', 'P:B', 'SF', 'F']);
+});
+t('ringOf: match > segment > division', () => {
+  const dv = { ringId: 'r1', segRings: { 'P:B': 'r2', F: 'r3', 'M:X9': 'r4' } };
+  assert.equal(KT.ringOf(dv, 'P:A'), 'r1');
+  assert.equal(KT.ringOf(dv, 'P:B'), 'r2');
+  assert.equal(KT.ringOf(dv, 'F', 'X1'), 'r3');
+  assert.equal(KT.ringOf(dv, 'F', 'X9'), 'r4');
+  assert.equal(KT.ringOf({ ringId: 'r1' }, ''), 'r1');
+});
+t('kpSegOfKey: pools, semifinal, final (no id prefix clash)', () => {
+  const br = KT.generateBracket({ id: 'x', format: 'KP', scoring: { judges: 6 } }, ents(20), rng(5));
+  const st = KT.kpState(br);
+  const r1 = st.rounds[0];
+  assert.ok(Object.keys(r1.pools).length >= 2);
+  for (const P of Object.keys(r1.pools)) for (const id of r1.pools[P].order) assert.equal(KT.kpSegOfKey(br, `R1_${id}`), 'P:' + P);
+  const q = KT.kpQueue(br); assert.ok(q.every(x => x.seg && x.seg.startsWith('P:')));
+  const segs = KT.segList(br).map(s => s.seg);
+  assert.ok(segs.includes('SF') && segs.includes('F') && segs.filter(s => s.startsWith('P:')).length === Object.keys(r1.pools).length);
+  kpPlayAll(br, kpStr);
+  const st2 = KT.kpState(br);
+  const semi = st2.rounds.find(r => r.type === 'semi');
+  if (semi) { const id = semi.pools[Object.keys(semi.pools)[0]].order[0]; assert.equal(KT.kpSegOfKey(br, `R${semi.n}_${id}`), 'SF'); }
+  assert.equal(KT.kpSegOfKey(br, `R${st2.final.n}_${st2.final.rows[0].id}`), 'F');
+});
+t('judge eligibility by event level', () => {
+  const j = { kataLevel: 2, kumiteLevel: 4 };
+  assert.equal(KT.judgeNeed('National'), 3); assert.equal(KT.judgeNeed('International'), 3); assert.equal(KT.judgeNeed('Local'), 1); assert.equal(KT.judgeNeed('Regional'), 1);
+  assert.ok(!KT.judgeEligible(j, 'kata', 'National'));
+  assert.ok(KT.judgeEligible(j, 'kumite', 'National'));
+  assert.ok(!KT.judgeEligible(j, 'fukugo', 'International'));
+  assert.ok(KT.judgeEligible(j, 'kata', 'Regional'));
+  const w = { country: 'Japan', region: 'Kanto', dojo: 'Hombu' };
+  assert.equal(KT.judgeFrom(w, 'International'), 'Japan'); assert.equal(KT.judgeFrom(w, 'National'), 'Kanto'); assert.equal(KT.judgeFrom(w, 'Local'), 'Hombu');
+});
+t('officials positions and check', () => {
+  const k = KT.officialPositions('kumite');
+  assert.deepEqual(k.map(p => p.key), ['shushin', 'f1', 'f2', 'f3', 'f4', 'kansa']);
+  const kata = KT.officialPositions('kata', 6);
+  assert.equal(kata.length, 6); assert.equal(kata[0].label, 'Shu-shin');
+  assert.equal(KT.officialsCheck(k, {}, 'Regional'), '');
+  assert.ok(KT.officialsCheck(k, {}, 'National'));
+  assert.ok(/two positions/.test(KT.officialsCheck(k, { shushin: 'a', f1: 'a' }, 'Local')));
+  const full = { shushin: 'a', f1: 'b', f2: 'c', f3: 'd', f4: 'e', kansa: 'f' };
+  assert.equal(KT.officialsCheck(k, full, 'International'), '');
+});
+t('Ten-to: executed penalty match scores nothing; unexecuted at time-up = 1 point (Art. 1-6-I, 1-7)', () => {
+  let r = KT.kumiteEval([{ s: 'a', t: 'tento', exec: true }, { t: 'timeup' }]);
+  assert.equal(r.phase, 'kettei'); assert.deepEqual(r.score, { a: 0, b: 0 });
+  r = KT.kumiteEval([{ s: 'a', t: 'tento', exec: true }, { s: 'b', t: 'tento' }, { t: 'timeup' }]);
+  assert.equal(r.winner, 'a'); assert.deepEqual(r.score, { a: 1, b: 0 });
+});
+t('Ko-go: a score or penalty ends the exchange (stand-alone match); Kettei-sen penalties only add points', () => {
+  const W = (s, t) => ({ s, t, ae: 1 });
+  let r = KT.kogoEval([W('a', 'waza')]);
+  assert.equal(r.exchange, 2); assert.deepEqual(r.cur, { a: 4, b: 0 });
+  r = KT.kogoEval([W('b', 'jogai'), W('a', 'jikan')]);           // Jo-gai ends exchange 1, Jikan ends exchange 2
+  assert.equal(r.exchange, 3); assert.deepEqual(r.cur, { a: 2, b: 2 });
+  r = KT.kogoEval([W('a', 'waza'), { t: 'next' }, { t: 'next' }, { t: 'next' }, { t: 'next' }, { t: 'next' }]);
+  assert.equal(r.done, true); assert.equal(r.winner, 'a');
+  // tie 0-0 → Kettei-sen; a Jo-gai there gives 2 points and ends that exchange, it does not win the bout
+  const six = Array.from({ length: 6 }, () => ({ t: 'next' }));
+  r = KT.kogoEval([...six, W('a', 'jogai')]);
+  assert.equal(r.phase, 'kettei'); assert.equal(r.exchange, 2); assert.deepEqual(r.cur, { a: 0, b: 2 });
+  r = KT.kogoEval([...six, W('a', 'jogai'), W('a', 'waza')]);
+  assert.equal(r.done, true); assert.equal(r.winner, 'a'); assert.equal(r.method, 'Kettei-sen · Waza-ari');
+  // old logs without the auto-end mark still work
+  r = KT.kogoEval([{ s: 'a', t: 'waza' }, { t: 'next' }]); assert.equal(r.exchange, 2);
+});
+
+// ---- v1.13.0 seeding & group separation ----
+t('seedClashes finds duplicate seeds', () => {
+  assert.deepEqual(KT.seedClashes({ a: 1, b: 2, c: 3 }), {});
+  assert.deepEqual(KT.seedClashes({ a: 1, b: 1, c: 2, d: 0 }), { 1: ['a', 'b'] });
+  assert.deepEqual(KT.seedClashes(null), {});
+});
+const half = (i, size) => Math.floor(i / (size / 2)), quarter = (i, size) => Math.floor(i / (size / 4));
+t('SE: same-group unseeded go to different halves (many draws)', () => {
+  for (let s = 1; s <= 60; s++) {
+    // 8 entrants, 2 countries × 2 + 4 singles → each pair in opposite halves
+    const e = ['JP', 'JP', 'US', 'US', 'A', 'B', 'C', 'D'].map((g, i) => ({ id: 'c' + i, group: g }));
+    const br = KT.generateBracket({ id: 'x', format: 'SE' }, e, rng(s));
+    const res = KT.resolve(br), slot = {};
+    for (let i = 0; i < 4; i++) { slot[res['W1-' + i].a] = 2 * i; slot[res['W1-' + i].b] = 2 * i + 1; }
+    assert.notEqual(half(slot.c0, 8), half(slot.c1, 8), 'JP same half, draw ' + s);
+    assert.notEqual(half(slot.c2, 8), half(slot.c3, 8), 'US same half, draw ' + s);
+  }
+});
+t('SE: a group of 4 lands one per quarter', () => {
+  for (let s = 1; s <= 40; s++) {
+    const e = Array.from({ length: 16 }, (_, i) => ({ id: 'c' + i, group: i < 4 ? 'FR' : 'G' + i }));
+    const slots = KT.placeSlots(e, 16, rng(s));
+    const qs = slots.map((id, i) => id && +id.slice(1) < 4 ? quarter(i, 16) : -1).filter(q => q >= 0);
+    assert.equal(new Set(qs).size, 4, 'draw ' + s + ': ' + qs);
+  }
+});
+t('SE: seeds keep their positions and byes', () => {
+  const e = Array.from({ length: 6 }, (_, i) => ({ id: 'c' + i, seed: i < 2 ? i + 1 : 0, group: 'X' }));
+  const ordered = KT.orderEntrants(e, rng(4));
+  const slots = KT.placeSlots(ordered, 8, rng(4));
+  assert.deepEqual(KT.seedOrder(8), [1, 8, 4, 5, 2, 7, 3, 6]); assert.equal(slots[0], 'c0'); assert.equal(slots[1], null); assert.equal(slots[4], 'c1'); assert.equal(slots[5], null);
+});
+t('SE: unseeded placement is random', () => {
+  const seen = new Set();
+  for (let s = 1; s <= 20; s++) seen.add(KT.placeSlots(ents(8), 8, rng(s)).join(','));
+  assert.ok(seen.size > 5);
+});
+t('RR pools: same group spread across pools', () => {
+  for (let s = 1; s <= 30; s++) {
+    const e = Array.from({ length: 12 }, (_, i) => ({ id: 'c' + i, group: ['R1', 'R2', 'R3'][i % 3] }));
+    const br = KT.generateBracket({ id: 'x', format: 'RR' }, e, rng(s));
+    const pools = Object.values(br.pools);
+    assert.equal(pools.length, 3);
+    for (const pl of pools) { assert.equal(pl.length, 4); const gs = pl.map(id => ['R1', 'R2', 'R3'][+id.slice(1) % 3]); assert.ok(new Set(gs).size >= 2); }
+    // each group of 4 splits 2/1/1 at worst over 3 pools → no pool holds 3 of a group
+    for (const g of ['R1', 'R2', 'R3']) for (const pl of pools) assert.ok(pl.filter(id => ['R1', 'R2', 'R3'][+id.slice(1) % 3] === g).length <= 2);
+  }
+});
+t('KP pools: a dojo is split between pools', () => {
+  for (let s = 1; s <= 20; s++) {
+    const e = Array.from({ length: 16 }, (_, i) => ({ id: 'c' + i, group: i < 2 ? 'Hombu' : 'D' + i }));
+    const br = KT.generateBracket({ id: 'x', format: 'KP', eventType: 'KATA', poolSize: 8 }, e, rng(s));
+    const pools = Object.values(br.kpPools);
+    assert.ok(pools.every(pl => pl.filter(id => +id.slice(1) < 2).length <= 1), 'draw ' + s);
+  }
+});
+t('DE pools: groups split across elimination pools', () => {
+  for (let s = 1; s <= 20; s++) {
+    const e = Array.from({ length: 16 }, (_, i) => ({ id: 'c' + i, group: i < 4 ? 'KR' : i < 8 ? 'BR' : 'G' + i }));
+    const br = KT.generateBracket({ id: 'x', format: 'DE', poolCount: 2 }, e, rng(s));
+    for (const pl of Object.values(br.pools)) { assert.equal(pl.filter(id => +id.slice(1) < 4).length, 2); assert.equal(pl.filter(id => +id.slice(1) >= 4 && +id.slice(1) < 8).length, 2); }
+  }
+});
+t('legacy dojo field still separates', () => {
+  const e = ents(8, i => i < 2 ? 'Same' : 'D' + i);
+  for (let s = 1; s <= 20; s++) { const sl = KT.placeSlots(e, 8, rng(s)); assert.notEqual(half(sl.indexOf('c1'), 8), half(sl.indexOf('c2'), 8)); }
 });
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

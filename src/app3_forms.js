@@ -204,7 +204,7 @@ function divForm(id) {
     <fieldset><legend>Bracket</legend><div class="fgrid">
       <label class="f"><span>Format</span><select name="format" id="d-fmt" ${bs.results ? 'disabled' : ''}>${Object.entries(KT.FORMATS).filter(([x]) => x !== 'KP' || k === 'kata').map(([x, l]) => opt(x, l, d.format)).join('')}</select></label>
       <label class="f"><span>Third place (single elim. / playoff)</span><select name="bronze" id="d-bronze">${opt('two', 'Two bronzes', d.bronze)}${opt('match', 'Bronze match', d.bronze)}</select></label>
-      <label class="f"><span>Double elim. grand final</span><select name="reset" id="d-reset">${opt('1', 'Reset match if needed', d.reset === false ? '0' : '1')}${opt('0', 'Single final', d.reset === false ? '0' : '1')}</select></label>
+      <label class="f"><span>Double elim.: number of pools</span><input type="number" name="poolCount" id="d-pools" min="0" max="16" value="${esc(d.poolCount || '')}" placeholder="Auto (8 per pool)"><span class="tiny muted">Top 2 of each pool go to a single-elimination playoff</span></label>
       <label class="f"><span>Round robin: advance per pool</span><select name="advance" id="d-adv">${opt('', 'Auto (2 if two pools, else 1)', d.advance || '')}${opt('1', '1', d.advance)}${opt('2', '2', d.advance)}</select></label>
       <label class="f"><span>Ring</span><select name="ringId" id="d-ring">${opt('', 'No ring yet', d.ringId)}${DC.rings.map(r => opt(r.id, r.name, d.ringId)).join('')}</select></label>
     </div>${bs.results ? '<p class="tiny muted">Format is locked because results exist.</p>' : ''}</fieldset>
@@ -218,9 +218,22 @@ function divForm(id) {
       ${k === 'teamkumite' ? `<label class="f"><span>Rounds per team match</span><select name="bouts" id="d-bouts">${opt('3', '3 (ITKF)', sc.bouts)}${opt('5', '5', sc.bouts)}</select></label>` : ''}
     </div></fieldset>
     ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${ents.length ? `<div class="stack" style="gap:6px">${ents.map(e => `<div class="row between small"><span style="min-width:0"><b>${esc(entName(e))}</b> <span class="muted">${esc(entDojo(e))}</span></span>
-      <input type="number" min="1" max="64" name="seed_${esc(e)}" id="seed-${esc(e)}" value="${esc((d.seeds || {})[e] || '')}" placeholder="Seed" style="width:86px" aria-label="Seed"></div>`).join('')}</div>
-      <p class="tiny muted" style="margin-top:6px">Seeded entrants are kept apart in the draw. Others are placed at random with dojo-mates separated where possible.</p>` : '<p class="small muted">No entrants match this division yet.</p>'}</fieldset>` : ''}</form>`,
+      <input type="number" min="1" max="64" name="seed_${esc(e)}" id="seed-${esc(e)}" data-input="seed" value="${esc((d.seeds || {})[e] || '')}" placeholder="Seed" style="width:86px" aria-label="Seed"></div>`).join('')}</div>
+      <p class="notice bad small" id="seed-msg" hidden style="margin-top:6px"></p>
+      <p class="tiny muted" style="margin-top:6px">Each seed number can be given to one entrant only. Seeded entrants are kept apart in the draw; the others are placed at random, with entrants from the same ${esc(sepLabel())} put in different pools and bracket halves wherever possible.</p>` : '<p class="small muted">No entrants match this division yet.</p>'}</fieldset>` : ''}</form>`,
     `${id ? `<button class="danger" data-act="div-delete" style="margin-right:auto">Delete</button>${bs.drawn ? `<button class="danger" data-act="bracket-clear">Clear bracket</button>` : ''}` : ''}<button data-act="modal-close">Cancel</button>${id && ents.length ? `<button data-act="draw" data-id="${esc(id)}" ${bs.results ? 'disabled' : ''}>${bs.drawn ? 'Save & redraw' : 'Save & draw'}</button>` : ''}<button class="primary" type="submit" form="f-div">Save</button>`));
+}
+/** What the draw keeps apart, by event level. */
+function sepLabel(level) { level = level || (curEvent() || {}).level; return level === 'International' ? 'country' : level === 'National' ? 'region' : 'dojo'; }
+function seedClashText(clash) { return Object.entries(clash).map(([n, ids]) => `Seed ${n} is given to ${ids.map(entName).join(' and ')}`).join('. ') + '. Each seed can be used once.'; }
+/** Highlight seed inputs that share a number and explain under the list. */
+function seedMarks(form) {
+  form = form || $('#f-div'); if (!form) return {};
+  const seeds = {}; $$('input[data-input="seed"]', form).forEach(i => { if (+i.value > 0) seeds[i.name.slice(5)] = +i.value; });
+  const clash = KT.seedClashes(seeds), bad = new Set([].concat(...Object.values(clash)));
+  $$('input[data-input="seed"]', form).forEach(i => { const b = bad.has(i.name.slice(5)); i.classList.toggle('clash', b); i.setAttribute('aria-invalid', b ? 'true' : 'false'); });
+  const m = $('#seed-msg', form); if (m) { m.hidden = !bad.size; m.textContent = bad.size ? seedClashText(clash) : ''; }
+  return clash;
 }
 async function saveDiv(form, thenDraw) {
   const v = fd(form), id = form.dataset.id || uid();
@@ -228,12 +241,15 @@ async function saveDiv(form, thenDraw) {
   const T = KT.EVENT_TYPES[v.eventType];
   if (!T.genders.includes(v.gender)) v.gender = T.genders[0];
   const seeds = {}; for (const k of Object.keys(v)) if (k.startsWith('seed_')) { if (+v[k] > 0) seeds[k.slice(5)] = +v[k]; delete v[k]; }
+  const clash = KT.seedClashes(seeds);
+  if (Object.keys(clash).length) { seedMarks(form); toast(seedClashText(clash), true); return false; }
   const kind = T.kind, base = Object.assign(KT.defaultScoring(v.eventType), old.scoring || {});
   if (v.format === 'KP' && kind !== 'kata') { toast('Kata score pools are for kata, team kata and enbu divisions.', true); return false; }
   const scoring = { method: v.format === 'KP' ? 'scores' : (v.method || base.method), judges: +(v.judges || base.judges), boutTime: +(v.boutTime || base.boutTime), ketteiTime: v.ketteiTime === '' || v.ketteiTime == null ? base.ketteiTime : +v.ketteiTime, bouts: +(v.bouts || base.bouts), style: v.style || base.style };
+  scoring.styleExplicit = !!v.style && v.style !== KT.defaultStyle({ eventType: v.eventType, belt: v.belt, group: v.group, maxAge: v.maxAge === '' ? null : +v.maxAge, minRank: v.minRank, maxRank: v.maxRank });
   if (scoring.method === 'flags' && scoring.judges % 2 === 0) scoring.judges = 5;
   const dv = { eventType: v.eventType, gender: v.gender, belt: v.belt, group: v.group, minAge: v.minAge === '' ? null : +v.minAge, maxAge: v.maxAge === '' ? null : +v.maxAge,
-    minRank: v.minRank || (v.belt === 'black' ? 'd1' : 'k10'), maxRank: v.maxRank || (v.belt === 'black' ? 'd10' : 'k1'), format: v.format || old.format || 'SE', bronze: v.bronze, reset: v.reset !== '0', advance: v.advance ? +v.advance : null,
+    minRank: v.minRank || (v.belt === 'black' ? 'd1' : 'k10'), maxRank: v.maxRank || (v.belt === 'black' ? 'd10' : 'k1'), format: v.format || old.format || 'SE', bronze: v.bronze, reset: false, poolCount: v.poolCount ? Math.max(0, +v.poolCount) : 0, advance: v.advance ? +v.advance : null,
     ringId: v.ringId || '', ringOrder: old.ringOrder ?? Date.now(), scoring, seeds, order: old.order || 0, poolSize: v.poolSize ? Math.min(12, Math.max(4, +v.poolSize)) : (old.poolSize || 8) };
   dv.name = v.name && v.name !== (old.eventType ? KT.divisionName(old) : '') ? v.name : KT.divisionName(dv);
   if (dv.minRank && dv.maxRank && KT.rankValue(dv.minRank) > KT.rankValue(dv.maxRank)) { toast('Lowest rank must be below highest rank.', true); return false; }
