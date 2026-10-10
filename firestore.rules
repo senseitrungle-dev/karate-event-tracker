@@ -1,5 +1,5 @@
 rules_version = '2';
-// Karate Event Tracker v1.11.0 — Firestore security rules
+// Karate Event Tracker v1.14.0 — Firestore security rules
 // App admin            = roles/{uid}.role in ['admin','director']  (every event; approves tournament directors)
 // Tournament director  = roles/{uid}.role == 'organizer'           (may create events)
 // Event director       = uid in events/{e}.directorIds              (full control of that event only)
@@ -67,7 +67,8 @@ service cloud.firestore {
     match /invites/{email} {
       allow read: if isAdmin() || (myEmail() != '' && myEmail() == email) || (signedIn() && resource.data.get('by', '') == request.auth.uid);
       allow create, update: if signedIn() && evDirector(request.resource.data.eventId);
-      allow delete: if isAdmin() || (myEmail() != '' && myEmail() == email) || (signedIn() && resource.data.get('by', '') == request.auth.uid);
+      allow delete: if isAdmin() || (myEmail() != '' && myEmail() == email) || (signedIn() && resource.data.get('by', '') == request.auth.uid)
+        || (signedIn() && resource.data.get('eventId', '') != '' && evDirector(resource.data.eventId));   // v1.14: any director of that event
     }
     match /share/{token} {
       allow get: if true;          // a link holder can resolve their own token…

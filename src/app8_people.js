@@ -28,9 +28,11 @@ function peopleHTML() {
   const inv = Object.values(S.invites || {}).filter(i => i.role === 'director' || i.eventId === S.evId).sort((a, b) => String(a.email).localeCompare(String(b.email)));
   const row = (id, ctl) => `<div class="jrow2"><span class="jname" style="display:flex;flex-direction:column;min-width:0">${personChip(id)}${personEmail(id) ? `<span class="dojo">${esc(personEmail(id))}</span>` : ''}</span><span></span>${ctl}</div>`;
   const ringSel = (id, label) => `<select id="pr-${esc(id)}" class="rmove" data-change="person-ring" data-id="${esc(id)}" aria-label="Ring for ${esc(personName(id))}">${opt('', label, '')}${DC.rings.filter(r => !(r.managerIds || []).includes(id)).map(r => opt(r.id, 'Ring manager · ' + r.name, '')).join('')}${managerRing(id) ? opt('__none', 'Remove from ring', '') : ''}${!dset.has(id) ? opt('__dir', 'Make director', '') : ''}</select>`;
-  const dirRow = id => row(id, id === S.myId && !isAdmin() && dirs.length < 2 ? '<span class="chip plain">You</span>' : `<button class="sm danger" data-act="dir-remove" data-id="${esc(id)}">Remove</button>`);
+  const row2 = (id, ctl) => `<div class="jrow2 pr"><span class="jname" style="display:flex;flex-direction:column;min-width:0">${personChip(id)}${personEmail(id) ? `<span class="dojo">${esc(personEmail(id))}</span>` : ''}</span><div class="pctl">${ctl}</div></div>`;
+  const outBtn = id => `<button class="sm danger" data-act="event-remove" data-id="${esc(id)}" title="Takes away every role in this event only; their other events are not affected">Remove from event</button>`;
+  const dirRow = id => row2(id, id === S.myId && !isAdmin() && dirs.length < 2 ? '<span class="chip plain">You · only director</span>' : `<button class="sm" data-act="dir-remove" data-id="${esc(id)}" title="Stops being a director of this event">Remove as director</button>${outBtn(id)}`);
   const ringCards = DC.rings.map(r => `<div class="card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${(r.managerIds || []).length ? '' : 'plain'}">${plural((r.managerIds || []).length, 'manager')}</span></div>
-    <div class="jlist">${(r.managerIds || []).map(id => row(id, ringSel(id, 'Move…'))).join('') || '<span class="small muted">No ring manager yet.</span>'}</div></div>`).join('');
+    <div class="jlist">${(r.managerIds || []).map(id => row2(id, `${ringSel(id, 'Move…')}${outBtn(id)}`)).join('') || '<span class="small muted">No ring manager yet.</span>'}</div></div>`).join('');
   const where = FB.on ? 'signed in to this site' : 'opened this tracker with edit access';
   return eventHeader() + requestsHTML() + `<div class="card stack"><div class="row between"><h3>Invite by email</h3></div>
       <form id="f-invite" data-form="invite" class="fgrid">
@@ -41,7 +43,7 @@ function peopleHTML() {
         <div class="span row"><button class="primary" type="submit">Create invite</button></div></form>
       <p class="tiny muted">${FB.on ? 'They sign in with Google using this email; the role is applied automatically when they first sign in.' : 'After creating the invite you can open it in Gmail, Outlook or your mail app, or copy it. claude.ai only lets people in whom you share the page with, so also add this email in the page’s <b>Share</b> menu as an <b>Editor</b> (ring managers need edit access to record scores). When they open the tracker they enter the invitation code from the email and get their role; you can also assign them yourself under “Not assigned” once they have opened it.'}</p>
       ${inv.length ? `<div class="label" style="margin-top:6px">Waiting for them to open it</div><div class="jlist">${inv.map(i => `<div class="jrow2"><span style="min-width:0"><b>${esc(i.email)}</b><span class="dojo">${esc(ROLE_NAME[i.role] || i.role)}${i.role === 'manager' ? ' · ' + esc(ringName(i.ringId)) : ''}${i.code ? ' · code <b>' + esc(i.code) + '</b>' : ''}</span></span><button class="sm" data-act="invite-mail" data-id="${esc(i.id)}">Send / copy</button><button class="sm danger" data-act="invite-cancel" data-id="${esc(i.id)}">Cancel</button></div>`).join('')}</div>` : ''}</div>
-    <div class="grid2" style="margin-top:14px"><div class="card stack"><div class="row between"><h3>Directors of this event</h3><span class="chip">${dirs.length}</span></div><div class="jlist">${dirs.map(dirRow).join('') || '<span class="small muted">Only app admins.</span>'}</div><p class="tiny muted">Directors have full control of this event only. App admins can also open every event.</p></div>
+    <div class="grid2" style="margin-top:14px"><div class="card stack"><div class="row between"><h3>Directors of this event</h3><span class="chip">${dirs.length}</span></div><div class="jlist">${dirs.map(dirRow).join('') || '<span class="small muted">Only app admins.</span>'}</div><p class="tiny muted">Directors have full control of this event only. App admins can also open every event. <b>Remove from event</b> takes away a person’s roles in this event only — they keep their access to every other event.</p></div>
       <div class="card stack"><div class="row between"><h3>Not assigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${un.map(id => row(id, ringSel(id, 'Assign…'))).join('') || `<span class="small muted">Everyone who has ${where} has a role.</span>`}</div>
         <p class="tiny muted">People appear here after they have ${where}${FB.on ? '' : ' (share the page with them as Editor first)'}.</p></div>
       ${ringCards}</div>`;
@@ -50,6 +52,9 @@ async function setPersonRing(id, rid) {
   for (const r of DC.rings) if ((r.managerIds || []).includes(id) && r.id !== rid) await guard(() => S.store.update(P.doc(S.evId, 'rings', r.id), { managerIds: (r.managerIds || []).filter(x => x !== id) }));
   if (rid) { const r = S.d.rings[rid]; await guard(() => S.store.update(P.doc(S.evId, 'rings', rid), { managerIds: [...new Set((r.managerIds || []).concat(id))] }), `${personName(id)} → ring manager of ${r.name}`); }
   else toast(`${personName(id)} removed from ring`);
+  // event access follows ring assignment right away (not only while the event stays open)
+  const ev = curEvent(), cur = (ev && ev.managerIds) || [], next = rid ? [...new Set(cur.concat(id))] : cur.filter(x => x !== id);
+  if (ev && next.slice().sort().join('|') !== cur.slice().sort().join('|')) await guard(() => S.store.update(P.event(ev.id), { managerIds: next }));
   scheduleSync();
 }
 /** Director of THIS event (v1.9: per event, not app-wide). */
@@ -58,6 +63,23 @@ async function setDirector(id, on) {
   const cur = evDirectors(ev), next = on ? [...new Set(cur.concat(id))] : cur.filter(x => x !== id);
   if (!on && !next.length && !isAdmin()) { toast('An event needs at least one director.', true); return; }
   await guard(() => S.store.update(P.event(ev.id), { directorIds: next }), on ? `${personName(id)} is now a director of this event` : 'Director removed from this event');
+}
+
+/** Take a person out of THIS event (director, ring manager, staff, pending invite, access request) — other events untouched. */
+async function removeFromEvent(id) {
+  const ev = curEvent(); if (!ev || !id) return false;
+  const dirs = evDirectors(ev);
+  if (dirs.includes(id) && dirs.length < 2 && !isAdmin()) { toast('An event needs at least one director. Add another director first.', true); return false; }
+  const who = personName(id), mail = String(personEmail(id) || '').toLowerCase();
+  for (const r of DC.rings) if ((r.managerIds || []).includes(id)) { if (!(await guard(() => S.store.update(P.doc(S.evId, 'rings', r.id), { managerIds: (r.managerIds || []).filter(x => x !== id) })))) return false; }
+  const upd = { directorIds: dirs.filter(x => x !== id), managerIds: (ev.managerIds || []).filter(x => x !== id), staffIds: (ev.staffIds || []).filter(x => x !== id) };
+  if (!(await guard(() => S.store.update(P.event(ev.id), upd)))) return false;
+  // pending invitations to this event for them, and any open access request (best effort)
+  for (const [k, i] of Object.entries(S.invites || {})) if (i && i.eventId === ev.id && (i.uid === id || (mail && String(i.email || '').toLowerCase() === mail))) { try { await S.store.del('invites/' + k); } catch (e) { /* not ours to delete */ } }
+  if ((S.d.requests || {})[id]) { try { await S.store.del(P.doc(S.evId, 'requests', id)); } catch (e) { /* ignore */ } }
+  scheduleSync();
+  toast(`${who} removed from ${ev.name || 'this event'} · other events unchanged`);
+  return true;
 }
 
 /* ---------- invites ---------- */

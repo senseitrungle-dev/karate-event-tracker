@@ -570,7 +570,7 @@ function kpTableHTML(did, title, rows, order, opts) {
 }
 function kpViewHTML(did) {
   const br = S.d.brackets[did], st = KT.kpState(br);
-  let h = `<p class="small muted">ITKF kata system · pools of up to ${br.poolSize || 8} · ${br.judges || 6} judges score 0–10${(br.judges || 6) >= 5 ? ', highest and lowest dropped, average of the rest' : ''} · top 4 of each pool advance until 8 remain · the final 8 is the semifinal; its top 4 perform in the final · semifinal and final each need a different kata${br.application ? ' · final adds Application (Bunkai)' : ''} · final placing = semifinal + final score · ties: all six scores added back, then Kettei-sen.</p>`;
+  let h = `<p class="small muted">WTKF kata system · pools of up to ${br.poolSize || 8} · ${br.judges || 6} judges score 0–10${(br.judges || 6) >= 5 ? ', highest and lowest dropped, average of the rest' : ''} · top 4 of each pool advance until 8 remain · the final 8 is the semifinal; its top 4 perform in the final · semifinal and final each need a different kata${br.application ? ' · final adds Application (Bunkai)' : ''} · final placing = semifinal + final score · ties: all six scores added back, then Kettei-sen.</p>`;
   if (roundsRingLine(did)) h += `<div class="row" style="justify-content:flex-end;margin-bottom:8px">${roundsRingLine(did)}</div>`;
   for (const rd of st.rounds) {
     h += `<div class="stage-h label">${esc(KT.kpRoundName(rd))}</div><div class="stack">`;

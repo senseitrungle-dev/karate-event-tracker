@@ -166,7 +166,7 @@ t('canEdit blocks after downstream', () => {
   res = KT.resolve(br); br.results['W2-0'] = { winnerId: res['W2-0'].a };
   assert.ok(!KT.canEdit(br, 'W1-0'));
 });
-t('ITKF kumite: ippon, awase-waza, points table, kettei-sen without carry-over, hantei', () => {
+t('WTKF kumite: ippon, awase-waza, points table, kettei-sen without carry-over, hantei', () => {
   assert.equal(KT.kumiteEval([{ s: 'a', t: 'ippon' }]).method, 'Ippon');
   const r2 = KT.kumiteEval([{ s: 'b', t: 'waza' }, { s: 'a', t: 'waza' }, { s: 'b', t: 'waza' }]);
   assert.equal(r2.winner, 'b'); assert.equal(r2.method, 'Awase-waza');
@@ -227,7 +227,7 @@ t('flags & scores', () => {
   assert.ok(tie.tie && !tie.done);
   assert.equal(KT.scoresEval([8, 8, 8], [8, 8, 8], 3, 'b').winner, 'b');
 });
-t('ITKF team kumite: total score, hansoku/kiken team, representative', () => {
+t('WTKF team kumite: total score, hansoku/kiken team, representative', () => {
   const ip = s => ({ log: [{ s, t: 'ippon' }] });
   const tu = { log: [{ t: 'timeup' }] };
   let r = KT.teamKumiteEval([ip('a'), ip('a')], 3);
@@ -250,11 +250,11 @@ t('fukugo alternates kumite / ki-tei; ki-tei by 5 flags', () => {
   assert.equal(KT.kiteiEval(['a', 'a', 'b', 'b', 'a'], 5).winner, 'a');
   assert.ok(!KT.kiteiEval(['a', 'a'], 5).done);
 });
-t('ITKF kata list (Kata Rules 1-3)', () => {
-  assert.ok(KT.ITKF_KATA.length >= 26);
-  for (const k of ['A-Nan-Kun (A-Nan-Ku)', 'Kuru-Run-Ha', 'Supa-Rin-Pan (Becchu-Rin, Hyaku-Hachi-Ho)', 'Wan-Kan', 'Sei-En-Chin']) assert.ok(KT.ITKF_KATA.includes(k), k);
+t('WTKF kata list (Kata Rules 1-3)', () => {
+  assert.ok(KT.WTKF_KATA.length >= 26);
+  for (const k of ['A-Nan-Kun (A-Nan-Ku)', 'Kuru-Run-Ha', 'Supa-Rin-Pan (Becchu-Rin, Hyaku-Hachi-Ho)', 'Wan-Kan', 'Sei-En-Chin']) assert.ok(KT.WTKF_KATA.includes(k), k);
 });
-t('ITKF defaults', () => {
+t('WTKF defaults', () => {
   const d = KT.blackBeltDivisions(KT.EVENT_ORDER);
   const f = (et, g, grp) => d.find(x => x.eventType === et && x.gender === g && (!grp || x.group === grp));
   // kumite style by age/rank, not gender (director 2026-10-01)

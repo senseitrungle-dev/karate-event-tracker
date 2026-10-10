@@ -1,6 +1,6 @@
 {
   "name": "karate-event-tracker",
-  "version": "1.13.3",
+  "version": "1.14.0",
   "private": true,
   "description": "Karate tournament & training camp manager (WTKF scoring, brackets, rings, results)",
   "scripts": {

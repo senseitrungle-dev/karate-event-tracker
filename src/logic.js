@@ -1,10 +1,10 @@
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
-   Brackets, divisions, ITKF (2009) scoring. Portable to native.
+   Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.13.3';
+  const VERSION = '1.14.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -20,8 +20,8 @@ const KT = (function () {
   const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools of 4)', DE: 'Double elimination', DES: 'Double elimination (simplified)', KP: 'Kata score pools (8 per pool)' };
   const ELIM_POOL = 8;
   const KP_POOL = 8, KP_ADV = 4;
-  /** ITKF Competition Rules 2009, Kata Rules Art. 1-3 (pp. 62–63): permitted kata (Dai/Sho and series listed separately). */
-  const ITKF_KATA = ['A-Nan-Kun (A-Nan-Ku)', 'Bassai (Pasai) Dai', 'Bassai (Pasai) Sho', 'Chin-tei (Chinte)', 'En-pi (Wan-Shu)', 'Gan-Kaku (Chin-To)',
+  /** WTKF Competition Rules 2009, Kata Rules Art. 1-3 (pp. 62–63): permitted kata (Dai/Sho and series listed separately). */
+  const WTKF_KATA = ['A-Nan-Kun (A-Nan-Ku)', 'Bassai (Pasai) Dai', 'Bassai (Pasai) Sho', 'Chin-tei (Chinte)', 'En-pi (Wan-Shu)', 'Gan-Kaku (Chin-To)',
     'Gojyu-Shi-Ho (U-Sei-Shi) Dai', 'Gojyu-Shi-Ho (U-Sei-Shi) Sho', 'Han-Getsu (Sei-San)', 'Ji-In', 'Ji-On', 'Jitte', 'Kan-Ku (Ku-Chan-Ku) Dai', 'Kan-Ku (Ku-Chan-Ku) Sho',
     'Shi-Ho-Ku-Chan-Ku', 'Kan-Shiwa', 'Kuru-Run-Ha', 'Ni-Jyu-Shi-Ho (Ni-Sei-Shi)', 'Mei-Kyo', 'Roh-Hai Sho-Dan', 'Roh-Hai Ni-Dan', 'Roh-Hai San-Dan', 'Sai-Ha', 'San-Se-Ru',
     'Se-San', 'Sei-En-Chin', 'Sei-Pai', 'Shi-So-Chin', 'So-Chin', 'Supa-Rin-Pan (Becchu-Rin, Hyaku-Hachi-Ho)', 'Un-Su (Un-Shu)', 'Wan-Kan'];
@@ -60,7 +60,7 @@ const KT = (function () {
     const grp = dv.group ? ' ' + dv.group : '';
     return `${who}${grp} ${GENDERS[dv.gender] || ''} ${et ? et.label : ''}`.replace(/\s+/g, ' ').trim();
   }
-  /** ITKF defaults: kumite 1:30 with 1:30 Kettei-sen; women's individual kumite (and fukugo kumite) = Ko-go. */
+  /** WTKF defaults: kumite 1:30 with 1:30 Kettei-sen; women's individual kumite (and fukugo kumite) = Ko-go. */
   function defaultScoring(eventType) {
     const et = EVENT_TYPES[eventType] || {};
     return { method: et.defMethod || 'flags', judges: 5, boutTime: 90, ketteiTime: 90, bouts: 3, style: 'shobu' };
@@ -79,7 +79,7 @@ const KT = (function () {
     if (lo != null && hi != null && lo >= -3 && hi <= -1) return 'kogo';
     return 'shobu';
   }
-  /** Default bracket format per event (ITKF): kata-type events use score pools; fukugo single elimination. */
+  /** Default bracket format per event (WTKF): kata-type events use score pools; fukugo single elimination. */
   function defaultFormat(eventType, belt, fallback) {
     if (eventType === 'FUKUGO') return 'SE';
     if (belt === 'black' && (eventType === 'IKATA' || eventType === 'TKATA' || eventType === 'ENBU')) return 'KP';
@@ -406,7 +406,7 @@ const KT = (function () {
       br.judges = +((division.scoring || {}).judges) || 6;
       br.scores = {};
       br.poolSize = Math.min(12, Math.max(4, +division.poolSize || KP_POOL));
-      br.kataRule = division.eventType !== 'ENBU';           // ITKF Kata 2-2-B (Enbu may repeat choreography)
+      br.kataRule = division.eventType !== 'ENBU';           // WTKF Kata 2-2-B (Enbu may repeat choreography)
       br.application = division.eventType === 'TKATA';      // Synchronized kata final adds Application (Bunkai)
       // seeded competitors perform last in their pool (Kata 1-6-B)
       const seedLast = pl => pl.filter(e => !e.seed).concat(pl.filter(e => e.seed).sort((x, y) => y.seed - x.seed));
@@ -605,7 +605,7 @@ const KT = (function () {
     return (mid && sr['M:' + mid]) || (seg && sr[seg]) || (dv && dv.ringId) || '';
   }
   /* ---------- judges ---------- */
-  /** Credential needed (ITKF levels 1–7): levels 3–7 for National/International, 1–2 enough for Regional/Local. */
+  /** Credential needed (WTKF levels 1–7): levels 3–7 for National/International, 1–2 enough for Regional/Local. */
   function judgeNeed(eventLevel) { return eventLevel === 'National' || eventLevel === 'International' ? 3 : 1; }
   function judgeLevelFor(j, kind) {
     const ka = +j.kataLevel || 0, ku = +j.kumiteLevel || 0;
@@ -620,7 +620,7 @@ const KT = (function () {
     if (eventLevel === 'National') return j.region || '';
     return j.dojo || '';
   }
-  /** Officials' positions on a score sheet (ITKF): kata Shu-shin + Fuku-shin; kumite Shu-shin + 4 Fuku-shin + Kan-sa. */
+  /** Officials' positions on a score sheet (WTKF): kata Shu-shin + Fuku-shin; kumite Shu-shin + 4 Fuku-shin + Kan-sa. */
   function officialPositions(kind, judges) {
     if (kind === 'kata' || kind === 'kitei') {
       const n = +judges || 5;
@@ -643,7 +643,7 @@ const KT = (function () {
     const n = +m[1];
     return !Object.keys(br.scores || {}).some(k => { const x = /^R(\d+)_/.exec(k); return x && +x[1] > n && br.scores[k]; });
   }
-  /** ITKF Kata 2-2-B / 2-5-C: final elimination and finals need a kata different from the previous round;
+  /** WTKF Kata 2-2-B / 2-5-C: final elimination and finals need a kata different from the previous round;
    *  a Kettei-sen (re-perform) needs a kata different from the one that tied. Returns an error text or ''. */
   function kpKataCheck(br, key, kata) {
     if (!br.kataRule) return '';
@@ -858,7 +858,7 @@ const KT = (function () {
     return `${pre}Round ${m.round}`;
   }
 
-  /* ---------- ITKF scoring (Competition Rules 2009) ---------- */
+  /* ---------- WTKF scoring (Competition Rules 2009) ---------- */
   // Kumite scoring table at time-up (Kumite Art. 2-3-A-(4)); team table Art. 2-3-B (Ippon 10).
   const PTS = { ippon: 10, waza: 4, chui: 4, keikoku: 2, jogai: 2, tento: 1, kogoPen: 2 };
   const OTHER = { a: 'b', b: 'a' };
@@ -922,7 +922,7 @@ const KT = (function () {
     return { done, winner, method, phase: done ? 'done' : phase, score: regular && phase !== 'regular' ? regular : cur, cur, st, kettei: phase !== 'regular' && !opts.ketteiOnly, hansokuDue: warn };
   }
   /**
-   * Ko-go Kumite (ITKF Ko-go Rules): six exchanges, Aka attacks 1–3, Shiro 4–6; each exchange independent.
+   * Ko-go Kumite (WTKF Ko-go Rules): six exchanges, Aka attacks 1–3, Shiro 4–6; each exchange independent.
    * Kettei-sen: six exchanges alternating from Aka; first Waza-ari/Ippon wins, else total, else Court Judges.
    * log items: {s, t:'waza'|'ippon'|'jikan'|'kakushi'|'saki'|'nigetai'|'keikoku'|'chui'|'jogai'|'tento'|'hansoku'|'kiken'|'hantei'} | {t:'next'}
    */
@@ -967,7 +967,7 @@ const KT = (function () {
     if (!(a >= 0 && a <= j) || a * 2 === j) return { done: false };
     return { done: true, winner: a > j / 2 ? 'a' : 'b', method: `Flags ${Math.max(a, j - a)}–${Math.min(a, j - a)}`, score: { a, b: j - a } };
   }
-  /** Judges' scores: highest & lowest dropped (5+ judges); ITKF announces the average of the rest (Kata Art. 3-2-D). */
+  /** Judges' scores: highest & lowest dropped (5+ judges); WTKF announces the average of the rest (Kata Art. 3-2-D). */
   function scoreTotal(arr, judges) {
     const v = (arr || []).slice(0, judges).map(Number);
     if (v.length !== +judges || v.some(x => !(x >= 0 && x <= 10))) return null;
@@ -987,7 +987,7 @@ const KT = (function () {
     if (tieSide === 'a' || tieSide === 'b') return { done: true, winner: tieSide, method: `Tie ${f(A)} · Court Judges`, score: { a: A.avg, b: B.avg } };
     return { done: false, tie: true, score: { a: A.avg, b: B.avg } };
   }
-  /** Team Kumite (ITKF Art. 2-3-B): 3 rounds, higher team total wins; tie → Kettei-sen by Representative.
+  /** Team Kumite (WTKF Art. 2-3-B): 3 rounds, higher team total wins; tie → Kettei-sen by Representative.
    *  Any member Han-soku → team Han-soku; any member Ki-ken → team forfeit. */
   function teamKumiteEval(bouts, nBouts, daihyo, kogo) {
     const E = kogo ? kogoEval : kumiteEval;
@@ -1012,7 +1012,7 @@ const KT = (function () {
     if (d.done) return Object.assign(res, { done: true, winner: d.winner, method: 'Representative · ' + d.method });
     return res;
   }
-  /** Fukugo (ITKF Fukugo Art. 1-3): single elimination alternating Kumite and Ki-tei.
+  /** Fukugo (WTKF Fukugo Art. 1-3): single elimination alternating Kumite and Ki-tei.
    *  Final = Kumite, semi-final = Ki-tei, and so on back; third-place match = Kumite. */
   function fukugoPart(m, br) {
     if (!m) return 'kumite';
@@ -1047,7 +1047,7 @@ const KT = (function () {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
-    seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, ITKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
+    seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS,
   };
 })();

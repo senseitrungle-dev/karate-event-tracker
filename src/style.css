@@ -518,3 +518,5 @@ input.clash { border-color: var(--bad); background: var(--bad-soft); color: var(
 /* iPhone home-screen app: the status bar overlays the page (viewport-fit=cover) — keep pop-ups below it */
 .scrim { padding-top: max(16px, calc(var(--sat) + 8px)); }
 @media (max-width: 640px) { .scrim { padding-top: var(--sat); } }
+.jrow2.pr { grid-template-columns: minmax(0, 1fr); row-gap: 6px; }
+.jrow2.pr .pctl { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }

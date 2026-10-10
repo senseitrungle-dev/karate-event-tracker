@@ -208,14 +208,14 @@ function divForm(id) {
       <label class="f"><span>Round robin: advance per pool</span><select name="advance" id="d-adv">${opt('', 'Auto (2 if two pools, else 1)', d.advance || '')}${opt('1', '1', d.advance)}${opt('2', '2', d.advance)}</select></label>
       <label class="f"><span>Ring</span><select name="ringId" id="d-ring">${opt('', 'No ring yet', d.ringId)}${DC.rings.map(r => opt(r.id, r.name, d.ringId)).join('')}</select></label>
     </div>${bs.results ? '<p class="tiny muted">Format is locked because results exist.</p>' : ''}</fieldset>
-    <fieldset><legend>Scoring (ITKF 2009)</legend><div class="fgrid">
+    <fieldset><legend>Scoring (WTKF 2009)</legend><div class="fgrid">
       ${k === 'kata' ? `<label class="f"><span>Decision</span><select name="method" id="d-method">${opt('flags', 'Flags (judges’ majority)', sc.method)}${opt('scores', 'Scores 0–10 (drop high & low with 5)', sc.method)}</select></label>` : ''}
-      ${k === 'kata' ? `<label class="f"><span>Kata pools: max per pool</span><input type="number" name="poolSize" id="d-pool" min="4" max="12" value="${esc(d.poolSize || 8)}"><span class="tiny muted">Kata score pools only · ITKF allows up to 12</span></label>` : ''}
+      ${k === 'kata' ? `<label class="f"><span>Kata pools: max per pool</span><input type="number" name="poolSize" id="d-pool" min="4" max="12" value="${esc(d.poolSize || 8)}"><span class="tiny muted">Kata score pools only · WTKF allows up to 12</span></label>` : ''}
       ${k === 'kumite' || k === 'teamkumite' || k === 'fukugo' ? `<label class="f"><span>Kumite style</span><select name="style" id="d-style">${opt('shobu', 'Shobu Ippon (1:30)', sc.style)}${opt('kogo', 'Ko-go Kumite (6 exchanges)', sc.style)}</select></label>` : ''}
       ${k === 'kata' ? `<label class="f"><span>Judges</span><select name="judges" id="d-judges">${opt('3', '3', sc.judges)}${opt('5', '5', sc.judges)}${opt('6', '6 (Shu-shin + 5, scores only)', sc.judges)}${opt('7', '7', sc.judges)}</select></label>` : ''}
       ${k !== 'kata' ? `<label class="f"><span>Bout time (seconds)</span><input type="number" name="boutTime" id="d-bt" min="30" max="600" step="10" value="${esc(sc.boutTime)}"></label>
       <label class="f"><span>Kettei-sen (seconds, 0 = none)</span><input type="number" name="ketteiTime" id="d-kt" min="0" max="180" step="10" value="${esc(sc.ketteiTime)}"></label>` : ''}
-      ${k === 'teamkumite' ? `<label class="f"><span>Rounds per team match</span><select name="bouts" id="d-bouts">${opt('3', '3 (ITKF)', sc.bouts)}${opt('5', '5', sc.bouts)}</select></label>` : ''}
+      ${k === 'teamkumite' ? `<label class="f"><span>Rounds per team match</span><select name="bouts" id="d-bouts">${opt('3', '3 (WTKF)', sc.bouts)}${opt('5', '5', sc.bouts)}</select></label>` : ''}
     </div></fieldset>
     ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${ents.length ? `<div class="stack" style="gap:6px">${ents.map(e => `<div class="row between small"><span style="min-width:0"><b>${esc(entName(e))}</b> <span class="muted">${esc(entDojo(e))}</span></span>
       <input type="number" min="1" max="64" name="seed_${esc(e)}" id="seed-${esc(e)}" data-input="seed" value="${esc((d.seeds || {})[e] || '')}" placeholder="Seed" style="width:86px" aria-label="Seed"></div>`).join('')}</div>

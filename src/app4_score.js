@@ -1,4 +1,4 @@
-/* ===== scoresheet (ITKF 2009) ===== */
+/* ===== scoresheet (WTKF 2009) ===== */
 const CLOCK = { left: 0, running: false, t0: 0, base: 0, timer: null, key: '' };
 function stopClock() { if (CLOCK.timer) clearInterval(CLOCK.timer); CLOCK.timer = null; if (CLOCK.running) { CLOCK.left = Math.max(0, CLOCK.base - (Date.now() - CLOCK.t0) / 1000); CLOCK.running = false; } }
 function setClock(sec, key) { stopClock(); CLOCK.left = sec; CLOCK.base = sec; CLOCK.key = key || CLOCK.key; paintClock(); }
@@ -35,7 +35,7 @@ function openScore(did, mid) {
   openModal('<div id="score-root"></div>', { wide: true, nofocus: true });
   renderScore(true);
 }
-/** Evaluate the draft into an outcome {done, winner:'a'|'b', method, pts, detail} — ITKF 2009 rules */
+/** Evaluate the draft into an outcome {done, winner:'a'|'b', method, pts, detail} — WTKF 2009 rules */
 function kumiteStyle(dv) { return scoringOf(dv).style === 'kogo' ? 'kogo' : 'shobu'; }
 function partOf(dv, m, br) { return kindOf(dv) === 'fukugo' ? KT.fukugoPart(m, br) : null; }
 function evaluate(dv, d, m, br) {
@@ -143,7 +143,7 @@ function teamPanel(d, sc, r, out, kogo) {
   const isD = idx === sc.bouts, b = isD ? (d.daihyo || {}) : (bouts[idx] || {});
   const path = isD ? 'daihyo' : `bouts.${idx}`;
   return `<div class="stack"><div class="row between"><h3>Team match</h3><span class="chip">Team score <span class="num">&nbsp;${out.pts ? out.pts.a : 0}–${out.pts ? out.pts.b : 0}</span></span></div>
-    <p class="tiny muted">ITKF: every round is fought; the higher team total wins (Ippon 10). Han-soku or Ki-ken of any member decides the whole team match. Tie → Kettei-sen by Representative.</p>
+    <p class="tiny muted">WTKF: every round is fought; the higher team total wins (Ippon 10). Han-soku or Ki-ken of any member decides the whole team match. Tie → Kettei-sen by Representative.</p>
     <div class="row">${tabs}</div>
     <div class="bout"><div class="bout-h"><b>${isD ? 'Kettei-sen by Representative' : `Round ${idx + 1}`}</b><div class="row">${sel(ta, 'a', isD ? 'd' : idx, b.ma)}${sel(tb, 'b', isD ? 'd' : idx, b.mb)}</div></div>
     ${kumitePanel(b.log || [], path, sc, r, { kogo: kogo && !isD, allowDraw: !isD, ketteiOnly: isD, names: { a: b.ma ? nm(ta, b.ma) : entName(r.a), b: b.mb ? nm(tb, b.mb) : entName(r.b) } })}</div></div>`;
@@ -264,7 +264,7 @@ function kpContext(br, key) {
   return { n, id, rp, label: label + (rp ? ' · Kettei-sen' : ''), isFinal, semiKata, carry };
 }
 function kpKept(br) { const J = br.judges || 6; return J >= 5 ? J - 2 : J; }
-const KATA_LIST = KT.ITKF_KATA.concat(['Heian Shodan', 'Heian Nidan', 'Heian Sandan', 'Heian Yondan', 'Heian Godan', 'Tekki Shodan', 'Tekki Nidan', 'Tekki Sandan']);
+const KATA_LIST = KT.WTKF_KATA.concat(['Heian Shodan', 'Heian Nidan', 'Heian Sandan', 'Heian Yondan', 'Heian Godan', 'Tekki Shodan', 'Tekki Nidan', 'Tekki Sandan']);
 function openKP(did, key) {
   const br = S.d.brackets[did]; if (!br) return;
   const ctx = kpContext(br, key); if (!ctx) return;

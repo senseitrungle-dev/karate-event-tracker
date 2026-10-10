@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.13.3 Requirements & Design
+# Karate Event Tracker · v1.14.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -11,7 +11,7 @@ R7  Tournament events: Individual Kata (M/W), Individual Kumite (M/W), Team Kata
 R8  Black-belt divisions by age: Senior 21+, Youth 19–20, Junior 16–18, Cadet 14–15. Kyu divisions defined by director (rank range + age range).
 R9  Track competitors: entering (registration + required info), competing (check-in, ring calls), results, awards.
 R10 Manage rings, rounds, scores, competitor advancement.
-R11 Scoring per WTKF traditional rules (user choice); from v1.1.0 aligned to the ITKF Competition Rules 2009 supplied by the director (see §8).
+R11 Scoring per WTKF traditional rules (user choice); from v1.1.0 aligned to the WTKF Competition Rules 2009 supplied by the director (see §8).
 R12 Training camps: participants, sessions, attendance.
 R13 Database: Google Firebase; hosting: Vercel; source: GitHub (project instructions). Also runs as a claude.ai hosted page.
 R14 Development process: requirements → design → verify logic → code → test → fix → verify requirements → version bump.
@@ -63,14 +63,14 @@ Concurrency: each match result is merged as one nested key (`matches.{id}`) — 
 - Not yet verified: firestore.rules in the Firebase emulator (needs your Firebase project); real Vercel deploy.
 
 ## 7. Open questions for the director
-- (v1.1.0) Fukugo now follows ITKF alternating Kumite/Ki-tei; Ko-go Ippon value (10, not ending) is an assumption to confirm.
+- (v1.1.0) Fukugo now follows WTKF alternating Kumite/Ki-tei; Ko-go Ippon value (10, not ending) is an assumption to confirm.
 - Kumite penalty values (Keikoku 2, Chui 4) and bout/Kettei-sen times are editable per division.
 
-## 8. v1.1.0 — Kata score pools + ITKF Competition Rules (2009) alignment
-Sources: director's pool requirement (2026-09-28) and the ITKF Competition Rules 2009 PDF provided by the director.
+## 8. v1.1.0 — Kata score pools + WTKF Competition Rules (2009) alignment
+Sources: director's pool requirement (2026-09-28) and the WTKF Competition Rules 2009 PDF provided by the director.
 
-### Kata score pools (Individual Kata, Team Kata, Enbu — ITKF Kata Art. 1-6, 2-2, 2-4, 2-5, 3-2)
-- Pools of up to 8 (configurable 4–12; ITKF max 12). Every competitor performs once per round; 6 judges (Shu-shin + 5 Fuku-shin) score 0–10;
+### Kata score pools (Individual Kata, Team Kata, Enbu — WTKF Kata Art. 1-6, 2-2, 2-4, 2-5, 3-2)
+- Pools of up to 8 (configurable 4–12; WTKF max 12). Every competitor performs once per round; 6 judges (Shu-shin + 5 Fuku-shin) score 0–10;
   highest & lowest dropped; score = average of the remaining four (sums used internally, identical ordering).
 - Top 4 of each pool advance; pools continue until only 8 remain, then one final-elimination pool; its top 4 reach the final.
 - Final score = final elimination + final. Elimination rounds are not cumulative.
@@ -89,7 +89,7 @@ Sources: director's pool requirement (2026-09-28) and the ITKF Competition Rules
 ### Ko-go Kumite (Women's individual kumite, and women's Fukugo kumite rounds)
 - Six exchanges: Aka attacks 1–3, Shiro 4–6. Jikan, Kakushi, Saki, Nige-tai 2 points to the opponent; Ten-to 1; Chui 4.
 - Tie → Kettei-sen of six alternating exchanges from Aka: first Waza-ari/Ippon wins, else total, else Court Judges.
-- Assumption: Ippon counts 10 points in Ko-go (ITKF team table value) and does not end the six exchanges — confirm.
+- Assumption: Ippon counts 10 points in Ko-go (WTKF team table value) and does not end the six exchanges — confirm.
 ### Team Kumite (Art. 2-3-B)
 - 3 rounds of 1:30, all fought; round ends on Ippon/Awase-waza; team with the higher total wins (Ippon 10, Waza-ari 4, Jo-gai 2 each, Chui 4, Kei-koku 2 each, Ten-to 1).
 - Any member Han-soku → team Han-soku; any member Ki-ken → team forfeit; tie → Kettei-sen by Representative (individual Kettei-sen rules).
@@ -97,13 +97,13 @@ Sources: director's pool requirement (2026-09-28) and the ITKF Competition Rules
 - Single elimination (no repechage), rounds alternate: final = Kumite, semi-final = Ki-tei, quarter-final = Kumite … third-place match = Kumite.
 - Ki-tei: both perform the designated kata simultaneously; 5 judges each raise Aka or Shiro (no tie).
 
-### Not yet implemented from ITKF (candidates for later versions)
+### Not yet implemented from WTKF (candidates for later versions)
 - Sanbon Shobu option; kumite repechage system (Art. 1-13); detailed kata scoring forms (Basic/Skill point criteria and penalty deduction tables) — judges enter final numbers instead.
 
 Tests: 100 unit tests; E2E scores 95 matches/performances through the UI (Shobu Ippon, Ko-go, team kumite, Fukugo kumite/Ki-tei, kata pools incl. kata-change enforcement and Kettei-sen); multi-user and Firebase mocks pass.
 
 ## 9. v1.2.0 — director clarifications (2026-09-29)
-- Kata name list = ITKF Kata Rules Art. 1-3 (printed pp. 62–63): A-Nan-Kun, Bassai Dai/Sho, Chin-tei, En-pi, Gan-Kaku, Gojyu-Shi-Ho Dai/Sho, Han-Getsu, Ji-In, Ji-On, Jitte,
+- Kata name list = WTKF Kata Rules Art. 1-3 (printed pp. 62–63): A-Nan-Kun, Bassai Dai/Sho, Chin-tei, En-pi, Gan-Kaku, Gojyu-Shi-Ho Dai/Sho, Han-Getsu, Ji-In, Ji-On, Jitte,
   Kan-Ku Dai/Sho, Shi-Ho-Ku-Chan-Ku, Kan-Shiwa, Kuru-Run-Ha, Ni-Jyu-Shi-Ho, Mei-Kyo, Roh-Hai Sho/Ni/San-Dan, Sai-Ha, San-Se-Ru, Se-San, Sei-En-Chin, Sei-Pai,
   Shi-So-Chin, So-Chin, Supa-Rin-Pan, Un-Su, Wan-Kan (Heian/Tekki kept for kyu divisions). Free text still allowed for other styles' names.
 - Ko-go Kumite: points from all six exchanges are added together to decide the winner.
@@ -113,7 +113,7 @@ Tests: 101 unit tests.
 ## 10. v1.3.0 — director changes (2026-10-01)
 1. Double elimination: no reset match (single grand final). More than 8 entrants → pools of up to 8 (director may set the pool count); each pool runs double elimination; the top 2 of each pool go to a single-elimination playoff (2 pools: A1 v B2, B1 v A2 semifinals; 3–4 pools: quarterfinals). Third place per the division's bronze setting.
 2. New format "Double elimination (simplified)": winners-bracket final decides 1st/2nd; repechage-bracket final decides 3rd/4th (no grand final; the winners-final loser does not drop into repechage). Pools: same as (1).
-3. Kata pools: the final 8 is the Semifinal (a round with more than 8 always uses 2+ pools); its top 4 perform the Final. Final placing = Semifinal + Final scores. Kata change rule kept per ITKF/WTKF: semifinal and final each need a different kata than the round before.
+3. Kata pools: the final 8 is the Semifinal (a round with more than 8 always uses 2+ pools); its top 4 perform the Final. Final placing = Semifinal + Final scores. Kata change rule kept per WTKF: semifinal and final each need a different kata than the round before.
 4–5. Kumite style defaults (gender no longer matters): black belt Senior/Youth → regular (Shobu Ippon); Junior/Cadet (≤18) → Ko-go; kyu divisions limited to brown belts (3rd–1st kyu) → Ko-go; other kyu divisions → regular until the director chooses. Applies to individual kumite, team kumite and fukugo kumite rounds. A director's explicit choice is kept; otherwise the default follows the division.
 6. Ko-go: Aka attacks exchanges 1–3, Shiro 4–6. Offense side: Saki and Nige-tai disabled; defense side: Jikan and Kakushi disabled.
 7. Recorded-score review: tapping a completed match (director / that ring's manager) shows how it was recorded — event-by-event log with running score and exchange/phase markers (kumite, Ko-go, team rounds), judges' flags (kata flags, Ki-tei), judges' scores with dropped high/low, and who/when. Tapping a scored kata competitor shows the recorded judge scores, kata and application.
@@ -157,7 +157,7 @@ Tests: 109 unit; v15 e2e updated (judge ring moves, Unassigned list, pool ring c
 
 ## 15. v1.5.2 (2026-10-03)
 1. Bracket view: for the director each pool (and the semifinal and final) has a ring selector, so pools can be moved to other rings and run in parallel straight from the bracket; others see the ring as a label.
-2. Shobu Ippon Ten-to per ITKF Kumite Art. 1-6-I / 1-7 and the scoring table (Art. 2-3-A): a fall is a Ten-to penalty match (Sagaru, Tsuzukete hajime) and scores no points; the opponent gets 1 point only when the Ten-to cannot be executed because time has expired (fall as the match ends). The sheet records Ten-to entered with time left as an executed penalty match (`exec`), and one entered with the clock at 0:00 as 1 point.
+2. Shobu Ippon Ten-to per WTKF Kumite Art. 1-6-I / 1-7 and the scoring table (Art. 2-3-A): a fall is a Ten-to penalty match (Sagaru, Tsuzukete hajime) and scores no points; the opponent gets 1 point only when the Ten-to cannot be executed because time has expired (fall as the match ends). The sheet records Ten-to entered with time left as an executed penalty match (`exec`), and one entered with the clock at 0:00 as 1 point.
 3. Scoring and penalty buttons (and Time up) are disabled while the match clock runs; the referee stops the clock (Yame) before a score or penalty is recorded.
 Tests: 110 unit tests; v15 e2e adds bracket-view pool ring moves, clock gating and Ten-to penalty match.
 
@@ -284,3 +284,12 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Diagnose**: signing out ends the tracker's Firebase session only; the browser stays signed in to Google, and Google's pop-up silently reuses that account unless asked to show the chooser.
 - **Fix**: the Google provider is created with `prompt: 'select_account'`, so the account chooser (with "Use another account") appears on every sign-in.
 - **Verify**: test/signin.js checks the provider asks for the account chooser; fb, access, people, public regression.
+
+## 32. v1.14.0 — WTKF naming; remove a person from one event (2026-10-08)
+- **WTKF**: the federation is now named WTKF everywhere (score sheets, division settings, kata list, help text, docs, tests; `KT.WTKF_KATA`). The rules themselves are unchanged (Competition Rules 2009).
+- **Remove from event** (People tab, director or app admin): on every director and ring manager row. It takes the person out of *this* event only — `directorIds`, every ring's `managerIds`, the event's `managerIds` and `staffIds`, division scorer lists, pending invitations to this event and any open access request — and leaves their account and their roles in all other events untouched. A confirmation says so; they can be added again later.
+  - "Remove as director" stays for the narrower change (stop being a director, keep any other role here).
+  - An event always keeps at least one director (unless an app admin is acting); a sole director sees "You · only director".
+- **Event access follows ring changes at once**: assigning or removing a ring manager now updates the event's `managerIds` immediately (before, it waited for a background sync while the event stayed open, so a newly assigned manager could find the event still locked).
+- **Rules**: any director of the event may delete that event's pending invitations (`firestore.rules` v1.14.0 — **redeploy the rules**).
+- **Verify**: test/removeevent.js (Firebase mock with the per-event rules): manager and director set up in two events; a non-admin director removes the manager from event 1 → gone from event, rings and division scorers, still manager in event 2, event 1 locked for them / event 2 opens; admin removes a director from event 1 → still director of event 2; full regression (120 unit tests + 19 browser suites).
