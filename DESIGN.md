@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.14.0 Requirements & Design
+# Karate Event Tracker · v1.15.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -293,3 +293,10 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Event access follows ring changes at once**: assigning or removing a ring manager now updates the event's `managerIds` immediately (before, it waited for a background sync while the event stayed open, so a newly assigned manager could find the event still locked).
 - **Rules**: any director of the event may delete that event's pending invitations (`firestore.rules` v1.14.0 — **redeploy the rules**).
 - **Verify**: test/removeevent.js (Firebase mock with the per-event rules): manager and director set up in two events; a non-admin director removes the manager from event 1 → gone from event, rings and division scorers, still manager in event 2, event 1 locked for them / event 2 opens; admin removes a director from event 1 → still director of event 2; full regression (120 unit tests + 19 browser suites).
+
+## 33. v1.15.0 — winners stand out; Ko-go attacker in corner colours (2026-10-11)
+- **Winner of a match** (score sheet as soon as the result is decided, finished-match sheet, match view): a large winner banner in the winner's corner colour — Aka red with white text, Shiro white with dark text — framed in gold with a ★, showing "Winner · Aka/Shiro", the name, how it was won and the score. The winning corner gets a gold outline and a "★ Winner" badge; the other corner is dimmed.
+- **Match view of a finished match** shows the recorded result and score, not a leftover "In progress" live board.
+- **Ko-go Kumite**: the "Aka attacks" / "Shiro attacks" block in the middle is filled with the attacker's colour (red / white with a dark border); the attacking corner is ringed and tagged "⚔ Attacking", the other "Defending"; log lines carry a red or white dot for the side; in the result record each exchange header row is red (Aka attacks) or white (Shiro attacks).
+- **Brackets**: the winner's line is tinted, bold, with a green ✓ and bold score; the loser's line is faded and struck through. A bye advance is bold without the ✓ (no match was won).
+- **Verify**: test/winner.js (Ko-go colours on exchanges 1 and 4–5, Shobu Ippon winner banner/outline/dim, bracket ✓ and faded loser, match view banner and final score); full regression.

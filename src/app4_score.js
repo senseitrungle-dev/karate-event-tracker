@@ -19,6 +19,13 @@ function paintClock() {
   const b = $('#clock-btn'), bt = CLOCK.running ? 'Stop' : 'Start'; if (b && b.textContent !== bt) b.textContent = bt;
 }
 
+/** Big, unmistakable winner banner in the winner's corner colour (Aka red / Shiro white). */
+function winBanner(side, name, method, pts) {
+  return `<div class="win-banner ${side === 'a' ? 'a' : 'b'}" role="status"><span class="wb-trophy" aria-hidden="true">★</span><span class="wb-text"><span class="wb-k">Winner · ${side === 'a' ? 'Aka' : 'Shiro'}</span><span class="wb-name">${esc(name)}</span><span class="wb-m">${esc(method || '')}${pts ? ` · <span class="num">${esc(pts.a)}–${esc(pts.b)}</span>` : ''}</span></span></div>`;
+}
+const WIN_CHIP = '<span class="win-badge">★ Winner</span>';
+/** corner classes for a finished match: the winner stands out, the other corner steps back */
+function cornerState(done, winner, s) { return done && winner ? (winner === s ? ' won' : ' lost') : ''; }
 function draftKey(did, mid) { return `${S.evId}:${did}:${mid}`; }
 function loadDraft(key) {
   if (S.draft[key]) return S.draft[key];
@@ -88,7 +95,7 @@ function scoresPanel(d, sc, out) {
 const EV_LABEL = { waza: 'Waza-ari', ippon: 'Ippon', jogai: 'Jo-gai', keikoku: 'Kei-koku', chui: 'Chui', tento: 'Ten-to', hansoku: 'Han-soku', kiken: 'Ki-ken', timeup: 'Time up', ketteiend: 'Kettei-sen ended', hantei: 'Hantei',
   jikan: 'Jikan', kakushi: 'Kakushi', saki: 'Saki', nigetai: 'Nige-tai', next: 'No score · next exchange' };
 function evText(e) { return (e.s ? (e.s === 'a' ? 'Aka ' : 'Shiro ') : '') + (EV_LABEL[e.t] || e.t) + (e.t === 'tento' && e.exec ? ' · penalty match' : '') + (e.ae ? ' · exchange over' : ''); }
-function logHTML(log) { return `<div class="log">${log.slice(-6).map(e => esc(evText(e))).join('<br>')}</div>`; }
+function logHTML(log) { return `<div class="log">${log.slice(-6).map(e => `<span class="lg${e && e.s ? ' ' + e.s : ''}">${esc(evText(e))}</span>`).join('<br>')}</div>`; }
 function kumitePanel(log, path, sc, r, opts) {
   if (opts.kogo) return kogoPanel(log, path, r, opts);
   const ev = KT.kumiteEval(log, opts);
@@ -97,7 +104,7 @@ function kumitePanel(log, path, sc, r, opts) {
     const name = s === 'a' ? entName(r.a) : entName(r.b);
     const dis = ev.done || CLOCK.running ? 'disabled' : '';
     const b = (t, l, cls) => `<button class="${cls || ''}" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="${t}" ${dis}${t === 'tento' ? ' title="Fall: Ten-to penalty match (no points). After time has expired: 1 point to the opponent."' : ''}>${l}</button>`;
-    return `<div class="corner ${s}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${ev.done && ev.winner === s ? '<span class="chip ok">Winner</span>' : ''}</div>
+    return `<div class="corner ${s}${cornerState(ev.done, ev.winner, s)}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${ev.done && ev.winner === s ? WIN_CHIP : ''}</div>
       <div class="who">${esc(opts.names ? opts.names[s] || name : name)}</div><div class="big">${ev.cur[s]}</div>
       <div class="tally">Waza-ari ${st.waza} · Jo-gai ${st.jogai} · K ${st.keikoku} · C ${st.chui}${st.tento || st.tentoX ? ' · Ten-to ' + (st.tento + st.tentoX) : ''}</div>
       ${ev.hansokuDue.includes(s) ? '<div class="tally" style="font-weight:700">Second Chui — Court Judges decide Han-soku</div>' : ''}
@@ -122,13 +129,13 @@ function kogoPanel(log, path, r, opts) {
     // offense can't commit Saki / Nige-tai; defense can't commit Jikan / Kakushi
     const na = live ? (off ? { saki: 1, nigetai: 1 } : { jikan: 1, kakushi: 1 }) : {};
     const b = (t, l, cls) => `<button class="${cls || ''}" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="${t}" ${dis || (na[t] ? 'disabled title="Not applicable to the ' + (off ? 'offense' : 'defense') + ' side"' : '')}>${l}</button>`;
-    return `<div class="corner ${s}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'} · ${off ? 'Offense' : 'Defense'}</span>${ev.done && ev.winner === s ? '<span class="chip ok">Winner</span>' : ''}</div>
+    return `<div class="corner ${s}${off ? ' off' : ''}${cornerState(ev.done, ev.winner, s)}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${ev.done && ev.winner === s ? WIN_CHIP : live ? `<span class="role-tag ${off ? 'atk' : 'def'}">${off ? '⚔ Attacking' : 'Defending'}</span>` : ''}</div>
       <div class="who">${esc(opts.names ? opts.names[s] || name : name)}</div><div class="big">${ev.cur[s]}</div>
       <div class="btns">${b('waza', 'Waza-ari')}${b('ippon', 'Ippon')}${b('jikan', 'Jikan', 'pen')}${b('kakushi', 'Kakushi', 'pen')}${b('saki', 'Saki', 'pen')}${b('nigetai', 'Nige-tai', 'pen')}${b('keikoku', 'Kei-koku', 'pen')}${b('chui', 'Chui', 'pen')}${b('jogai', 'Jo-gai', 'pen')}${b('tento', 'Ten-to', 'pen')}${b('hansoku', 'Han-soku', 'pen')}${ev.phase === 'hantei' ? `<button data-act="k-ev" data-p="${path}" data-s="${s}" data-t="hantei">Hantei</button>` : '<span></span>'}</div></div>`;
   };
   const phaseTxt = ev.done ? `${ev.winner ? (ev.winner === 'a' ? 'Aka' : 'Shiro') + ' · ' : ''}${ev.method}` : ev.phase === 'hantei' ? 'Hantei · Court Judges decide' : `${ev.phase === 'kettei' ? 'Kettei-sen' : 'Ko-go Kumite'} · Ko-geki ${ev.exchange} of 6`;
   return `<div class="board">${corner('a')}<div class="mid"><div class="phase">${esc(phaseTxt)}</div>
-      ${!ev.done && ev.phase !== 'hantei' ? `<div class="clock" style="font-size:1.4rem">${ev.offense === 'a' ? 'Aka' : 'Shiro'} attacks</div><button class="primary" data-act="k-ev" data-p="${path}" data-t="next">${ev.exchange < 6 ? 'No score · next exchange' : 'No score · end of exchanges'}</button>` : ''}
+      ${!ev.done && ev.phase !== 'hantei' ? `<div class="attack ${ev.offense === 'a' ? 'a' : 'b'}" id="attack-side">${ev.offense === 'a' ? 'Aka' : 'Shiro'} attacks</div><button class="primary" data-act="k-ev" data-p="${path}" data-t="next">${ev.exchange < 6 ? 'No score · next exchange' : 'No score · end of exchanges'}</button>` : ''}
       <p class="tiny muted">Points from all six exchanges are added together. Equal scores (or no score) → Kettei-sen: first Waza-ari or Ippon wins. Each exchange is a stand-alone match: it ends at the first score or penalty (the next exchange starts automatically); use “No score” when it ends without one. Offense must attack within 10 s (Jikan) · max 4 techniques. Penalties give 2 points to the opponent (Chui 4, Ten-to 1).</p>
       <button data-act="k-undo" data-p="${path}" ${log.length ? '' : 'disabled'}>Undo last</button>${logHTML(log)}</div>${corner('b')}</div>`;
 }
@@ -166,11 +173,12 @@ function renderScore(force) {
   const seg = KT.segOf(br, m), rid = KT.ringOf(dv, seg, mid);
   const sub = esc(dv.name) + (seg ? ' · ' + esc(SEG_LABEL(seg)) : '') + (S.d.rings[rid] ? ' · ' + esc(S.d.rings[rid].name) : '');
   const positions = positionsFor(dv, m, br), canS = canScoreMatch(did, mid);
-  const hdr = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="corner a"><div class="label" style="color:#fff;opacity:.8">Aka</div><div class="who">${esc(entName(r.a) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(r.a))}</div></div>
-    <div class="corner b"><div class="label">Shiro</div><div class="who">${esc(entName(r.b) || 'TBD')}</div><div class="tiny muted">${esc(entDojo(r.b))}</div></div></div>`;
+  const wSide = r.status === 'done' && r.winner ? (r.winner === r.a ? 'a' : 'b') : '';
+  const hdr = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="corner a${cornerState(!!wSide, wSide, 'a')}">${wSide === 'a' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label" style="color:#fff;opacity:.8">Aka</div><div class="who">${esc(entName(r.a) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(r.a))}</div></div>
+    <div class="corner b${cornerState(!!wSide, wSide, 'b')}">${wSide === 'b' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label">Shiro</div><div class="who">${esc(entName(r.b) || 'TBD')}</div><div class="tiny muted">${esc(entDojo(r.b))}</div></div></div>`;
   if (r.status === 'done') {
     const can = canS && KT.canEdit(br, mid, DC.res[did]);
-    root.innerHTML = sheet(title, `${hdr}<div class="result-banner">Winner: ${esc(entName(r.winner))} · ${esc((r.result || {}).method || '')}${r.result && r.result.pts ? ` · <span class="num">${esc(r.result.pts.a)}–${esc(r.result.pts.b)}</span>` : ''}</div>
+    root.innerHTML = sheet(title, `${hdr}${winBanner(wSide, entName(r.winner), (r.result || {}).method, r.result && r.result.pts)}
       ${canScoreDiv(did) ? recordHTML(dv, br, m, r) : officialsRec((r.result || {}).officials, positions)}
       ${!can && canS ? '<p class="small muted">This result can no longer be changed because a later match that depends on it has been scored. Undo that match first.</p>' : ''}`,
       `${can ? '<button class="danger" data-act="undo-result">Undo result</button>' : ''}<button class="primary" data-act="modal-close">Close</button>`, sub);
@@ -189,7 +197,7 @@ function renderScore(force) {
   else if (k === 'teamkumite') body = teamPanel(d, sc, r, out, kogo);
   else if (k === 'fukugo') body = fukugoPanel(d, sc, r, out, part, kogo);
   const kiken = `<div class="row small"><span class="muted">Withdrawal / no-show:</span><button class="sm ${d.kiken === 'a' ? 'danger' : ''}" data-act="kiken" data-s="a">Aka kiken</button><button class="sm ${d.kiken === 'b' ? 'danger' : ''}" data-act="kiken" data-s="b">Shiro kiken</button></div>`;
-  const banner = out.done ? `<div class="result-banner">Result: ${esc(entName(out.winner === 'a' ? r.a : r.b))} wins · ${esc(out.method)}</div>` : '';
+  const banner = out.done ? winBanner(out.winner, entName(out.winner === 'a' ? r.a : r.b), out.method, out.pts) : '';
   const ring = S.d.rings[rid];
   const offNote = out.done && offErr ? `<p class="small" style="color:var(--bad)">${esc(offErr)}</p>` : '';
   const openEl = document.activeElement && document.activeElement.id; const wasOpen = !!root.querySelector('details.officials[open]');
@@ -387,20 +395,20 @@ function logRecHTML(log, kogo, names, o) {
   if (!log.length) return '<p class="small muted">No events recorded.</p>';
   const E = kogo ? KT.kogoEval : KT.kumiteEval;
   const rows = []; let ex = 1, phase = o && o.ketteiOnly ? 'kettei' : 'regular';
-  if (kogo) rows.push(`<tr class="rec-sep"><td colspan="3">Exchange 1 · ${esc(names.a)} (Aka) attacks</td></tr>`);
+  if (kogo) rows.push(`<tr class="rec-sep atk-a"><td colspan="3">Exchange 1 · ${esc(names.a)} (Aka) attacks</td></tr>`);
   log.forEach((e, i) => {
     const after = E(log.slice(0, i + 1), o || {});
     if (e.t === 'next') {
-      if (after.phase !== phase) { phase = after.phase; ex = after.exchange; rows.push(`<tr class="rec-sep"><td colspan="3">${phase === 'kettei' ? 'Kettei-sen · exchange 1 · Aka attacks' : phase === 'hantei' ? 'Court Judges meeting (Hantei)' : ''}</td></tr>`); return; }
-      if (after.exchange !== ex) { ex = after.exchange; rows.push(`<tr class="rec-sep"><td colspan="3">${phase === 'kettei' ? 'Kettei-sen · ' : ''}Exchange ${ex} · ${after.offense === 'a' ? esc(names.a) + ' (Aka)' : esc(names.b) + ' (Shiro)'} attacks</td></tr>`); }
+      if (after.phase !== phase) { phase = after.phase; ex = after.exchange; rows.push(`<tr class="rec-sep${phase === 'kettei' ? ' atk-a' : ''}"><td colspan="3">${phase === 'kettei' ? 'Kettei-sen · exchange 1 · Aka attacks' : phase === 'hantei' ? 'Court Judges meeting (Hantei)' : ''}</td></tr>`); return; }
+      if (after.exchange !== ex) { ex = after.exchange; rows.push(`<tr class="rec-sep atk-${after.offense === 'a' ? 'a' : 'b'}"><td colspan="3">${phase === 'kettei' ? 'Kettei-sen · ' : ''}Exchange ${ex} · ${after.offense === 'a' ? esc(names.a) + ' (Aka)' : esc(names.b) + ' (Shiro)'} attacks</td></tr>`); }
       return;
     }
     if (e.t === 'timeup' || e.t === 'ketteiend') { rows.push(`<tr class="rec-sep"><td colspan="3">${e.t === 'timeup' ? 'Time up' : 'Kettei-sen time up'}${after.phase === 'kettei' ? ' → Kettei-sen (scores reset)' : after.phase === 'hantei' ? ' → Court Judges (Hantei)' : ''}</td></tr>`); phase = after.phase; return; }
     const who = e.s ? `<span class="belt ${e.s}" style="display:inline-block;height:12px;vertical-align:middle"></span> ${esc(e.s === 'a' ? names.a : names.b)}` : '';
     rows.push(`<tr><td class="num tiny">${i + 1}</td><td>${who} · ${esc((EV_LABEL[e.t] || e.t) + (e.t === 'tento' && e.exec ? ' · penalty match (no points)' : ''))}</td><td class="n">${after.cur ? after.cur.a + '–' + after.cur.b : ''}</td></tr>`);
     if (kogo && e.ae && !after.done) { // exchange ended by this score / penalty
-      if (after.phase !== phase) { phase = after.phase; ex = after.exchange; rows.push(`<tr class="rec-sep"><td colspan="3">${phase === 'kettei' ? 'Kettei-sen · exchange 1 · Aka attacks' : phase === 'hantei' ? 'Court Judges meeting (Hantei)' : ''}</td></tr>`); }
-      else if (after.exchange !== ex) { ex = after.exchange; rows.push(`<tr class="rec-sep"><td colspan="3">${phase === 'kettei' ? 'Kettei-sen · ' : ''}Exchange ${ex} · ${after.offense === 'a' ? esc(names.a) + ' (Aka)' : esc(names.b) + ' (Shiro)'} attacks</td></tr>`); }
+      if (after.phase !== phase) { phase = after.phase; ex = after.exchange; rows.push(`<tr class="rec-sep${phase === 'kettei' ? ' atk-a' : ''}"><td colspan="3">${phase === 'kettei' ? 'Kettei-sen · exchange 1 · Aka attacks' : phase === 'hantei' ? 'Court Judges meeting (Hantei)' : ''}</td></tr>`); }
+      else if (after.exchange !== ex) { ex = after.exchange; rows.push(`<tr class="rec-sep atk-${after.offense === 'a' ? 'a' : 'b'}"><td colspan="3">${phase === 'kettei' ? 'Kettei-sen · ' : ''}Exchange ${ex} · ${after.offense === 'a' ? esc(names.a) + ' (Aka)' : esc(names.b) + ' (Shiro)'} attacks</td></tr>`); }
     }
   });
   return `<div class="tw"><table class="rec-log"><thead><tr><th>#</th><th>Event</th><th class="n">Aka–Shiro</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;

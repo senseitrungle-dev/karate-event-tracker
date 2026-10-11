@@ -520,3 +520,38 @@ input.clash { border-color: var(--bad); background: var(--bad-soft); color: var(
 @media (max-width: 640px) { .scrim { padding-top: var(--sat); } }
 .jrow2.pr { grid-template-columns: minmax(0, 1fr); row-gap: 6px; }
 .jrow2.pr .pctl { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+
+/* v1.15 — winners stand out; Ko-go attacker in corner colours */
+.win-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; background: var(--gold, #e8b923); color: #2a1f00; font: 800 .76rem var(--f-body); letter-spacing: .06em; text-transform: uppercase; box-shadow: 0 1px 0 rgba(0,0,0,.15); }
+.corner.won { outline: 4px solid var(--gold, #e8b923); outline-offset: 2px; box-shadow: 0 0 0 8px color-mix(in srgb, #e8b923 22%, transparent); }
+.corner.lost { opacity: .5; filter: saturate(.55); }
+.corner.lost .big { font-weight: 500; }
+.win-banner { display: flex; align-items: center; gap: 14px; border-radius: 12px; padding: 12px 16px; border: 3px solid var(--gold, #e8b923); }
+.win-banner.a { background: var(--aka-bg); color: #fff; }
+.win-banner.b { background: var(--shiro); color: var(--shiro-ink); }
+.win-banner .wb-trophy { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--gold, #e8b923); color: #2a1f00; font-size: 1.5rem; }
+.win-banner .wb-text { display: flex; flex-direction: column; min-width: 0; }
+.win-banner .wb-k { font: 800 .74rem var(--f-body); letter-spacing: .1em; text-transform: uppercase; opacity: .85; }
+.win-banner .wb-name { font: 800 1.35rem/1.15 var(--f-display); overflow-wrap: anywhere; }
+.win-banner .wb-m { font-size: .86rem; opacity: .9; }
+.attack { text-align: center; border-radius: 10px; padding: 10px 8px; font: 800 1.25rem var(--f-display); letter-spacing: .04em; text-transform: uppercase; }
+.attack.a { background: var(--aka-bg); color: #fff; }
+.attack.b { background: var(--shiro); color: var(--shiro-ink); border: 3px solid var(--shiro-ink); }
+.role-tag { font: 800 .7rem var(--f-body); letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; }
+.corner.a .role-tag.atk { background: #fff; color: var(--aka-bg); }
+.corner.b .role-tag.atk { background: var(--shiro-ink); color: #fff; }
+.role-tag.def { opacity: .75; border: 1px solid currentColor; }
+.corner.a.off { box-shadow: 0 0 0 4px color-mix(in srgb, var(--aka) 45%, transparent); }
+.corner.b.off { border-color: var(--shiro-ink); box-shadow: 0 0 0 4px color-mix(in srgb, var(--shiro-ink) 30%, transparent); }
+.rec-sep.atk-a td { background: var(--aka-bg); color: #fff; }
+.rec-sep.atk-b td { background: var(--shiro); color: var(--shiro-ink); border-top: 2px solid var(--shiro-ink); border-bottom: 2px solid var(--shiro-ink); }
+.bm .ln.win { background: color-mix(in srgb, var(--go) 14%, var(--panel)); }
+.bm .ln.win .name { font-weight: 800; color: var(--ink); }
+.bm .ln.win .sc { font-weight: 800; color: var(--ink); }
+.bm .ln.win .strip { box-shadow: inset 0 0 0 0 transparent; }
+.bm .ln.lose { opacity: .55; }
+.bm .wmark { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-right: 5px; border-radius: 50%; background: var(--go); color: #fff; font-size: .66rem; font-weight: 900; vertical-align: 1px; }
+.bm .ln.adv .name { font-weight: 700; }
+.log .lg.a { color: var(--aka); font-weight: 600; }
+.log .lg.a::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--aka-bg); margin-right: 5px; }
+.log .lg.b::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--shiro); border: 1.5px solid var(--shiro-ink); margin-right: 5px; box-sizing: border-box; }

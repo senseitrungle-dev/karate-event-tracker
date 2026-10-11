@@ -156,12 +156,13 @@ function renderMatch() {
   const { did, mid } = M, dv = DC.divBy[did], br = S.d.brackets[did];
   if (!dv || !br || !br.matches[mid]) { root.innerHTML = sheet('Match', '<p>This match is no longer available.</p>', '<button data-act="modal-close">Close</button>'); return; }
   const m = br.matches[mid], r = DC.res[did][mid], seg = KT.segOf(br, m), rid = KT.ringOf(dv, seg, mid);
-  const live = liveFor(did, mid), rs = live ? live[1] : null;
-  const side = s => { const id = r[s]; return `<div class="corner ${s}"><div class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}${r.status === 'done' && r.winner === id ? ' · Winner' : ''}</div><div class="who">${id ? esc(entName(id)) : esc((s === 'a' ? r.hintA : r.hintB) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(id))}</div>
+  const live = r.status === 'done' ? null : liveFor(did, mid), rs = live ? live[1] : null;   // a finished match shows its result, not a stale live board
+  const wSide = r.status === 'done' && r.winner ? (r.winner === r.a ? 'a' : 'b') : '';
+  const side = s => { const id = r[s]; return `<div class="corner ${s}${cornerState(!!wSide, wSide, s)}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${wSide === s ? WIN_CHIP : ''}</div><div class="who">${id ? esc(entName(id)) : esc((s === 'a' ? r.hintA : r.hintB) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(id))}</div>
     ${rs && rs.score ? `<div class="big">${esc(rs.score[s])}</div>` : r.status === 'done' && r.result && r.result.pts ? `<div class="big">${esc(r.result.pts[s])}</div>` : ''}</div>`; };
   const status = r.status === 'done' ? `<span class="chip ok">Final · ${esc((r.result || {}).method || '')}</span>` : rs ? '<span class="chip aka">● Live on the mat</span>' : r.status === 'ready' ? '<span class="chip">Ready</span>' : r.status === 'bye' ? '<span class="chip plain">Bye</span>' : '<span class="chip plain">Waiting for earlier matches</span>';
   const canS = canScoreMatch(did, mid);
-  let body = `<div class="row between">${status}<span class="small muted">${esc(ringName(rid))}${seg ? ' · ' + esc(SEG_LABEL(seg)) : ''}</span></div>
+  let body = `${wSide ? winBanner(wSide, entName(r.winner), (r.result || {}).method, r.result && r.result.pts) : ''}<div class="row between">${status}<span class="small muted">${esc(ringName(rid))}${seg ? ' · ' + esc(SEG_LABEL(seg)) : ''}</span></div>
     <div class="board" style="grid-template-columns:1fr 1fr">${side('a')}${side('b')}</div>`;
   if (rs) body += `<div class="card live-card"><div class="row between"><b>${esc(rs.phase || 'In progress')}</b><span class="tiny muted">updated ${esc(timeAgo(rs.at))}</span></div>${(rs.log || []).length ? `<ol class="live-log">${rs.log.slice().reverse().map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : '<p class="small muted">Waiting for the first score.</p>'}</div>`;
   if (r.status === 'done') {

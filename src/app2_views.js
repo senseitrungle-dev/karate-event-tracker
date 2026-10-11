@@ -401,9 +401,9 @@ function bmHTML(did, m, res, live) {
   const res1 = r.result || {};
   const ln = (side) => {
     const id = r[side], hint = side === 'a' ? r.hintA : r.hintB;
-    const cls = !id ? 'tbd' : r.status === 'done' || r.status === 'bye' ? (r.winner === id ? 'win' : 'lose') : '';
+    const cls = !id ? 'tbd' : r.status === 'done' ? (r.winner === id ? 'win' : 'lose') : r.status === 'bye' ? (r.winner === id ? 'adv' : 'lose') : '';
     const sc = r.status === 'done' && res1.pts ? res1.pts[side] : '';
-    return `<div class="ln ${side} ${cls}"><span class="strip"></span><span style="min-width:0"><div class="name">${id ? esc(entName(id)) : r.status === 'bye' ? 'Bye' : esc(hint || 'TBD')}</div>${id ? `<div class="dojo">${esc(entDojo(id))}</div>` : ''}</span><span class="sc">${sc === '' || sc == null ? '' : esc(sc)}</span></div>`;
+    return `<div class="ln ${side} ${cls}"><span class="strip"></span><span style="min-width:0"><div class="name">${cls === 'win' ? '<span class="wmark" aria-label="Winner">✓</span>' : ''}${id ? esc(entName(id)) : r.status === 'bye' ? 'Bye' : esc(hint || 'TBD')}</div>${id ? `<div class="dojo">${esc(entDojo(id))}</div>` : ''}</span><span class="sc">${sc === '' || sc == null ? '' : esc(sc)}</span></div>`;
   };
   return `<div class="bm ${r.status === 'ready' ? 'ready' : ''} ${live ? 'live' : ''} ${canS ? 'click' : ''}" ${canS ? `data-act="${scorer && r.status === 'ready' ? 'score' : 'match'}" data-did="${esc(did)}" data-mid="${esc(m.id)}" tabindex="0" role="button"` : ''}>${ln('a')}${ln('b')}
     <div class="meta"><span>${esc(m.id)}${kindOf(DC.divBy[did]) === 'fukugo' ? ' · ' + (KT.fukugoPart(m, S.d.brackets[did]) === 'kitei' ? 'Ki-tei' : 'Kumite') : ''}</span><span>${r.status === 'done' ? esc(res1.method || '') : r.status === 'bye' ? 'Bye' : r.status === 'ready' ? (live ? '● Live' : scorer ? 'Tap to score' : 'Ready') : ''}</span></div></div>`;
