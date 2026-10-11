@@ -507,11 +507,11 @@ details.archive-list[open] > summary::before { content: "▾"; }
 .logo-seal svg { height: 40px; }
 .brand { gap: 12px; }
 @media (max-width: 760px) {
-  .brand .logo svg { height: 22px; }
-  .brand .logo-seal svg { height: 34px; }
-  .brand .logo { display: inline-flex !important; }
+  .bar .logo svg { height: 22px; }
+  .bar .logo-seal svg { height: 34px; }
+  .bar .logo { display: inline-flex !important; }
 }
-@media (max-width: 420px) { .brand .logo-horizon svg, .brand .logo-rays svg { height: 18px; } }
+@media (max-width: 420px) { .bar .logo-horizon svg, .bar .logo-rays svg { height: 18px; } }
 details.logo-pick { margin-bottom: 14px; } details.logo-pick > summary { cursor: pointer; list-style: none; } details.logo-pick > summary::-webkit-details-marker { display: none; }
 .logo-opts { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); margin-top: 10px; }
 .logo-opt { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; border-radius: 12px; border: 2px solid var(--line); background: #17191f; color: #fff; cursor: pointer; font-weight: 600; font-size: .85rem; }
@@ -561,16 +561,27 @@ input.clash { border-color: var(--bad); background: var(--bad-soft); color: var(
 .log .lg.a { color: var(--aka); font-weight: 600; }
 .log .lg.a::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--aka-bg); margin-right: 5px; }
 .log .lg.b::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--shiro); border: 1.5px solid var(--shiro-ink); margin-right: 5px; box-sizing: border-box; }
+
+/* v1.16 — tap the logo for "About this app" */
+.logo-btn { background: none; border: 0; padding: 2px; margin: 0; min-height: 0; color: inherit; cursor: pointer; border-radius: 8px; flex: none; display: inline-flex; }
+.logo-btn:hover, .logo-btn:focus-visible { background: rgba(255,255,255,.12); }
+.bar-in > .logo-btn + .brand { margin-left: -4px; }
+.about-head { display: flex; align-items: center; gap: 14px; }
+.about-head .logo svg { height: 64px; }
+.about-head h3 { margin: 0; font: 800 1.25rem var(--f-display); }
+.about-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 16px; align-items: baseline; margin: 0; }
+.about-grid dt { font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.about-grid dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.15.0 */
+<script>/* Karate Event Tracker v1.16.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.15.0';
+  const VERSION = '1.16.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -2089,19 +2100,20 @@ function doRender() {
 }
 function barHTML() {
   const ev = curEvent(), r = role();
-  if (FB.needSignIn) return `<div class="bar-in"><span class="brand">${logoHTML()}<span><b>Karate Event Tracker</b><small>v${KT.VERSION}</small></span></span></div>`;
+  if (FB.needSignIn) return `<div class="bar-in"><button class="logo-btn" data-act="app-info" aria-label="About this app" title="About this app">${logoHTML()}</button><span class="brand"><span><b>Karate Event Tracker</b><small>v${KT.VERSION}</small></span></span></div>`;
   const mode = !S.store ? `<span class="chip"><span class="dot"></span>Connecting…</span>` : isLocal()
     ? `<span class="chip" title="Data stays in this browser only">Local mode</span>` : `<span class="chip" title="Connected to the shared database — changes sync instantly"><span class="dot" style="color:#6fcf97"></span>Online</span>`;
   const liveChip = ev && ev.live ? `<span class="chip aka" title="This event is live">● LIVE</span>` : '';
   let roleCtl = `<span class="chip">${ev ? ROLE_LABEL[r] : isAdmin() ? 'App admin' : S.isOrganizer ? 'Tournament director' : S.myId ? 'Signed in' : ROLE_LABEL[r]}</span>`;
-  if (S.pub) return `<div class="bar-in"><span class="brand">${logoHTML()}<span><b>${ev ? esc(ev.name) : 'Karate Event Tracker'}</b><small>${ev ? 'Live results' : 'v' + KT.VERSION}</small></span></span><span class="spacer"></span>${liveChip}</div>`;
+  if (S.pub) return `<div class="bar-in"><button class="logo-btn" data-act="app-info" aria-label="About this app" title="About this app">${logoHTML()}</button><span class="brand"><span><b>${ev ? esc(ev.name) : 'Karate Event Tracker'}</b><small>${ev ? 'Live results' : 'v' + KT.VERSION}</small></span></span><span class="spacer"></span>${liveChip}</div>`;
   if (isLocal()) {
     roleCtl = `<select id="sim-role" aria-label="View as" data-change="sim-role">${opt('director', 'View as Director', r)}${opt('manager', 'View as Ring manager', r)}${opt('viewer', 'View as Spectator', r)}</select>`;
     if (r === 'manager' && ev) roleCtl += `<select id="sim-ring" aria-label="Manager of ring" data-change="sim-ring">${opt('', 'Pick ring…', S.ui.simRing)}${DC.rings.map(x => opt(x.id, x.name, S.ui.simRing)).join('')}</select>`;
   }
   return `<div class="bar-in">
     ${ev ? `<button class="back-btn" data-act="home" aria-label="All events">${icon('back')}</button>` : ''}
-    <button class="brand" data-act="home" aria-label="All events">${logoHTML()}<span><b>Karate Event Tracker</b><small>${ev ? esc(ev.name) : 'v' + KT.VERSION}</small></span></button>
+    <button class="logo-btn" data-act="app-info" aria-label="About this app" title="About this app">${logoHTML()}</button>
+    <button class="brand" data-act="home" aria-label="All events"><span><b>Karate Event Tracker</b><small>${ev ? esc(ev.name) : 'v' + KT.VERSION}</small></span></button>
     <span class="spacer"></span>${liveChip}${mode}${roleCtl}${fbBarBits()}</div>`;
 }
 function tabsFor() {
@@ -4045,6 +4057,40 @@ function lockedBannerHTML() {
   return `<div class="notice lock-banner"><span>🔒 <b>Official results</b> — approved ${ev.approvedAt ? esc(new Date(ev.approvedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })) : ''}${who && who !== 'Team member' ? ' by ' + esc(who) : ''}. This event is archived and read-only.</span>
     ${isEventDirector(ev) ? '<button class="sm" data-act="ev-reopen">Reopen</button>' : ''}</div>`;
 }
+
+/* ---------- v1.16: About this app (tap the logo) ---------- */
+function openAbout() { S.modal = { type: 'about', refresh: renderAbout }; openModal('<div id="about-root"></div>', { nofocus: true }); renderAbout(); }
+function renderAbout() {
+  const root = $('#about-root'); if (!root) return;
+  const ev = curEvent();
+  const where = FB.on ? `Vercel + Firebase${(window.KT_FIREBASE_CONFIG || {}).projectId ? ' · ' + esc(window.KT_FIREBASE_CONFIG.projectId) : ''}` : S.store && S.store.mode === 'cloud' ? 'claude.ai shared database' : isLocal() ? 'This browser only (local mode)' : '—';
+  const conn = FB.needSignIn ? '<span class="chip warn">Not signed in</span>' : !S.store ? '<span class="chip"><span class="dot"></span>Connecting…</span>' : isLocal() ? '<span class="chip">Local mode</span>' : '<span class="chip ok"><span class="dot" style="color:#2f9e5b"></span>Online</span>';
+  const evState = ev ? [ev.live ? '<span class="chip aka">● LIVE</span>' : '', ev.locked || ev.archived ? '<span class="chip plain">Archived · read-only</span>' : '', ev.public && !ev.live ? '<span class="chip">Public link on</span>' : ''].filter(Boolean).join(' ') : '';
+  let user = '', email = '';
+  if (S.pub) user = 'Not signed in — public spectator link';
+  else if (FB.on && FB.user) { user = FB.user.displayName || personName(S.myId); email = FB.user.email || ''; }
+  else if (FB.needSignIn) user = 'Not signed in';
+  else if (isLocal()) user = 'Nobody — local mode has no accounts';
+  else { user = S.myName || (S.myId ? personName(S.myId) : '') || 'Signed in to claude.ai'; email = S.myEmail || ''; }
+  const appRole = S.pub ? 'Spectator' : isLocal() ? `Simulated: ${ROLE_LABEL[S.ui.simRole] || 'Director'}` : isAdmin() ? 'App admin' : S.isOrganizer ? 'Tournament director' : S.myId ? 'Member' : '—';
+  let evRole = '';
+  if (ev) {
+    const r = role();
+    const rings = r === 'manager' && S.myId ? DC.rings.filter(x => (x.managerIds || []).includes(S.myId)).map(x => x.name) : [];
+    evRole = `${esc(ROLE_LABEL[r] || r)}${rings.length ? ' · ' + esc(rings.join(', ')) : ''} <span class="muted">in ${esc(ev.name || 'this event')}</span>`;
+  }
+  const body = `<div class="stack">
+    <div class="about-head">${logoHTML()}<div><h3>Karate Event Tracker</h3><div class="small muted">伝統空手道 · Dentō Karate-dō · WTKF</div></div></div>
+    <dl class="about-grid">
+      <dt>Version</dt><dd><b class="num" id="about-version">v${esc(KT.VERSION)}</b></dd>
+      <dt>Status</dt><dd id="about-status">${conn} ${evState}</dd>
+      <dt>Data</dt><dd class="small">${where}</dd>
+      <dt>Signed in</dt><dd id="about-user"><b>${esc(user)}</b>${email ? `<div class="small muted">${esc(email)}</div>` : ''}</dd>
+      <dt>Role</dt><dd id="about-role">${esc(appRole)}${evRole ? `<div class="small">${evRole}</div>` : ''}</dd>
+    </dl></div>`;
+  const foot = `${FB.on && FB.user && !S.pub ? '<button data-act="fb-signout" style="margin-right:auto">Sign out</button>' : ''}<button class="primary" data-act="modal-close">Close</button>`;
+  root.innerHTML = sheet('About this app', body, foot);
+}
 /* ===== v1.7: people — directors and ring managers (roster, assign like judges, invite by email) ===== */
 /* Why a roster: claude.ai's people search only covers the owner's own organization, so people shared from outside
    (a personal plan's guests) never show up in it. Everyone who opens the tracker with edit access records their id in
@@ -4598,6 +4644,7 @@ const ACT = {
     drawDivision(el.dataset.id);
   },
   'draw-all': () => drawAll(),
+  'app-info': () => openAbout(),
   'view-bracket': el => { S.ui.bracketDiv = el.dataset.id; S.ui.tab = 'brackets'; if (S.modal) closeModal(); render(); window.scrollTo(0, 0); },
   'ring-new': () => ringForm(null),
   'ring-edit': el => ringForm(el.dataset.id),

@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.15.0 Requirements & Design
+# Karate Event Tracker · v1.16.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -300,3 +300,8 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Ko-go Kumite**: the "Aka attacks" / "Shiro attacks" block in the middle is filled with the attacker's colour (red / white with a dark border); the attacking corner is ringed and tagged "⚔ Attacking", the other "Defending"; log lines carry a red or white dot for the side; in the result record each exchange header row is red (Aka attacks) or white (Shiro attacks).
 - **Brackets**: the winner's line is tinted, bold, with a green ✓ and bold score; the loser's line is faded and struck through. A bye advance is bold without the ✓ (no match was won).
 - **Verify**: test/winner.js (Ko-go colours on exchanges 1 and 4–5, Shobu Ippon winner banner/outline/dim, bracket ✓ and faded loser, match view banner and final score); full regression.
+
+## 34. v1.16.0 — "About this app" from the logo (2026-10-11)
+- Tapping the logo at the top left (every screen: sign-in, home, events, public spectator page) opens **About this app**: logo, app name (伝統空手道 · Dentō Karate-dō · WTKF), **version**, **status** (Online / Local mode / Connecting / Not signed in, plus ● LIVE, Archived or Public link for the open event), where the data lives (Vercel + Firebase project, claude.ai shared database, or this browser), the **signed-in user** (name and email; "public spectator link" or "not signed in" when relevant) and **role** (app-wide: App admin / Tournament director / Member; in the open event: Director, Ring manager with ring names, or Spectator).
+- **Close** (or ✕, Esc, tapping outside) removes it; on the Vercel site it also offers Sign out. Tapping the app name still goes to the event list.
+- Verify: test/about.js (local desktop + phone, inside an event, Firebase sign-in screen and signed-in admin); full regression.

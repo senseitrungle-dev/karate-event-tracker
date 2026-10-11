@@ -229,6 +229,7 @@ const ACT = {
     drawDivision(el.dataset.id);
   },
   'draw-all': () => drawAll(),
+  'app-info': () => openAbout(),
   'view-bracket': el => { S.ui.bracketDiv = el.dataset.id; S.ui.tab = 'brackets'; if (S.modal) closeModal(); render(); window.scrollTo(0, 0); },
   'ring-new': () => ringForm(null),
   'ring-edit': el => ringForm(el.dataset.id),

@@ -21,19 +21,20 @@ function doRender() {
 }
 function barHTML() {
   const ev = curEvent(), r = role();
-  if (FB.needSignIn) return `<div class="bar-in"><span class="brand">${logoHTML()}<span><b>Karate Event Tracker</b><small>v${KT.VERSION}</small></span></span></div>`;
+  if (FB.needSignIn) return `<div class="bar-in"><button class="logo-btn" data-act="app-info" aria-label="About this app" title="About this app">${logoHTML()}</button><span class="brand"><span><b>Karate Event Tracker</b><small>v${KT.VERSION}</small></span></span></div>`;
   const mode = !S.store ? `<span class="chip"><span class="dot"></span>Connecting…</span>` : isLocal()
     ? `<span class="chip" title="Data stays in this browser only">Local mode</span>` : `<span class="chip" title="Connected to the shared database — changes sync instantly"><span class="dot" style="color:#6fcf97"></span>Online</span>`;
   const liveChip = ev && ev.live ? `<span class="chip aka" title="This event is live">● LIVE</span>` : '';
   let roleCtl = `<span class="chip">${ev ? ROLE_LABEL[r] : isAdmin() ? 'App admin' : S.isOrganizer ? 'Tournament director' : S.myId ? 'Signed in' : ROLE_LABEL[r]}</span>`;
-  if (S.pub) return `<div class="bar-in"><span class="brand">${logoHTML()}<span><b>${ev ? esc(ev.name) : 'Karate Event Tracker'}</b><small>${ev ? 'Live results' : 'v' + KT.VERSION}</small></span></span><span class="spacer"></span>${liveChip}</div>`;
+  if (S.pub) return `<div class="bar-in"><button class="logo-btn" data-act="app-info" aria-label="About this app" title="About this app">${logoHTML()}</button><span class="brand"><span><b>${ev ? esc(ev.name) : 'Karate Event Tracker'}</b><small>${ev ? 'Live results' : 'v' + KT.VERSION}</small></span></span><span class="spacer"></span>${liveChip}</div>`;
   if (isLocal()) {
     roleCtl = `<select id="sim-role" aria-label="View as" data-change="sim-role">${opt('director', 'View as Director', r)}${opt('manager', 'View as Ring manager', r)}${opt('viewer', 'View as Spectator', r)}</select>`;
     if (r === 'manager' && ev) roleCtl += `<select id="sim-ring" aria-label="Manager of ring" data-change="sim-ring">${opt('', 'Pick ring…', S.ui.simRing)}${DC.rings.map(x => opt(x.id, x.name, S.ui.simRing)).join('')}</select>`;
   }
   return `<div class="bar-in">
     ${ev ? `<button class="back-btn" data-act="home" aria-label="All events">${icon('back')}</button>` : ''}
-    <button class="brand" data-act="home" aria-label="All events">${logoHTML()}<span><b>Karate Event Tracker</b><small>${ev ? esc(ev.name) : 'v' + KT.VERSION}</small></span></button>
+    <button class="logo-btn" data-act="app-info" aria-label="About this app" title="About this app">${logoHTML()}</button>
+    <button class="brand" data-act="home" aria-label="All events"><span><b>Karate Event Tracker</b><small>${ev ? esc(ev.name) : 'v' + KT.VERSION}</small></span></button>
     <span class="spacer"></span>${liveChip}${mode}${roleCtl}${fbBarBits()}</div>`;
 }
 function tabsFor() {

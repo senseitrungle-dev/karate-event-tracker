@@ -244,3 +244,37 @@ function lockedBannerHTML() {
   return `<div class="notice lock-banner"><span>🔒 <b>Official results</b> — approved ${ev.approvedAt ? esc(new Date(ev.approvedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })) : ''}${who && who !== 'Team member' ? ' by ' + esc(who) : ''}. This event is archived and read-only.</span>
     ${isEventDirector(ev) ? '<button class="sm" data-act="ev-reopen">Reopen</button>' : ''}</div>`;
 }
+
+/* ---------- v1.16: About this app (tap the logo) ---------- */
+function openAbout() { S.modal = { type: 'about', refresh: renderAbout }; openModal('<div id="about-root"></div>', { nofocus: true }); renderAbout(); }
+function renderAbout() {
+  const root = $('#about-root'); if (!root) return;
+  const ev = curEvent();
+  const where = FB.on ? `Vercel + Firebase${(window.KT_FIREBASE_CONFIG || {}).projectId ? ' · ' + esc(window.KT_FIREBASE_CONFIG.projectId) : ''}` : S.store && S.store.mode === 'cloud' ? 'claude.ai shared database' : isLocal() ? 'This browser only (local mode)' : '—';
+  const conn = FB.needSignIn ? '<span class="chip warn">Not signed in</span>' : !S.store ? '<span class="chip"><span class="dot"></span>Connecting…</span>' : isLocal() ? '<span class="chip">Local mode</span>' : '<span class="chip ok"><span class="dot" style="color:#2f9e5b"></span>Online</span>';
+  const evState = ev ? [ev.live ? '<span class="chip aka">● LIVE</span>' : '', ev.locked || ev.archived ? '<span class="chip plain">Archived · read-only</span>' : '', ev.public && !ev.live ? '<span class="chip">Public link on</span>' : ''].filter(Boolean).join(' ') : '';
+  let user = '', email = '';
+  if (S.pub) user = 'Not signed in — public spectator link';
+  else if (FB.on && FB.user) { user = FB.user.displayName || personName(S.myId); email = FB.user.email || ''; }
+  else if (FB.needSignIn) user = 'Not signed in';
+  else if (isLocal()) user = 'Nobody — local mode has no accounts';
+  else { user = S.myName || (S.myId ? personName(S.myId) : '') || 'Signed in to claude.ai'; email = S.myEmail || ''; }
+  const appRole = S.pub ? 'Spectator' : isLocal() ? `Simulated: ${ROLE_LABEL[S.ui.simRole] || 'Director'}` : isAdmin() ? 'App admin' : S.isOrganizer ? 'Tournament director' : S.myId ? 'Member' : '—';
+  let evRole = '';
+  if (ev) {
+    const r = role();
+    const rings = r === 'manager' && S.myId ? DC.rings.filter(x => (x.managerIds || []).includes(S.myId)).map(x => x.name) : [];
+    evRole = `${esc(ROLE_LABEL[r] || r)}${rings.length ? ' · ' + esc(rings.join(', ')) : ''} <span class="muted">in ${esc(ev.name || 'this event')}</span>`;
+  }
+  const body = `<div class="stack">
+    <div class="about-head">${logoHTML()}<div><h3>Karate Event Tracker</h3><div class="small muted">伝統空手道 · Dentō Karate-dō · WTKF</div></div></div>
+    <dl class="about-grid">
+      <dt>Version</dt><dd><b class="num" id="about-version">v${esc(KT.VERSION)}</b></dd>
+      <dt>Status</dt><dd id="about-status">${conn} ${evState}</dd>
+      <dt>Data</dt><dd class="small">${where}</dd>
+      <dt>Signed in</dt><dd id="about-user"><b>${esc(user)}</b>${email ? `<div class="small muted">${esc(email)}</div>` : ''}</dd>
+      <dt>Role</dt><dd id="about-role">${esc(appRole)}${evRole ? `<div class="small">${evRole}</div>` : ''}</dd>
+    </dl></div>`;
+  const foot = `${FB.on && FB.user && !S.pub ? '<button data-act="fb-signout" style="margin-right:auto">Sign out</button>' : ''}<button class="primary" data-act="modal-close">Close</button>`;
+  root.innerHTML = sheet('About this app', body, foot);
+}

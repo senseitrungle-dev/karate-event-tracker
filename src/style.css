@@ -501,11 +501,11 @@ details.archive-list[open] > summary::before { content: "▾"; }
 .logo-seal svg { height: 40px; }
 .brand { gap: 12px; }
 @media (max-width: 760px) {
-  .brand .logo svg { height: 22px; }
-  .brand .logo-seal svg { height: 34px; }
-  .brand .logo { display: inline-flex !important; }
+  .bar .logo svg { height: 22px; }
+  .bar .logo-seal svg { height: 34px; }
+  .bar .logo { display: inline-flex !important; }
 }
-@media (max-width: 420px) { .brand .logo-horizon svg, .brand .logo-rays svg { height: 18px; } }
+@media (max-width: 420px) { .bar .logo-horizon svg, .bar .logo-rays svg { height: 18px; } }
 details.logo-pick { margin-bottom: 14px; } details.logo-pick > summary { cursor: pointer; list-style: none; } details.logo-pick > summary::-webkit-details-marker { display: none; }
 .logo-opts { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); margin-top: 10px; }
 .logo-opt { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; border-radius: 12px; border: 2px solid var(--line); background: #17191f; color: #fff; cursor: pointer; font-weight: 600; font-size: .85rem; }
@@ -555,3 +555,14 @@ input.clash { border-color: var(--bad); background: var(--bad-soft); color: var(
 .log .lg.a { color: var(--aka); font-weight: 600; }
 .log .lg.a::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--aka-bg); margin-right: 5px; }
 .log .lg.b::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--shiro); border: 1.5px solid var(--shiro-ink); margin-right: 5px; box-sizing: border-box; }
+
+/* v1.16 — tap the logo for "About this app" */
+.logo-btn { background: none; border: 0; padding: 2px; margin: 0; min-height: 0; color: inherit; cursor: pointer; border-radius: 8px; flex: none; display: inline-flex; }
+.logo-btn:hover, .logo-btn:focus-visible { background: rgba(255,255,255,.12); }
+.bar-in > .logo-btn + .brand { margin-left: -4px; }
+.about-head { display: flex; align-items: center; gap: 14px; }
+.about-head .logo svg { height: 64px; }
+.about-head h3 { margin: 0; font: 800 1.25rem var(--f-display); }
+.about-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 16px; align-items: baseline; margin: 0; }
+.about-grid dt { font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.about-grid dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
