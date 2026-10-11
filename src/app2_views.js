@@ -3,7 +3,8 @@ let rq = false;
 function render() { if (rq) return; rq = true; setTimeout(() => { rq = false; if (S.dragging) { S.renderPending = true; return; } doRender(); }, 0); }
 function doRender() {
   derive();
-  const ae = document.activeElement, aid = ae && ae.id && !$('#modal').contains(ae) ? ae.id : null;
+  // keep typing focus across a redraw — but never put focus back on a drop-down on a phone/tablet (that re-opens its picker)
+  const ae = document.activeElement, aid = ae && ae.id && !$('#modal').contains(ae) && !(ae.tagName === 'SELECT' && isTouch()) ? ae.id : null;
   const sel = aid && ae.selectionStart != null ? [ae.selectionStart, ae.selectionEnd] : null;
   $('#bar').innerHTML = barHTML();
   const bar = $('#bar'); document.documentElement.style.setProperty('--barh', bar.offsetHeight + 'px');
@@ -256,7 +257,35 @@ function divisionsHTML() {
     <button class="primary" data-act="draw-all">Draw all ready</button>`;
   if (!DC.divs.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No divisions yet</h2>
     <p class="muted" style="max-width:56ch">Start with the standard black-belt age groups — Senior 21+, Youth 19–20, Junior 16–18, Cadet 14–15 — for every event you offer, then define kyu divisions by rank and age.</p><div class="row">${acts}</div></div>`;
-  const rows = list.map(d => {
+  const DO = divOrder(), finFirst = DO.groups === 'finished';
+  const grpOf = d => { const n = divEntrants(d.id).length; return !n ? 2 : bracketState(d.id).complete ? (finFirst ? 0 : 1) : (finFirst ? 1 : 0); };
+  const sorted = list.slice().sort((a, b) => grpOf(a) - grpOf(b) || divSortCmp(a, b));
+  const GRP = finFirst ? ['Finished', 'Not finished', 'No entrants'] : ['Not finished', 'Finished', 'No entrants'];
+  const orderCtl = `<div class="row div-order" style="gap:6px;flex-wrap:wrap"><span class="tiny muted">Order:</span>
+    <select id="do-groups" data-change="div-order" data-k="groups" aria-label="Group order" ${isDirector() ? '' : 'disabled'}>${opt('open', 'Not finished first', DO.groups)}${opt('finished', 'Finished first', DO.groups)}</select>
+    <select id="do-age" data-change="div-order" data-k="age" aria-label="Age group order" ${isDirector() ? '' : 'disabled'}>${opt('asc', 'Youngest age group first', DO.age)}${opt('desc', 'Oldest age group first', DO.age)}</select>
+    <select id="do-rank" data-change="div-order" data-k="rank" aria-label="Kyu rank order" ${isDirector() ? '' : 'disabled'}>${opt('asc', 'Kyu: 10th → 1st', DO.rank)}${opt('desc', 'Kyu: 1st → 10th', DO.rank)}</select></div>`;
+  let lastG = -1;
+  const rows = sorted.map(d => {
+    const g = grpOf(d), head = g !== lastG ? `<tr class="grp-row"><td colspan="6">${GRP[g]} · ${sorted.filter(x => grpOf(x) === g).length}</td></tr>` : ''; lastG = g;
+    return head + divRowHTML(d);
+  }).join('');
+  return eventHeader() + `<div class="section-h"><select id="div-f" data-change="divFilter" aria-label="Event filter" style="max-width:240px">${opt('', 'All events', f)}${(ev.eventTypes || KT.EVENT_ORDER).map(t => opt(t, KT.EVENT_TYPES[t].label, f)).join('')}</select><div class="row actions">${acts}</div></div>${orderCtl}
+    <div class="card flush"><div class="tw"><table class="mcards"><thead><tr><th>Division</th><th>Format</th><th>Ring</th><th class="n">Entrants</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+/** The event's division order (director's choice, shared with everyone): groups, age groups, kyu ranks. */
+function divOrder() { const o = (curEvent() || {}).divOrder || {}; return { groups: o.groups === 'finished' ? 'finished' : 'open', age: o.age === 'desc' ? 'desc' : 'asc', rank: o.rank === 'desc' ? 'desc' : 'asc' }; }
+/** Division order: black-belt age groups, then kyu divisions by rank (each direction selectable); then event, gender. */
+function divSortCmp(a, b) {
+  const DO = divOrder(), sa = DO.age === 'desc' ? -1 : 1, sr = DO.rank === 'desc' ? -1 : 1;
+  const kyu = d => d.belt === 'kyu' ? 1 : 0;
+  const age = d => (d.minAge === '' || d.minAge == null ? 0 : +d.minAge);
+  const rank = d => KT.rankValue(d.minRank) ?? -99;
+  const evo = d => { const i = KT.EVENT_ORDER.indexOf(d.eventType); return i < 0 ? 99 : i; };
+  const gen = d => ({ M: 0, W: 1, F: 1, X: 2 })[d.gender] ?? 3;
+  return kyu(a) - kyu(b) || (kyu(a) ? sr * (rank(a) - rank(b)) || sa * (age(a) - age(b)) : sa * (age(a) - age(b))) || evo(a) - evo(b) || gen(a) - gen(b) || String(a.name).localeCompare(String(b.name));
+}
+function divRowHTML(d) {
     const n = divEntrants(d.id).length, bs = bracketState(d.id), ring = S.d.rings[d.ringId];
     const st = !bs.drawn ? (n >= 2 ? '<span class="chip plain">Ready to draw</span>' : n === 1 ? '<span class="chip warn">1 entrant</span>' : '<span class="chip plain">Empty</span>')
       : bs.complete ? '<span class="chip ok">Finished</span>' : `<span class="chip">${bs.fought}/${bs.playable} ${bs.kp ? 'performances' : 'matches'}</span>${bs.changed ? ' <span class="chip warn">Entrants changed</span>' : ''}`;
@@ -266,9 +295,6 @@ function divisionsHTML() {
       <td class="small">${ring ? esc(ring.name) : '<span class="muted">—</span>'}</td>
       <td class="n">${n}</td><td>${st}</td>
       <td style="white-space:nowrap">${bs.drawn ? `<button class="sm" data-act="view-bracket" data-id="${esc(d.id)}">Bracket</button>` : n >= 1 ? `<button class="sm" data-act="draw" data-id="${esc(d.id)}">Draw</button>` : ''}</td></tr>`;
-  }).join('');
-  return eventHeader() + `<div class="section-h"><select id="div-f" data-change="divFilter" aria-label="Event filter" style="max-width:240px">${opt('', 'All events', f)}${(ev.eventTypes || KT.EVENT_ORDER).map(t => opt(t, KT.EVENT_TYPES[t].label, f)).join('')}</select><div class="row actions">${acts}</div></div>
-    <div class="card flush"><div class="tw"><table class="mcards"><thead><tr><th>Division</th><th>Format</th><th>Ring</th><th class="n">Entrants</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function ageRange(d) {
   const lo = d.minAge === '' || d.minAge == null ? null : d.minAge, hi = d.maxAge === '' || d.maxAge == null ? null : d.maxAge;
@@ -281,7 +307,8 @@ function ageRange(d) {
 /* ---------- rings ---------- */
 function ringsHTML() {
   const cards = DC.rings.map(r => {
-    const divs = DC.divs.filter(d => d.ringId === r.id && divEntrants(d.id).length).sort((a, b) => (a.ringOrder || 0) - (b.ringOrder || 0));
+    const all = DC.divs.filter(d => d.ringId === r.id && divEntrants(d.id).length).sort((a, b) => (a.ringOrder || 0) - (b.ringOrder || 0));
+    const divs = all.filter(d => !bracketState(d.id).complete), done = all.filter(d => bracketState(d.id).complete);   // finished divisions leave the running order
     const free = DC.divs.filter(d => !S.d.rings[d.ringId] && divEntrants(d.id).length);
     const others = DC.rings.filter(x => x.id !== r.id);
     const guest = guestItems(r.id);
@@ -297,7 +324,8 @@ function ringsHTML() {
       <div class="rdivs" data-ring="${esc(r.id)}">${divs.map((d, i) => `<div class="rdiv" data-id="${esc(d.id)}" data-tap="div-panel" tabindex="0" aria-label="${esc(d.name)}, position ${i + 1}. Hold to move; Alt+arrow keys also move.">
         <span class="grip" aria-hidden="true">⋮⋮</span><span class="rnum num">${i + 1}</span>
         <span class="rname"><span class="name">${esc(d.name)}</span><span class="dojo">${plural(divEntrants(d.id).length, 'entrant')}${bracketState(d.id).drawn ? ' · drawn' : ''}${awaySegs(d).map(([sg, rr]) => ` · ${esc(SEG_LABEL(sg))} → ${esc(ringName(rr))}`).join('')}</span></span>
-        <select class="rmove" id="rmv-${esc(d.id)}" data-change="div-ring" data-id="${esc(d.id)}" aria-label="Move ${esc(d.name)} to ring">${opt('', 'Move…', '')}${others.map(x => opt(x.id, 'To ' + x.name, '')).join('')}${opt('__none', 'Remove from ring', '')}</select></div>`).join('') || '<span class="small muted">No divisions with competitors assigned.</span>'}</div>
+        <select class="rmove" id="rmv-${esc(d.id)}" data-change="div-ring" data-id="${esc(d.id)}" aria-label="Move ${esc(d.name)} to ring">${opt('', 'Move…', '')}${others.map(x => opt(x.id, 'To ' + x.name, '')).join('')}${opt('__none', 'Remove from ring', '')}</select></div>`).join('') || `<span class="small muted">${done.length ? 'Every division on this ring is finished.' : 'No divisions with competitors assigned.'}</span>`}</div>
+      ${done.length ? `<details class="rdone"><summary class="small"><span class="chip ok">Finished · ${done.length}</span> <span class="muted">no longer in the running order</span></summary><div class="pill-list" style="margin-top:6px">${done.map(d => `<button class="sm ghost" data-act="div-panel" data-id="${esc(d.id)}">✓ ${esc(d.name)}</button>`).join('')}</div></details>` : ''}
       ${guest.length ? `<div class="label" style="margin-top:12px">Pools &amp; rounds from other rings' divisions</div><div class="rdivs">${guest.map(g => { const gd = DC.divBy[g.did]; return `<div class="rdiv guest"><span class="rnum num">↪</span><span class="rname"><span class="name">${esc(gd.name)} · ${esc(SEG_LABEL(g.seg))}</span><span class="dojo">From ${esc(ringName(gd.ringId))}</span></span>
         <select class="rmove" id="gmv-${esc(g.did)}-${esc(g.seg.replace(':', ''))}" data-change="seg-ring" data-did="${esc(g.did)}" data-seg="${esc(g.seg)}" aria-label="Move">${opt('', 'Move…', '')}${DC.rings.filter(x => x.id !== r.id).map(x => opt(x.id, 'To ' + x.name + (x.id === gd.ringId ? ' (back)' : ''), '')).join('')}</select></div>`; }).join('')}</div>` : ''}
       <div class="row" style="margin-top:8px"><button class="sm" data-act="ring-live" data-id="${esc(r.id)}">● Live view</button><span class="tiny muted">Tap a division to place its pools, rounds and judges.</span></div>
@@ -320,6 +348,8 @@ function ringQueue(rid) {
   }
   return out;
 }
+/** Tapping a kata competitor (on the mat / up next): scorers get that competitor's score card, everyone else the division's bracket. */
+function kpTapAttrs(did, key) { return (canScoreKP(did, key) ? `data-act="kp-score" data-did="${esc(did)}" data-key="${esc(key)}"` : `data-act="view-bracket" data-id="${esc(did)}"`) + ' role="button" tabindex="0"'; }
 function nowHTML(rs) {
   if (!rs || !rs.did || !S.d.brackets[rs.did]) return '';
   const dv = DC.divBy[rs.did], br = S.d.brackets[rs.did];
@@ -327,7 +357,7 @@ function nowHTML(rs) {
     const q = br.format === 'KP' ? KT.kpQueue(br).find(x => x.key === rs.kp) : null;
     if (!q) return '';
     return `<div class="label">${esc(dv ? dv.name : '')} · ${esc(q.label)}</div>
-      <div class="now" style="grid-template-columns:1fr auto"><div class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span style="min-width:0"><div class="name">${esc(entName(q.id))}</div><div class="dojo">${esc(entDojo(q.id))}${rs.kata ? ' · ' + esc(rs.kata) : ''}</div></span></div>
+      <div class="now" ${kpTapAttrs(rs.did, rs.kp)} style="grid-template-columns:1fr auto;cursor:pointer"><div class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span style="min-width:0"><div class="name">${esc(entName(q.id))}</div><div class="dojo">${esc(entDojo(q.id))}${rs.kata ? ' · ' + esc(rs.kata) : ''}</div></span></div>
       <div class="sc num">${rs.score != null && rs.score !== '' ? esc(rs.score) : ''}</div></div>`;
   }
   const res = (DC.res[rs.did] || {})[rs.mid];
@@ -350,7 +380,7 @@ function ringBoardHTML(rings, withActions) {
       <div>${now || '<div class="small muted">Nothing on the mat.</div>'}${openBtn}</div>
       <div class="queue"><div class="label">Up next</div>${next.map(x => {
         const can = withActions && (x.kp ? canScoreKP(x.did, x.kp.key) : canScoreMatch(x.did, x.m.id));
-        if (x.kp) return `<div class="q" style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id))}</span></span>
+        if (x.kp) return `<div class="q" ${kpTapAttrs(x.did, x.kp.key)} style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id))}</span></span>
           <span class="vs">${can ? `<button class="sm go" data-act="kp-score" data-did="${esc(x.did)}" data-key="${esc(x.kp.key)}">Score</button>` : 'kata'}</span></div>
           <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(x.kp.label)}</div>`;
         return `<div class="q" data-act="match" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}" role="button" tabindex="0"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a))}</span></span>
@@ -562,7 +592,7 @@ function kpTableHTML(did, title, rows, order, opts) {
   return `<div class="card flush"><div class="card-h"><h3>${esc(title)}</h3>${opts.chip || ''}</div><div class="tw"><table class="kp"><thead><tr><th>#</th><th>${opts.byRank ? 'Place' : 'Order'}</th><th>Competitor</th><th>${br.kataRule ? 'Kata' : 'Notes'}</th><th>Judges</th>${opts.carry ? '<th class="n">Semifinal</th><th class="n">Final</th>' : ''}<th class="n">Score</th></tr></thead><tbody>
     ${seq.map((r, i) => `<tr class="${can || isDirector() ? 'click' : ''} ${r.advance ? 'adv' : ''}" ${can || isDirector() ? `data-act="kp-score" data-did="${esc(did)}" data-key="${esc(r.key)}"` : ''}>
       <td class="num">${i + 1}</td><td class="num">${r.rank ? (opts.medals && r.rank <= 3 ? `<span class="medal ${['g', 's', 'b'][r.rank - 1]}">${r.rank}</span>` : r.rank) : '—'}${r.advance ? ' <span class="chip ok" title="Advances">▸</span>' : ''}</td>
-      <td><div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div></td>
+      <td>${can || isDirector() ? `<button type="button" class="kp-who" aria-label="Score ${esc(entName(r.id))}"><span class="name">${esc(entName(r.id))}</span><span class="dojo">${esc(entDojo(r.id))}</span></button>` : `<div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div>`}</td>
       <td class="small">${esc(r.kata || '')}${r.appTotal != null ? `<div class="tiny muted">Kata ${f(r.kataOwn)} · Application ${f(r.appTotal)}</div>` : ''}${r.rpTotal != null ? `<div class="tiny muted">Kettei-sen ${f(r.rpTotal)}</div>` : ''}</td>
       <td class="jcell">${sc(r)}</td>
       ${opts.carry ? `<td class="n">${r.sheet ? f(r.carry) : ''}</td><td class="n">${r.sheet ? f(r.own) : ''}</td>` : ''}

@@ -134,7 +134,7 @@ table { width: 100%; border-collapse: collapse; font-size: .88rem; }
 th { text-align: left; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 tr:last-child td { border-bottom: 0; }
-tr.click { cursor: pointer; } tr.click:hover td { background: var(--ai-soft); }
+tr.click { cursor: pointer; } @media (hover: hover) { tr.click:hover td { background: var(--ai-soft); } }
 td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
 
 /* empty */
@@ -164,7 +164,7 @@ td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric
 .bcol-in { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 12px; }
 .bcol > .label { text-align: center; margin-bottom: 2px; }
 .bm { background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; cursor: default; position: relative; font-size: .84rem; }
-.bm.click { cursor: pointer; } .bm.click:hover { border-color: var(--ai); box-shadow: var(--shadow); }
+.bm.click { cursor: pointer; } @media (hover: hover) { .bm.click:hover { border-color: var(--ai); box-shadow: var(--shadow); } }
 .bm.ready { border-color: var(--ai); } .bm.live { border-color: var(--aka); box-shadow: 0 0 0 2px var(--aka-soft); }
 .bm .ln { display: grid; grid-template-columns: 6px 1fr auto; gap: 8px; align-items: center; padding: 6px 9px 6px 0; min-height: 32px; }
 .bm .ln + .ln { border-top: 1px solid var(--line); }
@@ -279,7 +279,7 @@ button:active:not(:disabled), .click:active, .bn:active, .menu-item:active, .fab
 .chip.plain, .tabs .tab { }
 /* tappable rows & cards */
 tr.click td:last-child::after { content: "›"; float: right; margin-left: 8px; color: var(--ai); font-size: 1.2rem; line-height: 1; }
-tr.click:hover td, tr.click:active td { background: var(--ai-soft); }
+@media (hover: hover) { tr.click:hover td { background: var(--ai-soft); } } tr.click:active td { background: var(--ai-soft); }
 .ev-card { background: var(--panel); color: var(--ink); border: 1px solid var(--line); }
 .ev-card::after { content: "Open ›"; justify-self: end; font-size: .8rem; font-weight: 700; color: var(--ai); }
 .bm.click { border-color: color-mix(in srgb, var(--ai) 35%, var(--line-2)); }
@@ -446,7 +446,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .vrow > .tiny { flex-basis: 100%; order: 2; }
 .vrow > .pill-list { flex-basis: 100%; order: 3; }
 .vrow.guest { background: color-mix(in srgb, var(--ai-soft) 45%, transparent); }
-.vrow:hover { background: var(--paper); }
+@media (hover: hover) { .vrow:hover { background: var(--paper); } }
 a.btn.go { background: var(--go); color: var(--go-ink, #fff); }
 ul.checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 ul.checks li { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
@@ -571,16 +571,31 @@ input.clash { border-color: var(--bad); background: var(--bad-soft); color: var(
 .about-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 16px; align-items: baseline; margin: 0; }
 .about-grid dt { font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 .about-grid dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+/* v1.17 */
+tr.grp-row td { background: var(--paper); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); padding: 8px 12px; }
+@media (max-width: 760px) { table.mcards tr.grp-row { display: block; padding: 0; } table.mcards tr.grp-row td { padding: 8px 14px; } }
+details.rdone { margin-top: 8px; } details.rdone > summary { cursor: pointer; list-style: none; } details.rdone > summary::-webkit-details-marker { display: none; }
+button.primary.nudge:focus, button.primary.nudge { box-shadow: 0 0 0 4px color-mix(in srgb, var(--go) 45%, transparent); animation: nudge 1s ease-in-out 3; }
+@keyframes nudge { 50% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--go) 18%, transparent); } }
+@media (prefers-reduced-motion: reduce) { button.primary.nudge { animation: none; } }
+
+/* v1.17: one tap is enough on phones (no double-tap zoom wait, no hover-first tap) */
+html { touch-action: manipulation; }
+tr.click, .bm.click, .vrow, [data-act], [data-tap] { touch-action: manipulation; -webkit-tap-highlight-color: color-mix(in srgb, var(--ai) 18%, transparent); }
+button.kp-who { all: unset; display: flex; flex-direction: column; align-items: flex-start; cursor: pointer; min-width: 0; text-align: left; }
+button.kp-who .name { font-weight: 700; } button.kp-who:focus-visible { outline: 2px solid var(--ai); outline-offset: 2px; border-radius: 4px; }
+.div-order { margin: -4px 0 10px; } .div-order select { width: auto; min-height: 34px; font-size: .82rem; padding: 4px 8px; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.16.0 */
+<script>/* Karate Event Tracker v1.17.3 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.16.0';
+  const VERSION = '1.17.3';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -1905,8 +1920,10 @@ function openModal(html, opts) {
   host.innerHTML = `<div class="scrim" data-act="modal-scrim"><div class="sheet ${opts && opts.wide ? 'wide' : ''}" role="dialog" aria-modal="true">${html}</div></div>`;
   host.hidden = false;
   const f = host.querySelector('[autofocus]') || host.querySelector('input,select,textarea,button:not(.ghost)');
-  if (f && !(opts && opts.nofocus)) setTimeout(() => f.focus(), 30);
+  if (f && !(opts && opts.nofocus) && !(isTouch() && !f.hasAttribute('autofocus'))) setTimeout(() => f.focus(), 30);   // phones: don't pop a picker or keyboard on open
 }
+/** phones and tablets: a picked item should close the picker (no auto-focus that keeps it open) */
+function isTouch() { try { return matchMedia('(pointer: coarse)').matches; } catch (e) { return false; } }
 function closeModal() { const host = $('#modal'); host.hidden = true; host.innerHTML = ''; S.modal = null; stopClock(); }
 function sheet(title, body, foot, sub) {
   return `<div class="sheet-h"><div><h2>${title}</h2>${sub ? `<div class="small muted">${sub}</div>` : ''}</div><button class="ghost" data-act="modal-close" aria-label="Close">✕</button></div>
@@ -2081,7 +2098,8 @@ let rq = false;
 function render() { if (rq) return; rq = true; setTimeout(() => { rq = false; if (S.dragging) { S.renderPending = true; return; } doRender(); }, 0); }
 function doRender() {
   derive();
-  const ae = document.activeElement, aid = ae && ae.id && !$('#modal').contains(ae) ? ae.id : null;
+  // keep typing focus across a redraw — but never put focus back on a drop-down on a phone/tablet (that re-opens its picker)
+  const ae = document.activeElement, aid = ae && ae.id && !$('#modal').contains(ae) && !(ae.tagName === 'SELECT' && isTouch()) ? ae.id : null;
   const sel = aid && ae.selectionStart != null ? [ae.selectionStart, ae.selectionEnd] : null;
   $('#bar').innerHTML = barHTML();
   const bar = $('#bar'); document.documentElement.style.setProperty('--barh', bar.offsetHeight + 'px');
@@ -2334,7 +2352,35 @@ function divisionsHTML() {
     <button class="primary" data-act="draw-all">Draw all ready</button>`;
   if (!DC.divs.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No divisions yet</h2>
     <p class="muted" style="max-width:56ch">Start with the standard black-belt age groups — Senior 21+, Youth 19–20, Junior 16–18, Cadet 14–15 — for every event you offer, then define kyu divisions by rank and age.</p><div class="row">${acts}</div></div>`;
-  const rows = list.map(d => {
+  const DO = divOrder(), finFirst = DO.groups === 'finished';
+  const grpOf = d => { const n = divEntrants(d.id).length; return !n ? 2 : bracketState(d.id).complete ? (finFirst ? 0 : 1) : (finFirst ? 1 : 0); };
+  const sorted = list.slice().sort((a, b) => grpOf(a) - grpOf(b) || divSortCmp(a, b));
+  const GRP = finFirst ? ['Finished', 'Not finished', 'No entrants'] : ['Not finished', 'Finished', 'No entrants'];
+  const orderCtl = `<div class="row div-order" style="gap:6px;flex-wrap:wrap"><span class="tiny muted">Order:</span>
+    <select id="do-groups" data-change="div-order" data-k="groups" aria-label="Group order" ${isDirector() ? '' : 'disabled'}>${opt('open', 'Not finished first', DO.groups)}${opt('finished', 'Finished first', DO.groups)}</select>
+    <select id="do-age" data-change="div-order" data-k="age" aria-label="Age group order" ${isDirector() ? '' : 'disabled'}>${opt('asc', 'Youngest age group first', DO.age)}${opt('desc', 'Oldest age group first', DO.age)}</select>
+    <select id="do-rank" data-change="div-order" data-k="rank" aria-label="Kyu rank order" ${isDirector() ? '' : 'disabled'}>${opt('asc', 'Kyu: 10th → 1st', DO.rank)}${opt('desc', 'Kyu: 1st → 10th', DO.rank)}</select></div>`;
+  let lastG = -1;
+  const rows = sorted.map(d => {
+    const g = grpOf(d), head = g !== lastG ? `<tr class="grp-row"><td colspan="6">${GRP[g]} · ${sorted.filter(x => grpOf(x) === g).length}</td></tr>` : ''; lastG = g;
+    return head + divRowHTML(d);
+  }).join('');
+  return eventHeader() + `<div class="section-h"><select id="div-f" data-change="divFilter" aria-label="Event filter" style="max-width:240px">${opt('', 'All events', f)}${(ev.eventTypes || KT.EVENT_ORDER).map(t => opt(t, KT.EVENT_TYPES[t].label, f)).join('')}</select><div class="row actions">${acts}</div></div>${orderCtl}
+    <div class="card flush"><div class="tw"><table class="mcards"><thead><tr><th>Division</th><th>Format</th><th>Ring</th><th class="n">Entrants</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+/** The event's division order (director's choice, shared with everyone): groups, age groups, kyu ranks. */
+function divOrder() { const o = (curEvent() || {}).divOrder || {}; return { groups: o.groups === 'finished' ? 'finished' : 'open', age: o.age === 'desc' ? 'desc' : 'asc', rank: o.rank === 'desc' ? 'desc' : 'asc' }; }
+/** Division order: black-belt age groups, then kyu divisions by rank (each direction selectable); then event, gender. */
+function divSortCmp(a, b) {
+  const DO = divOrder(), sa = DO.age === 'desc' ? -1 : 1, sr = DO.rank === 'desc' ? -1 : 1;
+  const kyu = d => d.belt === 'kyu' ? 1 : 0;
+  const age = d => (d.minAge === '' || d.minAge == null ? 0 : +d.minAge);
+  const rank = d => KT.rankValue(d.minRank) ?? -99;
+  const evo = d => { const i = KT.EVENT_ORDER.indexOf(d.eventType); return i < 0 ? 99 : i; };
+  const gen = d => ({ M: 0, W: 1, F: 1, X: 2 })[d.gender] ?? 3;
+  return kyu(a) - kyu(b) || (kyu(a) ? sr * (rank(a) - rank(b)) || sa * (age(a) - age(b)) : sa * (age(a) - age(b))) || evo(a) - evo(b) || gen(a) - gen(b) || String(a.name).localeCompare(String(b.name));
+}
+function divRowHTML(d) {
     const n = divEntrants(d.id).length, bs = bracketState(d.id), ring = S.d.rings[d.ringId];
     const st = !bs.drawn ? (n >= 2 ? '<span class="chip plain">Ready to draw</span>' : n === 1 ? '<span class="chip warn">1 entrant</span>' : '<span class="chip plain">Empty</span>')
       : bs.complete ? '<span class="chip ok">Finished</span>' : `<span class="chip">${bs.fought}/${bs.playable} ${bs.kp ? 'performances' : 'matches'}</span>${bs.changed ? ' <span class="chip warn">Entrants changed</span>' : ''}`;
@@ -2344,9 +2390,6 @@ function divisionsHTML() {
       <td class="small">${ring ? esc(ring.name) : '<span class="muted">—</span>'}</td>
       <td class="n">${n}</td><td>${st}</td>
       <td style="white-space:nowrap">${bs.drawn ? `<button class="sm" data-act="view-bracket" data-id="${esc(d.id)}">Bracket</button>` : n >= 1 ? `<button class="sm" data-act="draw" data-id="${esc(d.id)}">Draw</button>` : ''}</td></tr>`;
-  }).join('');
-  return eventHeader() + `<div class="section-h"><select id="div-f" data-change="divFilter" aria-label="Event filter" style="max-width:240px">${opt('', 'All events', f)}${(ev.eventTypes || KT.EVENT_ORDER).map(t => opt(t, KT.EVENT_TYPES[t].label, f)).join('')}</select><div class="row actions">${acts}</div></div>
-    <div class="card flush"><div class="tw"><table class="mcards"><thead><tr><th>Division</th><th>Format</th><th>Ring</th><th class="n">Entrants</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function ageRange(d) {
   const lo = d.minAge === '' || d.minAge == null ? null : d.minAge, hi = d.maxAge === '' || d.maxAge == null ? null : d.maxAge;
@@ -2359,7 +2402,8 @@ function ageRange(d) {
 /* ---------- rings ---------- */
 function ringsHTML() {
   const cards = DC.rings.map(r => {
-    const divs = DC.divs.filter(d => d.ringId === r.id && divEntrants(d.id).length).sort((a, b) => (a.ringOrder || 0) - (b.ringOrder || 0));
+    const all = DC.divs.filter(d => d.ringId === r.id && divEntrants(d.id).length).sort((a, b) => (a.ringOrder || 0) - (b.ringOrder || 0));
+    const divs = all.filter(d => !bracketState(d.id).complete), done = all.filter(d => bracketState(d.id).complete);   // finished divisions leave the running order
     const free = DC.divs.filter(d => !S.d.rings[d.ringId] && divEntrants(d.id).length);
     const others = DC.rings.filter(x => x.id !== r.id);
     const guest = guestItems(r.id);
@@ -2375,7 +2419,8 @@ function ringsHTML() {
       <div class="rdivs" data-ring="${esc(r.id)}">${divs.map((d, i) => `<div class="rdiv" data-id="${esc(d.id)}" data-tap="div-panel" tabindex="0" aria-label="${esc(d.name)}, position ${i + 1}. Hold to move; Alt+arrow keys also move.">
         <span class="grip" aria-hidden="true">⋮⋮</span><span class="rnum num">${i + 1}</span>
         <span class="rname"><span class="name">${esc(d.name)}</span><span class="dojo">${plural(divEntrants(d.id).length, 'entrant')}${bracketState(d.id).drawn ? ' · drawn' : ''}${awaySegs(d).map(([sg, rr]) => ` · ${esc(SEG_LABEL(sg))} → ${esc(ringName(rr))}`).join('')}</span></span>
-        <select class="rmove" id="rmv-${esc(d.id)}" data-change="div-ring" data-id="${esc(d.id)}" aria-label="Move ${esc(d.name)} to ring">${opt('', 'Move…', '')}${others.map(x => opt(x.id, 'To ' + x.name, '')).join('')}${opt('__none', 'Remove from ring', '')}</select></div>`).join('') || '<span class="small muted">No divisions with competitors assigned.</span>'}</div>
+        <select class="rmove" id="rmv-${esc(d.id)}" data-change="div-ring" data-id="${esc(d.id)}" aria-label="Move ${esc(d.name)} to ring">${opt('', 'Move…', '')}${others.map(x => opt(x.id, 'To ' + x.name, '')).join('')}${opt('__none', 'Remove from ring', '')}</select></div>`).join('') || `<span class="small muted">${done.length ? 'Every division on this ring is finished.' : 'No divisions with competitors assigned.'}</span>`}</div>
+      ${done.length ? `<details class="rdone"><summary class="small"><span class="chip ok">Finished · ${done.length}</span> <span class="muted">no longer in the running order</span></summary><div class="pill-list" style="margin-top:6px">${done.map(d => `<button class="sm ghost" data-act="div-panel" data-id="${esc(d.id)}">✓ ${esc(d.name)}</button>`).join('')}</div></details>` : ''}
       ${guest.length ? `<div class="label" style="margin-top:12px">Pools &amp; rounds from other rings' divisions</div><div class="rdivs">${guest.map(g => { const gd = DC.divBy[g.did]; return `<div class="rdiv guest"><span class="rnum num">↪</span><span class="rname"><span class="name">${esc(gd.name)} · ${esc(SEG_LABEL(g.seg))}</span><span class="dojo">From ${esc(ringName(gd.ringId))}</span></span>
         <select class="rmove" id="gmv-${esc(g.did)}-${esc(g.seg.replace(':', ''))}" data-change="seg-ring" data-did="${esc(g.did)}" data-seg="${esc(g.seg)}" aria-label="Move">${opt('', 'Move…', '')}${DC.rings.filter(x => x.id !== r.id).map(x => opt(x.id, 'To ' + x.name + (x.id === gd.ringId ? ' (back)' : ''), '')).join('')}</select></div>`; }).join('')}</div>` : ''}
       <div class="row" style="margin-top:8px"><button class="sm" data-act="ring-live" data-id="${esc(r.id)}">● Live view</button><span class="tiny muted">Tap a division to place its pools, rounds and judges.</span></div>
@@ -2398,6 +2443,8 @@ function ringQueue(rid) {
   }
   return out;
 }
+/** Tapping a kata competitor (on the mat / up next): scorers get that competitor's score card, everyone else the division's bracket. */
+function kpTapAttrs(did, key) { return (canScoreKP(did, key) ? `data-act="kp-score" data-did="${esc(did)}" data-key="${esc(key)}"` : `data-act="view-bracket" data-id="${esc(did)}"`) + ' role="button" tabindex="0"'; }
 function nowHTML(rs) {
   if (!rs || !rs.did || !S.d.brackets[rs.did]) return '';
   const dv = DC.divBy[rs.did], br = S.d.brackets[rs.did];
@@ -2405,7 +2452,7 @@ function nowHTML(rs) {
     const q = br.format === 'KP' ? KT.kpQueue(br).find(x => x.key === rs.kp) : null;
     if (!q) return '';
     return `<div class="label">${esc(dv ? dv.name : '')} · ${esc(q.label)}</div>
-      <div class="now" style="grid-template-columns:1fr auto"><div class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span style="min-width:0"><div class="name">${esc(entName(q.id))}</div><div class="dojo">${esc(entDojo(q.id))}${rs.kata ? ' · ' + esc(rs.kata) : ''}</div></span></div>
+      <div class="now" ${kpTapAttrs(rs.did, rs.kp)} style="grid-template-columns:1fr auto;cursor:pointer"><div class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span style="min-width:0"><div class="name">${esc(entName(q.id))}</div><div class="dojo">${esc(entDojo(q.id))}${rs.kata ? ' · ' + esc(rs.kata) : ''}</div></span></div>
       <div class="sc num">${rs.score != null && rs.score !== '' ? esc(rs.score) : ''}</div></div>`;
   }
   const res = (DC.res[rs.did] || {})[rs.mid];
@@ -2428,7 +2475,7 @@ function ringBoardHTML(rings, withActions) {
       <div>${now || '<div class="small muted">Nothing on the mat.</div>'}${openBtn}</div>
       <div class="queue"><div class="label">Up next</div>${next.map(x => {
         const can = withActions && (x.kp ? canScoreKP(x.did, x.kp.key) : canScoreMatch(x.did, x.m.id));
-        if (x.kp) return `<div class="q" style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id))}</span></span>
+        if (x.kp) return `<div class="q" ${kpTapAttrs(x.did, x.kp.key)} style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id))}</span></span>
           <span class="vs">${can ? `<button class="sm go" data-act="kp-score" data-did="${esc(x.did)}" data-key="${esc(x.kp.key)}">Score</button>` : 'kata'}</span></div>
           <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(x.kp.label)}</div>`;
         return `<div class="q" data-act="match" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}" role="button" tabindex="0"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a))}</span></span>
@@ -2640,7 +2687,7 @@ function kpTableHTML(did, title, rows, order, opts) {
   return `<div class="card flush"><div class="card-h"><h3>${esc(title)}</h3>${opts.chip || ''}</div><div class="tw"><table class="kp"><thead><tr><th>#</th><th>${opts.byRank ? 'Place' : 'Order'}</th><th>Competitor</th><th>${br.kataRule ? 'Kata' : 'Notes'}</th><th>Judges</th>${opts.carry ? '<th class="n">Semifinal</th><th class="n">Final</th>' : ''}<th class="n">Score</th></tr></thead><tbody>
     ${seq.map((r, i) => `<tr class="${can || isDirector() ? 'click' : ''} ${r.advance ? 'adv' : ''}" ${can || isDirector() ? `data-act="kp-score" data-did="${esc(did)}" data-key="${esc(r.key)}"` : ''}>
       <td class="num">${i + 1}</td><td class="num">${r.rank ? (opts.medals && r.rank <= 3 ? `<span class="medal ${['g', 's', 'b'][r.rank - 1]}">${r.rank}</span>` : r.rank) : '—'}${r.advance ? ' <span class="chip ok" title="Advances">▸</span>' : ''}</td>
-      <td><div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div></td>
+      <td>${can || isDirector() ? `<button type="button" class="kp-who" aria-label="Score ${esc(entName(r.id))}"><span class="name">${esc(entName(r.id))}</span><span class="dojo">${esc(entDojo(r.id))}</span></button>` : `<div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div>`}</td>
       <td class="small">${esc(r.kata || '')}${r.appTotal != null ? `<div class="tiny muted">Kata ${f(r.kataOwn)} · Application ${f(r.appTotal)}</div>` : ''}${r.rpTotal != null ? `<div class="tiny muted">Kettei-sen ${f(r.rpTotal)}</div>` : ''}</td>
       <td class="jcell">${sc(r)}</td>
       ${opts.carry ? `<td class="n">${r.sheet ? f(r.carry) : ''}</td><td class="n">${r.sheet ? f(r.own) : ''}</td>` : ''}
@@ -3194,9 +3241,11 @@ function renderScore(force) {
   const offNote = out.done && offErr ? `<p class="small" style="color:var(--bad)">${esc(offErr)}</p>` : '';
   const openEl = document.activeElement && document.activeElement.id; const wasOpen = !!root.querySelector('details.officials[open]');
   root.innerHTML = sheet(title + (part ? ` · ${part === 'kitei' ? 'Ki-tei' : 'Kumite'}` : ''), `${offs}${k === 'kumite' || (k === 'fukugo' && part === 'kumite') ? '' : hdr}${body}${banner}${offNote}${kiken}`,
-    `${ring ? `<button data-act="call-mat" style="margin-right:auto">Call to ${esc(ring.name)}</button>` : ''}<button data-act="reset-draft">Clear sheet</button><button data-act="modal-close">Close</button><button class="primary" data-act="save-result" ${out.done && !offErr ? '' : 'disabled'}>Confirm result</button>`, sub);
-  if (wasOpen) { const dd = root.querySelector('details.officials'); if (dd) dd.open = true; }
-  if (openEl && openEl.startsWith('off-')) { const el = document.getElementById(openEl); if (el) el.focus(); }
+    `${ring ? `<button data-act="call-mat" style="margin-right:auto">Call to ${esc(ring.name)}</button>` : ''}<button data-act="reset-draft">Clear sheet</button><button data-act="modal-close">Close</button><button class="primary" id="save-result" data-act="save-result" ${out.done && !offErr ? '' : 'disabled'}>Confirm result</button>`, sub);
+  const offStep = S.modal.offStep; S.modal.offStep = null;
+  if (wasOpen && !(offStep && offStep.close)) { const dd = root.querySelector('details.officials'); if (dd) dd.open = true; }
+  if (offStep) { if (offStep.close) { const dd = root.querySelector('details.officials'); if (dd) dd.open = false; } else if (!isTouch()) { const el = document.getElementById('off-' + offStep.next); if (el) el.focus(); } }
+  else if (openEl && ((openEl.startsWith('off-') && !isTouch()) || openEl.startsWith('sc-') || openEl === 'save-result')) { const el = document.getElementById(openEl); if (el) el.focus(); }
   paintClock();
 }
 function logAt(d, path) {
@@ -3427,6 +3476,27 @@ function kpRecTable(arr, J, label) {
   const hi = Math.max(...v), lo = Math.min(...v); let dh = J >= 5, dl = J >= 5;
   return `<div class="tw"><table><thead><tr><th></th>${v.map((_, i) => `<th class="n">${i === 0 ? 'Shu-shin' : 'J' + (i + 1)}</th>`).join('')}<th class="n">Avg</th></tr></thead><tbody><tr><td><b>${esc(label)}</b></td>${v.map(x => { let c = ''; if (dh && x === hi) { c = 'dropped'; dh = false; } else if (dl && x === lo) { c = 'dropped'; dl = false; } return `<td class="n"><span class="js ${c}">${x.toFixed(1)}</span></td>`; }).join('')}<td class="n"><b>${t.avg.toFixed(2)}</b></td></tr></tbody></table></div>`;
 }
+
+/* ---------- v1.17: judges' score entry moves on by itself ---------- */
+/** a finished score entry: 0.0–9.9 with one decimal, or 10 / 10.0 */
+function scoreComplete(v) { return /^(10(\.0)?|\d\.\d)$/.test(String(v || '').trim()); }
+function scoreInputs() { return $$('#modal input[data-input="kp-j"]:not([disabled]), #modal input[data-change="kscore"]:not([disabled])'); }
+/** Move from a judge's score to the next judge; after the last one, go to (and highlight) the save button. */
+function scoreAdvance(el) {
+  const list = scoreInputs(), i = list.indexOf(el); if (i < 0) return;
+  const nxt = list.slice(i + 1).find(x => !String(x.value).trim()) || list[i + 1];
+  if (nxt) { nxt.focus(); try { nxt.select(); } catch (e) { /* ignore */ } return; }
+  const empty = list.find(x => !String(x.value).trim());
+  if (empty) { empty.focus(); return; }
+  const save = $('#kp-save') || $('#save-result');
+  if (save) { el.blur(); setTimeout(() => { const b = $('#kp-save') || $('#save-result'); if (b) { b.classList.add('nudge'); b.focus(); } }, 60); }
+}
+/** officials: after a pick go to the next empty position; when every position is filled, fold the list away */
+function officialsStep(positions, officials, pos) {
+  const keys = positions.map(p => p.key), start = Math.max(0, keys.indexOf(pos));
+  const next = keys.slice(start + 1).concat(keys.slice(0, start)).find(k => !(officials || {})[k]);
+  return next ? { next } : { close: true };
+}
 /* ===== v1.5: rings & segments, judges, officials, match view, follow ===== */
 
 /* ---------- segments on rings ---------- */
@@ -3557,7 +3627,7 @@ function officialsHTML(rid, kind, positions, officials, editable) {
   return `<details class="officials" ${editable && filled < positions.length ? 'open' : ''}><summary><span>Officials</span><span class="chip ${filled === positions.length ? 'ok' : req ? 'warn' : 'plain'}">${filled}/${positions.length}${req ? ' · required' : ' · optional'}</span></summary>
     ${all.length ? `<div class="off-grid">${positions.map(p => `<label class="f"><span>${esc(p.label)}</span>${editable ? `<select id="off-${p.key}" data-change="official" data-pos="${p.key}">${optsFor(p.key)}</select>` : `<span class="small">${esc(((S.d.judges[o[p.key]] || {}).name) || '—')}</span>`}</label>`).join('')}</div>
     ${editable ? `<p class="tiny muted">The Shu-shin assigns a judge to each position; the ring manager records it here. A seated judge is removed from the other lists. ⚠ = below the credential level for this event.</p>
-      <div class="tiny"><span class="muted">Not seated (${esc(ringName(rid))}):</span> ${left.map(j => esc(judgeShort(j.id))).join(', ') || '—'}</div>` : ''}` : '<p class="small muted">No judges in the pool yet (Judges tab).</p>'}</details>`;
+      <div class="row between" style="align-items:flex-end"><div class="tiny"><span class="muted">Not seated (${esc(ringName(rid))}):</span> ${left.map(j => esc(judgeShort(j.id))).join(', ') || '—'}</div><button class="sm" data-act="off-done" type="button">Done</button></div>` : ''}` : '<p class="small muted">No judges in the pool yet (Judges tab).</p>'}</details>`;
 }
 function officialsRec(officials, positions) {
   const o = officials || {}; if (!Object.values(o).some(Boolean)) return '';
@@ -3911,7 +3981,7 @@ function divStatusChip(did) {
 }
 function viewerDivisionsHTML() {
   const q = (S.ui.dq || '').trim().toLowerCase();
-  const divs = DC.divs.filter(d => divEntrants(d.id).length && (!q || d.name.toLowerCase().includes(q)));
+  const divs = DC.divs.filter(d => divEntrants(d.id).length && (!q || d.name.toLowerCase().includes(q))).sort(divSortCmp);   // same order the director chose
   const rows = divs.map(dv => {
     const br = S.d.brackets[dv.id], segs = KT.segList(br).filter(s => s.seg.startsWith('P:'));
     const pools = segs.map(s => `<span class="chip ring-chip">${esc(s.label)} · ${esc(ringName(KT.ringOf(dv, s.seg)))}</span>`).join('');
@@ -4644,6 +4714,7 @@ const ACT = {
   },
   'draw-all': () => drawAll(),
   'app-info': () => openAbout(),
+  'off-done': el => { const d = el.closest('details'); if (d) d.open = false; },
   'view-bracket': el => { S.ui.bracketDiv = el.dataset.id; S.ui.tab = 'brackets'; if (S.modal) closeModal(); render(); window.scrollTo(0, 0); },
   'ring-new': () => ringForm(null),
   'ring-edit': el => ringForm(el.dataset.id),
@@ -4721,11 +4792,11 @@ const ACT = {
   'bout-sel': el => { S.boutSel = +el.dataset.i; const sc = scoringOf(DC.divBy[S.modal.did]); setClock(+el.dataset.i >= sc.bouts ? sc.ketteiTime : sc.boutTime); renderScore(true); },
   'fk-hantei': el => { const d = loadDraft(S.modal.key); d.hantei = el.dataset.s; draftChanged(); },
   'reset-draft': async () => { if (!(await confirmBox('Clear everything entered on this scoresheet?', 'Clear'))) return; const M = S.modal; dropDraft(M.key); S.boutSel = 0; setClock(scoringOf(DC.divBy[M.did]).boutTime); renderScore(true); pushLive(); },
-  'call-mat': () => { pushLive(); toast('Called to the mat'); },
+  'call-mat': () => { pushLive(); toast('Called — shown as “now on the mat” for this ring'); },
   'save-result': () => saveResult(),
   'kp-score': el => openKP(el.dataset.did, el.dataset.key),
   'kp-save': () => kpSave(),
-  'kp-call': () => { kpPushLive(false); toast('Called to the mat'); },
+  'kp-call': () => { kpPushLive(false); toast('Called — shown as “now on the mat” for this ring'); },
   'kp-clear': async () => {
     const M = S.modal; if (!(await confirmBox(`Clear this score for ${entName(M.ctx.id)}?`, 'Clear score', true))) return;
     const ok = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { scores: { [M.key]: null } }), 'Score cleared'); if (ok) { dropDraft(M.dkey); closeModal(); }
@@ -4761,6 +4832,7 @@ const CHANGE = {
   'sim-ring': el => { S.ui.simRing = el.value; saveUIPrefs(); render(); },
   filter: el => { S.ui.filter = el.value; render(); },
   divFilter: el => { S.ui.divFilter = el.value; render(); },
+  'div-order': el => { const ev = curEvent(); if (!ev || !isDirector()) return; const o = Object.assign({}, ev.divOrder || {}, { [el.dataset.k]: el.value }); guard(() => S.store.update(P.event(ev.id), { divOrder: o }), 'Division order saved'); },
   ring: el => { S.ui.ring = el.value; render(); },
   bracketDiv: el => { S.ui.bracketDiv = el.value; render(); },
   session: el => { S.ui.session = el.value; render(); },
@@ -4796,10 +4868,12 @@ const CHANGE = {
     const M = S.modal; if (!M) return;
     if (M.type === 'kp') {
       const d = loadDraft(M.dkey); d.officials = d.officials || {}; d.officials[el.dataset.pos] = el.value; saveDraft(M.dkey);
-      const host = $('details.officials'); if (host) { const tmp = document.createElement('div'); tmp.innerHTML = officialsHTML(M.rid, 'kata', M.positions, d.officials, true); const nx = tmp.firstElementChild; nx.open = true; host.replaceWith(nx); const f = document.getElementById('off-' + el.dataset.pos); if (f) f.focus(); }
+      const step = el.value ? officialsStep(M.positions, d.officials, el.dataset.pos) : { next: el.dataset.pos };
+      const host = $('details.officials'); if (host) { const tmp = document.createElement('div'); tmp.innerHTML = officialsHTML(M.rid, 'kata', M.positions, d.officials, true); const nx = tmp.firstElementChild; nx.open = !step.close; host.replaceWith(nx);
+        const f = isTouch() ? null : step.close ? ($('#kp-kata') && !$('#kp-kata').value ? $('#kp-kata') : scoreInputs().find(x => !x.value) || null) : document.getElementById('off-' + step.next); if (f) f.focus(); }
       kpPaint(); return;
     }
-    if (M.type === 'score') { const d = loadDraft(M.key); d.officials = d.officials || {}; d.officials[el.dataset.pos] = el.value; draftChanged(); }
+    if (M.type === 'score') { const d = loadDraft(M.key); d.officials = d.officials || {}; d.officials[el.dataset.pos] = el.value; M.offStep = el.value ? officialsStep(positionsFor(DC.divBy[M.did], S.d.brackets[M.did].matches[M.mid], S.d.brackets[M.did]), d.officials, el.dataset.pos) : null; draftChanged(); }
   },
   'ring-adddiv': el => { if (!el.value) return; const rid = el.dataset.ring; const n = DC.divs.filter(d => d.ringId === rid).length; guard(() => S.store.update(P.doc(S.evId, 'divisions', el.value), { ringId: rid, ringOrder: n })).then(scheduleSync); },
   'ring-format': async el => {
@@ -4930,7 +5004,7 @@ function wire() {
   document.addEventListener('click', e => {
     if (e.detail > 0 && e.target.closest('[data-press]')) return;   // pointer clicks on press buttons were handled on pointerdown; keyboard (detail 0) still clicks
     const el = e.target.closest('[data-act]');
-    if (!e.target.closest('.dd')) $$('.dd-list').forEach(x => { x.hidden = true; });
+    if (!e.target.closest('.dd') || (el && el.closest('.dd-list'))) $$('.dd-list').forEach(x => { x.hidden = true; });
     if (!el) {
       const t = e.target.closest('[data-tap]');
       if (t && !e.target.closest('select,button,a,input') && !(S.justDragged && Date.now() - S.justDragged < 400) && ACT[t.dataset.tap]) ACT[t.dataset.tap](t, e);
@@ -4944,8 +5018,20 @@ function wire() {
     if (e.key === 'Escape') { if (!$('#confirm').hidden) confirmDone(false); else if (!$('#modal').hidden) closeModal(); }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bm[role="button"]')) { e.preventDefault(); e.target.click(); }
   });
-  document.addEventListener('change', e => { const el = e.target.closest('[data-change]'); if (el && CHANGE[el.dataset.change]) CHANGE[el.dataset.change](el, e); });
+  document.addEventListener('change', e => {
+    // phones/tablets: a chosen item closes the drop-down everywhere (cards and pop-ups) — release it before the screen redraws
+    const touchSel = isTouch() && e.target.tagName === 'SELECT';
+    const el = e.target.closest('[data-change]'), run = () => { if (el && CHANGE[el.dataset.change]) CHANGE[el.dataset.change](el, e); };
+    if (!touchSel) { run(); return; }
+    e.target.blur();
+    const off = () => { const a = document.activeElement; if (a && a.tagName === 'SELECT') a.blur(); };
+    setTimeout(() => { run(); off(); }, 60);    // let the phone's picker finish closing before the card is redrawn
+    setTimeout(off, 200); setTimeout(off, 500);
+  });
   document.addEventListener('input', e => { const el = e.target.closest('[data-input]'); if (el && INPUT[el.dataset.input]) INPUT[el.dataset.input](el, e); });
+  // judges' scores: a complete entry (e.g. 7.5 or 10) jumps to the next judge, then to the save button; Enter does the same
+  document.addEventListener('input', e => { const el = e.target; if (el.matches && el.matches('input[data-input="kp-j"], input[data-change="kscore"]') && scoreComplete(el.value) && !(e.inputType || '').startsWith('delete')) scoreAdvance(el); });
+  document.addEventListener('keydown', e => { const el = e.target; if (e.key === 'Enter' && el.matches && el.matches('input[data-input="kp-j"], input[data-change="kscore"]')) { e.preventDefault(); scoreAdvance(el); } });
   document.addEventListener('focusin', e => { const el = e.target.closest('[data-input$="-search"]'); if (el && INPUT[el.dataset.input]) INPUT[el.dataset.input](el, e); });
   document.addEventListener('submit', async e => {
     const f = e.target.closest('[data-form]'); if (!f) return; e.preventDefault();

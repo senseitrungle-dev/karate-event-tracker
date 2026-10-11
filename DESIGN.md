@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.16.0 Requirements & Design
+# Karate Event Tracker · v1.17.3 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -305,3 +305,31 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - Tapping the logo at the top left (every screen: sign-in, home, events, public spectator page) opens **About this app**: logo, app name (伝統空手道 · Dentō Karate-dō · WTKF), **version**, **status** (Online / Local mode / Connecting / Not signed in, plus ● LIVE, Archived or Public link for the open event), where the data lives (Vercel + Firebase project, claude.ai shared database, or this browser), the **signed-in user** (name and email; "public spectator link" or "not signed in" when relevant) and **role** (app-wide: App admin / Tournament director / Member; in the open event: Director, Ring manager with ring names, or Spectator).
 - **Close** (or ✕, Esc, tapping outside) removes it; on the Vercel site it also offers Sign out. Tapping the app name still goes to the event list.
 - Verify: test/about.js (local desktop + phone, inside an event, Firebase sign-in screen and signed-in admin); full regression.
+
+## 35. v1.17.0 — tidier running order and division list; faster officials and score entry (2026-10-11)
+- **Ring card**: a finished division leaves "Divisions, in running order" (numbering and drag only cover what is still to run). Finished divisions are listed under a folded "Finished · n" line, each tappable to open its pop-up.
+- **Divisions tab**: grouped top to bottom — **Not finished** (has entrants, not complete), **Finished**, **No entrants** (bottom) — with a header row and count for each group. Inside each group: black-belt divisions by age group (youngest first: Cadet, Junior, Youth, Senior), then kyu divisions by rank (10th kyu → 1st kyu, then age); ties by event (Kata, Kumite, Team Kata, Team Kumite, Fukugo, Enbu) and gender.
+- **Officials (judges) on a score sheet**: after picking a judge for a position, focus moves to the next empty position; once every position is filled the list folds away (and on kata pool sheets focus moves on to the kata name). A **Done** button folds it at any time; tap "Officials" to reopen.
+- **Judges' scores** (kata score pools and kata flags/scores sheets): a complete entry — one decimal such as 7.5, or 10 — jumps straight to the next judge; Enter does the same (for whole numbers like 8). After the last judge, **Save score / Confirm result** gets focus and a pulsing green highlight, so Enter saves.
+- **Call to Ring** wording: the toast now says the pair is shown as "now on the mat" for that ring.
+- Verify: test/v117.js (finish a division → ring card and Divisions grouping/sorting; officials stepping and fold-away; score entry 7.5 / 10 / Enter → next judge → Save highlighted → Enter saves); full regression.
+- **Phones — one tap on a kata pool competitor** opens their score card: the competitor is now a real button, every tappable row/card uses `touch-action: manipulation` (no double-tap-zoom wait), and hover effects apply only on devices with a mouse, so a first tap is never spent on "hover".
+- **Phones — lists in pop-ups close when an item is picked**: on touch devices a chosen option closes the picker; the app no longer moves focus to the next drop-down (which kept the phone's picker open on the next field) or to the kata name. On a computer the keyboard-friendly focus stepping stays.
+
+## 36. v1.17.1 — selectable division order (2026-10-11)
+- Divisions tab, under the actions: **Order** — three drop-downs the director sets for the event (saved on the event as `divOrder`, so ring managers and spectators see the same order; read-only for them):
+  - Groups: **Not finished first** (default) or **Finished first** — divisions with no entrants always stay at the bottom.
+  - Age groups: **Youngest first** (default) or **Oldest first**.
+  - Kyu ranks: **10th → 1st** (default) or **1st → 10th**.
+- The spectators' Divisions list follows the same age/rank order.
+- Verify: test/divorder.js (default youngest first; oldest first; kyu order switch; saved on the event after reload; group order selectable); regression.
+
+## 37. v1.17.2 — phone drop-downs close after a choice, everywhere (2026-10-11)
+- **Locate**: on phones, drop-down lists in cards (Rings: Add a judge, Move…, Assign a division, Add a ring manager; Divisions/People selects) and in pop-ups stayed open after picking.
+- **Diagnose**: after every change the screen is redrawn, and the redraw put keyboard focus back on the same drop-down (by id) — on a phone that keeps or re-opens its picker. v1.17.0 only released drop-downs inside pop-ups, and pop-ups also auto-focused their first field on open.
+- **Fix** (touch devices only; mouse/keyboard behaviour unchanged): the chosen drop-down is released first and the change is applied a moment later (after the phone's picker has closed); the redraw never re-focuses a drop-down; pop-ups don't auto-focus a field on open; picking from a search list (ring manager / staff) closes every list.
+- **Verify**: test/touchselect.js (iPhone emulation: ring card Add a judge, Move…, a pop-up drop-down — none left focused, change applied); regression.
+
+## 38. v1.17.3 — tap the kata competitor "On the mat" (2026-10-11)
+- Dashboard (and Mat) ring cards: tapping the kata competitor shown **On the mat**, or a kata competitor in **Up next**, opens that competitor's score card for people who can score it (director, that ring's manager); spectators are taken to the division's bracket. Kumite pairs already opened their match.
+- Verify: test/matnow.js (phone: call a kata competitor, tap on the Dashboard → their score card; Up next → score card; spectator → bracket); regression.

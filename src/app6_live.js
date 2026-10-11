@@ -128,7 +128,7 @@ function officialsHTML(rid, kind, positions, officials, editable) {
   return `<details class="officials" ${editable && filled < positions.length ? 'open' : ''}><summary><span>Officials</span><span class="chip ${filled === positions.length ? 'ok' : req ? 'warn' : 'plain'}">${filled}/${positions.length}${req ? ' · required' : ' · optional'}</span></summary>
     ${all.length ? `<div class="off-grid">${positions.map(p => `<label class="f"><span>${esc(p.label)}</span>${editable ? `<select id="off-${p.key}" data-change="official" data-pos="${p.key}">${optsFor(p.key)}</select>` : `<span class="small">${esc(((S.d.judges[o[p.key]] || {}).name) || '—')}</span>`}</label>`).join('')}</div>
     ${editable ? `<p class="tiny muted">The Shu-shin assigns a judge to each position; the ring manager records it here. A seated judge is removed from the other lists. ⚠ = below the credential level for this event.</p>
-      <div class="tiny"><span class="muted">Not seated (${esc(ringName(rid))}):</span> ${left.map(j => esc(judgeShort(j.id))).join(', ') || '—'}</div>` : ''}` : '<p class="small muted">No judges in the pool yet (Judges tab).</p>'}</details>`;
+      <div class="row between" style="align-items:flex-end"><div class="tiny"><span class="muted">Not seated (${esc(ringName(rid))}):</span> ${left.map(j => esc(judgeShort(j.id))).join(', ') || '—'}</div><button class="sm" data-act="off-done" type="button">Done</button></div>` : ''}` : '<p class="small muted">No judges in the pool yet (Judges tab).</p>'}</details>`;
 }
 function officialsRec(officials, positions) {
   const o = officials || {}; if (!Object.values(o).some(Boolean)) return '';

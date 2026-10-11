@@ -99,7 +99,7 @@ function divStatusChip(did) {
 }
 function viewerDivisionsHTML() {
   const q = (S.ui.dq || '').trim().toLowerCase();
-  const divs = DC.divs.filter(d => divEntrants(d.id).length && (!q || d.name.toLowerCase().includes(q)));
+  const divs = DC.divs.filter(d => divEntrants(d.id).length && (!q || d.name.toLowerCase().includes(q))).sort(divSortCmp);   // same order the director chose
   const rows = divs.map(dv => {
     const br = S.d.brackets[dv.id], segs = KT.segList(br).filter(s => s.seg.startsWith('P:'));
     const pools = segs.map(s => `<span class="chip ring-chip">${esc(s.label)} · ${esc(ringName(KT.ringOf(dv, s.seg)))}</span>`).join('');

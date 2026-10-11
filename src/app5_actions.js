@@ -230,6 +230,7 @@ const ACT = {
   },
   'draw-all': () => drawAll(),
   'app-info': () => openAbout(),
+  'off-done': el => { const d = el.closest('details'); if (d) d.open = false; },
   'view-bracket': el => { S.ui.bracketDiv = el.dataset.id; S.ui.tab = 'brackets'; if (S.modal) closeModal(); render(); window.scrollTo(0, 0); },
   'ring-new': () => ringForm(null),
   'ring-edit': el => ringForm(el.dataset.id),
@@ -307,11 +308,11 @@ const ACT = {
   'bout-sel': el => { S.boutSel = +el.dataset.i; const sc = scoringOf(DC.divBy[S.modal.did]); setClock(+el.dataset.i >= sc.bouts ? sc.ketteiTime : sc.boutTime); renderScore(true); },
   'fk-hantei': el => { const d = loadDraft(S.modal.key); d.hantei = el.dataset.s; draftChanged(); },
   'reset-draft': async () => { if (!(await confirmBox('Clear everything entered on this scoresheet?', 'Clear'))) return; const M = S.modal; dropDraft(M.key); S.boutSel = 0; setClock(scoringOf(DC.divBy[M.did]).boutTime); renderScore(true); pushLive(); },
-  'call-mat': () => { pushLive(); toast('Called to the mat'); },
+  'call-mat': () => { pushLive(); toast('Called — shown as “now on the mat” for this ring'); },
   'save-result': () => saveResult(),
   'kp-score': el => openKP(el.dataset.did, el.dataset.key),
   'kp-save': () => kpSave(),
-  'kp-call': () => { kpPushLive(false); toast('Called to the mat'); },
+  'kp-call': () => { kpPushLive(false); toast('Called — shown as “now on the mat” for this ring'); },
   'kp-clear': async () => {
     const M = S.modal; if (!(await confirmBox(`Clear this score for ${entName(M.ctx.id)}?`, 'Clear score', true))) return;
     const ok = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { scores: { [M.key]: null } }), 'Score cleared'); if (ok) { dropDraft(M.dkey); closeModal(); }
@@ -347,6 +348,7 @@ const CHANGE = {
   'sim-ring': el => { S.ui.simRing = el.value; saveUIPrefs(); render(); },
   filter: el => { S.ui.filter = el.value; render(); },
   divFilter: el => { S.ui.divFilter = el.value; render(); },
+  'div-order': el => { const ev = curEvent(); if (!ev || !isDirector()) return; const o = Object.assign({}, ev.divOrder || {}, { [el.dataset.k]: el.value }); guard(() => S.store.update(P.event(ev.id), { divOrder: o }), 'Division order saved'); },
   ring: el => { S.ui.ring = el.value; render(); },
   bracketDiv: el => { S.ui.bracketDiv = el.value; render(); },
   session: el => { S.ui.session = el.value; render(); },
@@ -382,10 +384,12 @@ const CHANGE = {
     const M = S.modal; if (!M) return;
     if (M.type === 'kp') {
       const d = loadDraft(M.dkey); d.officials = d.officials || {}; d.officials[el.dataset.pos] = el.value; saveDraft(M.dkey);
-      const host = $('details.officials'); if (host) { const tmp = document.createElement('div'); tmp.innerHTML = officialsHTML(M.rid, 'kata', M.positions, d.officials, true); const nx = tmp.firstElementChild; nx.open = true; host.replaceWith(nx); const f = document.getElementById('off-' + el.dataset.pos); if (f) f.focus(); }
+      const step = el.value ? officialsStep(M.positions, d.officials, el.dataset.pos) : { next: el.dataset.pos };
+      const host = $('details.officials'); if (host) { const tmp = document.createElement('div'); tmp.innerHTML = officialsHTML(M.rid, 'kata', M.positions, d.officials, true); const nx = tmp.firstElementChild; nx.open = !step.close; host.replaceWith(nx);
+        const f = isTouch() ? null : step.close ? ($('#kp-kata') && !$('#kp-kata').value ? $('#kp-kata') : scoreInputs().find(x => !x.value) || null) : document.getElementById('off-' + step.next); if (f) f.focus(); }
       kpPaint(); return;
     }
-    if (M.type === 'score') { const d = loadDraft(M.key); d.officials = d.officials || {}; d.officials[el.dataset.pos] = el.value; draftChanged(); }
+    if (M.type === 'score') { const d = loadDraft(M.key); d.officials = d.officials || {}; d.officials[el.dataset.pos] = el.value; M.offStep = el.value ? officialsStep(positionsFor(DC.divBy[M.did], S.d.brackets[M.did].matches[M.mid], S.d.brackets[M.did]), d.officials, el.dataset.pos) : null; draftChanged(); }
   },
   'ring-adddiv': el => { if (!el.value) return; const rid = el.dataset.ring; const n = DC.divs.filter(d => d.ringId === rid).length; guard(() => S.store.update(P.doc(S.evId, 'divisions', el.value), { ringId: rid, ringOrder: n })).then(scheduleSync); },
   'ring-format': async el => {
@@ -516,7 +520,7 @@ function wire() {
   document.addEventListener('click', e => {
     if (e.detail > 0 && e.target.closest('[data-press]')) return;   // pointer clicks on press buttons were handled on pointerdown; keyboard (detail 0) still clicks
     const el = e.target.closest('[data-act]');
-    if (!e.target.closest('.dd')) $$('.dd-list').forEach(x => { x.hidden = true; });
+    if (!e.target.closest('.dd') || (el && el.closest('.dd-list'))) $$('.dd-list').forEach(x => { x.hidden = true; });
     if (!el) {
       const t = e.target.closest('[data-tap]');
       if (t && !e.target.closest('select,button,a,input') && !(S.justDragged && Date.now() - S.justDragged < 400) && ACT[t.dataset.tap]) ACT[t.dataset.tap](t, e);
@@ -530,8 +534,20 @@ function wire() {
     if (e.key === 'Escape') { if (!$('#confirm').hidden) confirmDone(false); else if (!$('#modal').hidden) closeModal(); }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bm[role="button"]')) { e.preventDefault(); e.target.click(); }
   });
-  document.addEventListener('change', e => { const el = e.target.closest('[data-change]'); if (el && CHANGE[el.dataset.change]) CHANGE[el.dataset.change](el, e); });
+  document.addEventListener('change', e => {
+    // phones/tablets: a chosen item closes the drop-down everywhere (cards and pop-ups) — release it before the screen redraws
+    const touchSel = isTouch() && e.target.tagName === 'SELECT';
+    const el = e.target.closest('[data-change]'), run = () => { if (el && CHANGE[el.dataset.change]) CHANGE[el.dataset.change](el, e); };
+    if (!touchSel) { run(); return; }
+    e.target.blur();
+    const off = () => { const a = document.activeElement; if (a && a.tagName === 'SELECT') a.blur(); };
+    setTimeout(() => { run(); off(); }, 60);    // let the phone's picker finish closing before the card is redrawn
+    setTimeout(off, 200); setTimeout(off, 500);
+  });
   document.addEventListener('input', e => { const el = e.target.closest('[data-input]'); if (el && INPUT[el.dataset.input]) INPUT[el.dataset.input](el, e); });
+  // judges' scores: a complete entry (e.g. 7.5 or 10) jumps to the next judge, then to the save button; Enter does the same
+  document.addEventListener('input', e => { const el = e.target; if (el.matches && el.matches('input[data-input="kp-j"], input[data-change="kscore"]') && scoreComplete(el.value) && !(e.inputType || '').startsWith('delete')) scoreAdvance(el); });
+  document.addEventListener('keydown', e => { const el = e.target; if (e.key === 'Enter' && el.matches && el.matches('input[data-input="kp-j"], input[data-change="kscore"]')) { e.preventDefault(); scoreAdvance(el); } });
   document.addEventListener('focusin', e => { const el = e.target.closest('[data-input$="-search"]'); if (el && INPUT[el.dataset.input]) INPUT[el.dataset.input](el, e); });
   document.addEventListener('submit', async e => {
     const f = e.target.closest('[data-form]'); if (!f) return; e.preventDefault();

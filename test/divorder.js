@@ -1,0 +1,34 @@
+// v1.17.1: division order is selectable (groups, age groups, kyu ranks), saved on the event
+const { chromium } = require(require('child_process').execSync('npm root -g').toString().trim() + '/playwright');
+const path = require('path');
+(async () => {
+  const b = await chromium.launch(); const errors = [];
+  const ok = (name, v) => { console.log((v ? 'PASS ' : 'FAIL ') + name); if (!v) errors.push('assert: ' + name); };
+  const p = await b.newPage({ viewport: { width: 1280, height: 900 } }); p.on('pageerror', e => errors.push(e.message));
+  await p.route(/fonts\./, r => r.abort());
+  await p.goto('file://' + path.resolve('dist/karate-event-tracker.html'));
+  await p.click('button:has-text("Create demo tournament")'); await p.click('button[data-kind="local"]'); await p.waitForSelector('text=Director checklist', { timeout: 60000 });
+  await p.click('.tab:has-text("Divisions")'); await p.waitForTimeout(300);
+  const rowsInfo = () => p.$$eval('table.mcards tbody tr', trs => trs.map(t => t.classList.contains('grp-row') ? { h: t.textContent.trim() } : { n: (t.querySelector('.name') || {}).textContent, d: (t.querySelector('.dojo') || {}).textContent }));
+  const bbAges = rs => rs.filter(r => r.n && /Black Belt/.test(r.n)).map(r => +((r.d.match(/Age (\d+)/) || [])[1] || 0));
+  const kyuRanks = rs => rs.filter(r => r.n && !/Black Belt/.test(r.n) && /Kyu/.test(r.d || '')).map(r => +((r.d.match(/(\d+)\w\w Kyu/) || [])[1] || 0));
+  let r = await rowsInfo();
+  const firstGroup = rs => rs.slice(1, rs.findIndex((x, i) => i > 0 && x.h));
+  ok('default: youngest age group first', bbAges(firstGroup(r))[0] <= Math.min(...bbAges(firstGroup(r))));
+  await p.selectOption('#do-age', 'desc'); await p.waitForTimeout(300);
+  r = await rowsInfo();
+  ok('oldest age group first when chosen', bbAges(firstGroup(r))[0] === Math.max(...bbAges(firstGroup(r))));
+  const k1 = kyuRanks(r);
+  await p.selectOption('#do-rank', 'desc'); await p.waitForTimeout(300);
+  const k2 = kyuRanks(await rowsInfo());
+  ok('kyu rank order switches', k1.length < 2 || JSON.stringify(k1) !== JSON.stringify(k2) || new Set(k1).size === 1);
+  await p.reload(); await p.waitForTimeout(800);
+  if (await p.$('.ev-card')) await p.click('.ev-card'); await p.waitForTimeout(400);
+  await p.click('.tab:has-text("Divisions")'); await p.waitForTimeout(300);
+  ok('choice saved on the event', (await p.$eval('#do-age', s => s.value)) === 'desc' && (await p.$eval('#do-rank', s => s.value)) === 'desc');
+  await p.selectOption('#do-groups', 'finished'); await p.waitForTimeout(300);
+  ok('group order selectable', (await p.$eval('#do-groups', s => s.value)) === 'finished');
+  await p.screenshot({ path: 'test/shots/divorder.png' });
+  console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
+  await b.close(); process.exit(errors.length ? 1 : 0);
+})();

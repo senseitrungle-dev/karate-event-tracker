@@ -202,9 +202,11 @@ function renderScore(force) {
   const offNote = out.done && offErr ? `<p class="small" style="color:var(--bad)">${esc(offErr)}</p>` : '';
   const openEl = document.activeElement && document.activeElement.id; const wasOpen = !!root.querySelector('details.officials[open]');
   root.innerHTML = sheet(title + (part ? ` · ${part === 'kitei' ? 'Ki-tei' : 'Kumite'}` : ''), `${offs}${k === 'kumite' || (k === 'fukugo' && part === 'kumite') ? '' : hdr}${body}${banner}${offNote}${kiken}`,
-    `${ring ? `<button data-act="call-mat" style="margin-right:auto">Call to ${esc(ring.name)}</button>` : ''}<button data-act="reset-draft">Clear sheet</button><button data-act="modal-close">Close</button><button class="primary" data-act="save-result" ${out.done && !offErr ? '' : 'disabled'}>Confirm result</button>`, sub);
-  if (wasOpen) { const dd = root.querySelector('details.officials'); if (dd) dd.open = true; }
-  if (openEl && openEl.startsWith('off-')) { const el = document.getElementById(openEl); if (el) el.focus(); }
+    `${ring ? `<button data-act="call-mat" style="margin-right:auto">Call to ${esc(ring.name)}</button>` : ''}<button data-act="reset-draft">Clear sheet</button><button data-act="modal-close">Close</button><button class="primary" id="save-result" data-act="save-result" ${out.done && !offErr ? '' : 'disabled'}>Confirm result</button>`, sub);
+  const offStep = S.modal.offStep; S.modal.offStep = null;
+  if (wasOpen && !(offStep && offStep.close)) { const dd = root.querySelector('details.officials'); if (dd) dd.open = true; }
+  if (offStep) { if (offStep.close) { const dd = root.querySelector('details.officials'); if (dd) dd.open = false; } else if (!isTouch()) { const el = document.getElementById('off-' + offStep.next); if (el) el.focus(); } }
+  else if (openEl && ((openEl.startsWith('off-') && !isTouch()) || openEl.startsWith('sc-') || openEl === 'save-result')) { const el = document.getElementById(openEl); if (el) el.focus(); }
   paintClock();
 }
 function logAt(d, path) {
@@ -434,4 +436,25 @@ function kpRecTable(arr, J, label) {
   const v = (arr || []).map(Number), t = KT.scoreTotal(v, J); if (!t) return '';
   const hi = Math.max(...v), lo = Math.min(...v); let dh = J >= 5, dl = J >= 5;
   return `<div class="tw"><table><thead><tr><th></th>${v.map((_, i) => `<th class="n">${i === 0 ? 'Shu-shin' : 'J' + (i + 1)}</th>`).join('')}<th class="n">Avg</th></tr></thead><tbody><tr><td><b>${esc(label)}</b></td>${v.map(x => { let c = ''; if (dh && x === hi) { c = 'dropped'; dh = false; } else if (dl && x === lo) { c = 'dropped'; dl = false; } return `<td class="n"><span class="js ${c}">${x.toFixed(1)}</span></td>`; }).join('')}<td class="n"><b>${t.avg.toFixed(2)}</b></td></tr></tbody></table></div>`;
+}
+
+/* ---------- v1.17: judges' score entry moves on by itself ---------- */
+/** a finished score entry: 0.0–9.9 with one decimal, or 10 / 10.0 */
+function scoreComplete(v) { return /^(10(\.0)?|\d\.\d)$/.test(String(v || '').trim()); }
+function scoreInputs() { return $$('#modal input[data-input="kp-j"]:not([disabled]), #modal input[data-change="kscore"]:not([disabled])'); }
+/** Move from a judge's score to the next judge; after the last one, go to (and highlight) the save button. */
+function scoreAdvance(el) {
+  const list = scoreInputs(), i = list.indexOf(el); if (i < 0) return;
+  const nxt = list.slice(i + 1).find(x => !String(x.value).trim()) || list[i + 1];
+  if (nxt) { nxt.focus(); try { nxt.select(); } catch (e) { /* ignore */ } return; }
+  const empty = list.find(x => !String(x.value).trim());
+  if (empty) { empty.focus(); return; }
+  const save = $('#kp-save') || $('#save-result');
+  if (save) { el.blur(); setTimeout(() => { const b = $('#kp-save') || $('#save-result'); if (b) { b.classList.add('nudge'); b.focus(); } }, 60); }
+}
+/** officials: after a pick go to the next empty position; when every position is filled, fold the list away */
+function officialsStep(positions, officials, pos) {
+  const keys = positions.map(p => p.key), start = Math.max(0, keys.indexOf(pos));
+  const next = keys.slice(start + 1).concat(keys.slice(0, start)).find(k => !(officials || {})[k]);
+  return next ? { next } : { close: true };
 }

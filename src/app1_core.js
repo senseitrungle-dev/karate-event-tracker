@@ -273,8 +273,10 @@ function openModal(html, opts) {
   host.innerHTML = `<div class="scrim" data-act="modal-scrim"><div class="sheet ${opts && opts.wide ? 'wide' : ''}" role="dialog" aria-modal="true">${html}</div></div>`;
   host.hidden = false;
   const f = host.querySelector('[autofocus]') || host.querySelector('input,select,textarea,button:not(.ghost)');
-  if (f && !(opts && opts.nofocus)) setTimeout(() => f.focus(), 30);
+  if (f && !(opts && opts.nofocus) && !(isTouch() && !f.hasAttribute('autofocus'))) setTimeout(() => f.focus(), 30);   // phones: don't pop a picker or keyboard on open
 }
+/** phones and tablets: a picked item should close the picker (no auto-focus that keeps it open) */
+function isTouch() { try { return matchMedia('(pointer: coarse)').matches; } catch (e) { return false; } }
 function closeModal() { const host = $('#modal'); host.hidden = true; host.innerHTML = ''; S.modal = null; stopClock(); }
 function sheet(title, body, foot, sub) {
   return `<div class="sheet-h"><div><h2>${title}</h2>${sub ? `<div class="small muted">${sub}</div>` : ''}</div><button class="ghost" data-act="modal-close" aria-label="Close">✕</button></div>
