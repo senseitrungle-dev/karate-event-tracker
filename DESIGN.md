@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.17.3 Requirements & Design
+# Karate Event Tracker · v1.18.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -333,3 +333,9 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 ## 38. v1.17.3 — tap the kata competitor "On the mat" (2026-10-11)
 - Dashboard (and Mat) ring cards: tapping the kata competitor shown **On the mat**, or a kata competitor in **Up next**, opens that competitor's score card for people who can score it (director, that ring's manager); spectators are taken to the division's bracket. Kumite pairs already opened their match.
 - Verify: test/matnow.js (phone: call a kata competitor, tap on the Dashboard → their score card; Up next → score card; spectator → bracket); regression.
+
+## 39. v1.18.0 — larger, darker text (2026-10-11)
+- **One size larger everywhere**: the root size goes from 16 px to 18 px (every rem-based size grows 12.5 %); body text 15 → 17 px (phones too); form fields 16 → 18 px.
+- **Regular-weight text darker / easier to read**: secondary text colours darkened — `--ink-2` #4d525c → #33373f, `--ink-3` #7b808a → #50555e (dark mode brightened: #b4b9c4 → #d3d7de, #868c98 → #aeb3bd); body text uses a slightly heavier weight (medium where the font has it); faded helper text in the title bar and score boards made more opaque.
+- **Phones, to make room**: bottom-tab labels keep a fixed 12 px with tighter spacing ("Dashboard" fits); on screens narrower than 480 px the connection chip (Online / Local mode) leaves the title bar — the status is in the About pop-up (tap the logo); ● LIVE stays.
+- Verify: screenshots desktop + iPhone (no sideways scrolling, tab labels fit); full regression.
