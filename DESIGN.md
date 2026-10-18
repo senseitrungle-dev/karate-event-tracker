@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.25.0 Requirements & Design
+# Karate Event Tracker · v1.25.1 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -410,3 +410,9 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - QR: vendored qrcode-generator 2.0.4 (MIT), error correction M, drawn as SVG and canvas PNG.
 - **Rules** (`firestore.rules` v1.25.0 — **redeploy**): `isPublic(e)` = public && live; the event doc alone stays readable while shared (for the waiting page).
 - Verify: test/publink.js (card before start, QR + waiting chip, PNG download decodes to the link, spectator waiting page, data closed until live, auto-switch to live, End live → turned off with link kept, Stop sharing → off, admin borders 2px); public.js / golive.js updated for End-live wording; full regression.
+
+## 48. v1.25.1 — App admin card fits phone screens (2026-10-18)
+- **Locate**: iPhone, App admin → "Waiting to be accepted" rows, "Directors by event" and "Events by director" ran past the right edge (page 639px wide on a 390px phone).
+- **Diagnose**: invitation rows used a 3-column grid (email | Send / copy | Cancel) with unbreakable emails; the two tables kept their desktop columns; long names/emails and chips didn't wrap.
+- **Fix** (CSS + invitation row markup): invitation rows use the bordered person box — email (wraps), role · code · time below, buttons on their own line. On phones (≤640px) the two tables become stacked bordered boxes; long names, emails and chips wrap anywhere; the Add-director menu is full width. Rules unchanged.
+- Verify: test/adminphone.js (390px and 320px: no sideways scroll, nothing inside the App admin card past its edge); regression.

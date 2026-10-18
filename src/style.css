@@ -621,3 +621,20 @@ body { font-weight: 450; }
 .admin-card .jrow2.pr { border: 2px solid var(--line-2); border-radius: 12px; padding: 10px 12px; background: var(--panel); box-shadow: 0 1px 0 rgba(0,0,0,.04); }
 .admin-card .jrow2.pr:first-child { border-top: 2px solid var(--line-2); }
 .admin-card .jrow2.pr .who-line b { font-size: 1.02rem; }
+
+/* v1.25.1 — App admin card stays inside a phone screen */
+.admin-card, .admin-card .jlist, .admin-card .jrow2, .admin-card .jname { min-width: 0; max-width: 100%; }
+.admin-card b, .admin-card .dojo, .admin-card .pmail, .admin-card .who-mail, .admin-card .chip, .admin-card td { overflow-wrap: anywhere; word-break: break-word; }
+.admin-card .dojo, .admin-card .chip { white-space: normal; }
+.admin-card .chip { max-width: 100%; }
+.admin-card .who-line b { min-width: 0; }
+@media (max-width: 640px) {
+  .admin-card table.acc, .admin-card table.acc tbody, .admin-card table.acc tr, .admin-card table.acc td { display: block; width: 100%; }
+  .admin-card table.acc thead { display: none; }
+  .admin-card table.acc tr { padding: 10px 12px; margin-top: 8px; border: 2px solid var(--line-2); border-radius: 12px; }
+  .admin-card table.acc td { padding: 4px 0; border: 0; }
+  .admin-card table.acc select { width: 100%; min-width: 0; }
+  .admin-card .tw { overflow-x: visible; }
+  .admin-card .jrow2.pr .pctl { justify-content: flex-start; }
+}
+.admin-card .acc-chip { flex-wrap: wrap; border-radius: 12px; row-gap: 0; }

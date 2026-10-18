@@ -630,16 +630,33 @@ body { font-weight: 450; }
 .admin-card .jrow2.pr { border: 2px solid var(--line-2); border-radius: 12px; padding: 10px 12px; background: var(--panel); box-shadow: 0 1px 0 rgba(0,0,0,.04); }
 .admin-card .jrow2.pr:first-child { border-top: 2px solid var(--line-2); }
 .admin-card .jrow2.pr .who-line b { font-size: 1.02rem; }
+
+/* v1.25.1 — App admin card stays inside a phone screen */
+.admin-card, .admin-card .jlist, .admin-card .jrow2, .admin-card .jname { min-width: 0; max-width: 100%; }
+.admin-card b, .admin-card .dojo, .admin-card .pmail, .admin-card .who-mail, .admin-card .chip, .admin-card td { overflow-wrap: anywhere; word-break: break-word; }
+.admin-card .dojo, .admin-card .chip { white-space: normal; }
+.admin-card .chip { max-width: 100%; }
+.admin-card .who-line b { min-width: 0; }
+@media (max-width: 640px) {
+  .admin-card table.acc, .admin-card table.acc tbody, .admin-card table.acc tr, .admin-card table.acc td { display: block; width: 100%; }
+  .admin-card table.acc thead { display: none; }
+  .admin-card table.acc tr { padding: 10px 12px; margin-top: 8px; border: 2px solid var(--line-2); border-radius: 12px; }
+  .admin-card table.acc td { padding: 4px 0; border: 0; }
+  .admin-card table.acc select { width: 100%; min-width: 0; }
+  .admin-card .tw { overflow-x: visible; }
+  .admin-card .jrow2.pr .pctl { justify-content: flex-start; }
+}
+.admin-card .acc-chip { flex-wrap: wrap; border-radius: 12px; row-gap: 0; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.25.0 */
+<script>/* Karate Event Tracker v1.25.1 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.25.0';
+  const VERSION = '1.25.1';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -7125,7 +7142,7 @@ function appInviteHTML() {
       <label class="f"><span>Invite as</span><select name="role" id="ai-role">${opt('organizer', 'Tournament director (can create events)', 'organizer')}${opt('member', 'Ring manager (added to events by a director)', 'organizer')}</select></label>
       <div class="row" style="align-items:flex-end"><button class="primary" type="submit">Create invite</button></div></form>
     <p class="tiny muted">${FB.on ? 'They sign in with this email — Google for Gmail/Google accounts, any other address with email + a password they choose with the invitation code in your email (“First time? Use your invitation code”); the invitation is accepted on their first sign-in.' : 'They enter the invitation code from the email to accept. Also add their email in the page’s Share menu as an Editor.'} Once accepted they appear above as tournament director or ring manager — add them to an event there, or a director adds them on the event’s People tab.</p>
-    ${pend.length ? `<div class="label" style="margin-top:8px">Waiting to be accepted</div><div class="jlist">${pend.map(([k, i]) => `<div class="jrow2"><span style="min-width:0"><b>${esc(i.email)}</b><span class="dojo">${roleName(i.role)}${i.code ? ' · code <b>' + esc(i.code) + '</b>' : ''} · ${esc(timeAgo(i.at))}</span></span><button class="sm" data-act="invite-mail" data-id="${esc(k)}">Send / copy</button><button class="sm danger" data-act="invite-cancel" data-id="${esc(k)}">Cancel</button></div>`).join('')}</div>` : ''}
+    ${pend.length ? `<div class="label" style="margin-top:8px">Waiting to be accepted</div><div class="jlist">${pend.map(([k, i]) => `<div class="jrow2 pr inv-row"><span class="jname" style="display:flex;flex-direction:column;min-width:0"><b class="inv-mail">${esc(i.email)}</b><span class="dojo">${roleName(i.role)}${i.code ? ' · code <b>' + esc(i.code) + '</b>' : ''} · ${esc(timeAgo(i.at))}</span></span><div class="pctl"><button class="sm" data-act="invite-mail" data-id="${esc(k)}">Send / copy</button><button class="sm danger" data-act="invite-cancel" data-id="${esc(k)}">Cancel</button></div></div>`).join('')}</div>` : ''}
 `;
 }
 /** Admin adds an accepted person to an event: director → directorIds; ring manager → event staff (the event's director picks the ring). */
