@@ -609,3 +609,4 @@ body { font-weight: 450; }
 .chip .pmail { color: inherit; opacity: .8; }
 .bar-mail { font-size: .78rem; color: #fff; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 @media (max-width: 760px) { .bar-mail { display: none; } }
+.signin-card { min-width: 0; } .signin-card > * { min-width: 0; } .first-time { border-top: 1px solid var(--line); padding-top: 10px; }

@@ -56,7 +56,8 @@ async function initFirebase(cfg) {
   if (!user) { FB.needSignIn = true; S.store = { mode: 'firebase' }; render(); return false; }
   FB.user = user;
   // v1.22: email + password accounts must confirm their email before they can use invitations or roles
-  if (isPwUser(user) && !user.emailVerified) { try { if (!sessionStorage.getItem('kt-verify-sent')) { sessionStorage.setItem('kt-verify-sent', '1'); await user.sendEmailVerification(); } } catch (e) { /* resend button */ } FB.needVerify = true; S.store = { mode: 'firebase' }; S.myEmail = String(user.email || '').toLowerCase(); render(); return false; }
+  if (isPwUser(user) && !user.emailVerified) { const cl = await FB.fs.doc('claims/' + user.uid).get().catch(() => null); if (cl && cl.exists) FB.claimed = true; }
+  if (isPwUser(user) && !user.emailVerified && !FB.claimed) { try { if (!sessionStorage.getItem('kt-verify-sent')) { sessionStorage.setItem('kt-verify-sent', '1'); await user.sendEmailVerification(); } } catch (e) { /* resend button */ } FB.needVerify = true; S.store = { mode: 'firebase' }; S.myEmail = String(user.email || '').toLowerCase(); render(); return false; }
   { const bl = await FB.fs.doc('blocked/' + user.uid).get().catch(() => null); S.blocked = !!(bl && bl.exists); }   // v1.21: access removed by the app admin
   if (S.blocked) { S.store = FirestoreStore(FB.fs); S.myId = user.uid; S.myEmail = String(user.email || '').toLowerCase(); S.myName = user.displayName || ''; return true; }
   await FB.fs.doc('users/' + user.uid).set({ name: user.displayName || nameFromEmail(user.email), email: user.email || '', photo: user.photoURL || '', seenAt: new Date().toISOString() }, { merge: true }).catch(() => {});
@@ -73,35 +74,63 @@ function nameFromEmail(e) { const n = String(e || '').split('@')[0].replace(/[._
 function fbEmailVal() { return String(($('#fb-email') || {}).value || '').trim().toLowerCase(); }
 async function fbEmailSignIn() {
   const email = fbEmailVal(), pw = String(($('#fb-pw') || {}).value || '');
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('Enter your email address.', true); return; }
-  if (!pw) { toast('Enter your password — or tap “First time? Set a password”.', true); return; }
+  FB.lastEmail = email;
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setAuthMsg({ bad: true, text: 'Enter your email address.' }); return; }
+  if (!pw) { setAuthMsg({ bad: true, text: 'Enter your password — first time? Tap “First time? Use your invitation code”.' }); return; }
   try { await FB.auth.signInWithEmailAndPassword(email, pw); location.reload(); }
-  catch (e) { console.error(e); toast(fbAuthHelp(e), true); }
+  catch (e) { console.error(e); setAuthMsg({ bad: true, text: fbAuthHelp(e), code: (e && e.code) || '' }); }
 }
 /** First use or forgotten password: make sure the account exists, then email a link to choose a password. */
-async function fbSetPassword() {
+/** Forgot password: Firebase emails a reset link — only for an account that already exists (no account is created). */
+async function fbForgotPassword() {
   const email = fbEmailVal(); FB.lastEmail = email;
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { FB.authMsg = { bad: true, text: 'Enter your email address first, then tap “Set a password”.' }; render(); return; }
-  if (FB.resetAt && Date.now() - FB.resetAt < 30000 && FB.resetSent === email) { FB.authMsg = { bad: true, text: 'An email was just sent — wait 30 seconds before asking again.' }; render(); return; }
-  FB.authMsg = { text: 'Sending…' }; FB.resetSent = ''; render();
-  let step = 'create';
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setAuthMsg({ bad: true, text: 'Enter your email address first, then tap “Forgot your password?”.' }); return; }
+  if (FB.resetAt && Date.now() - FB.resetAt < 30000 && FB.resetSent === email) { setAuthMsg({ bad: true, text: 'An email was just sent — wait 30 seconds before asking again.' }); return; }
+  setAuthMsg({ text: 'Sending…' });
   try {
-    try {
-      const tmp = Array.from(crypto.getRandomValues(new Uint8Array(18)), b => (b % 36).toString(36)).join('') + 'A1!';
-      await FB.auth.createUserWithEmailAndPassword(email, tmp);   // first use: create the account with a throw-away password…
-      await FB.auth.signOut();
-    } catch (e) { if (e && e.code !== 'auth/email-already-in-use') throw e; }
-    step = 'email';
-    // …then Firebase emails a link where they choose their own password; after saving it they are sent back here
     const back = { url: location.origin + location.pathname, handleCodeInApp: false };
     try { await FB.auth.sendPasswordResetEmail(email, back); }
     catch (e) { if (e && /continue-uri|unauthorized-continue|invalid-continue/.test(e.code || '')) await FB.auth.sendPasswordResetEmail(email); else throw e; }
     FB.resetSent = email; FB.resetAt = Date.now(); FB.authMsg = null; render();
-    console.info('[auth] password email requested for', email);
-  } catch (e) {
-    console.error('[auth] set password failed at', step, e);
-    FB.authMsg = { bad: true, text: fbAuthHelp(e), code: (e && e.code) || '' }; render();
-  }
+  } catch (e) { console.error('[auth] reset failed', e); setAuthMsg({ bad: true, text: fbAuthHelp(e), code: (e && e.code) || '' }); }
+}
+/** Show a sign-in message in place — the typed fields stay as they are. */
+function authMsgInner(m) { return `${esc(m.text)}${m.code ? ` <span class="tiny" style="display:block;margin-top:4px;opacity:.8">Code: ${esc(m.code)}</span>` : ''}`; }
+function setAuthMsg(m) {
+  FB.authMsg = m; const el = $('#auth-msg');
+  if (!el) { render(); return; }
+  el.hidden = !m; el.classList.toggle('bad', !!(m && m.bad)); el.innerHTML = m ? authMsgInner(m) : '';
+}
+/** v1.24: SHA-256 of "email:CODE" — the public key of an invitation code (the code itself is never stored readable). */
+async function codeHash(email, code) {
+  const data = new TextEncoder().encode(String(email).trim().toLowerCase() + ':' + String(code).trim().toUpperCase().replace(/[^A-Z0-9]/g, ''));
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('');
+}
+/** First time: only someone holding an invitation code for this email can create an email + password account. */
+async function fbCreateWithCode() {
+  const email = fbEmailVal(); FB.lastEmail = email;
+  const code = String(($('#fb-code') || {}).value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const pw = String(($('#fb-newpw') || {}).value || ''), pw2 = String(($('#fb-newpw2') || {}).value || '');
+  const fail = t => setAuthMsg({ bad: true, text: t });
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail('Enter the email address the invitation was sent to.');
+  if (code.length < 6) return fail('Enter the invitation code from your invitation email.');
+  if (pw.length < 8) return fail('Choose a password of at least 8 characters.');
+  if (pw !== pw2) return fail('The two passwords are different.');
+  setAuthMsg({ text: 'Checking your invitation…' });
+  try {
+    const h = await codeHash(email, code);
+    const inv = await FB.fs.doc('invcodes/' + h).get().catch(() => null);
+    if (!inv || !inv.exists) return fail('That invitation code doesn’t match this email address. Check both against your invitation email, or ask the tournament director for a new invitation.');
+    try { await FB.auth.createUserWithEmailAndPassword(email, pw); }
+    catch (e) {
+      if (e && e.code === 'auth/email-already-in-use') return fail('An account already exists for this email. Sign in with your password above, or use “Forgot your password?”. If you never chose a password, ask the app admin to delete the old account (Firebase → Authentication → Users) and try again.');
+      throw e;
+    }
+    const u = FB.auth.currentUser;
+    await FB.fs.doc('claims/' + u.uid).set({ email, h, at: new Date().toISOString() });   // proves the address (the code came by email)
+    location.reload();
+  } catch (e) { console.error('[auth] create with code failed', e); setAuthMsg({ bad: true, text: fbAuthHelp(e), code: (e && e.code) || '' }); }
 }
 async function fbResendVerify() { try { await FB.auth.currentUser.sendEmailVerification(); toast('Verification email sent'); } catch (e) { toast(fbAuthHelp(e), true); } }
 async function fbVerifiedContinue() { try { await FB.auth.currentUser.reload(); } catch (e) { /* ignore */ } if (FB.auth.currentUser && FB.auth.currentUser.emailVerified) { try { await FB.auth.currentUser.getIdToken(true); } catch (e) { /* ignore */ } location.reload(); } else toast('Not verified yet — open the link in the email first.', true); }
@@ -117,12 +146,12 @@ function fbAuthHelp(e, via) {
   if (c === 'auth/unauthorized-domain') return `Sign-in failed: ${host} is not authorized. Firebase → Authentication → Settings → Authorized domains → add ${host} (no https://).`;
   if (c === 'auth/operation-not-allowed' && via === 'google') return 'Sign-in failed: Google sign-in is turned off. Firebase → Authentication → Sign-in method → enable Google.';
   if (c === 'auth/operation-not-allowed') return 'Email and password sign-in is turned off for this site. App admin: Firebase console → Authentication → Sign-in method → Email/Password → Enable → Save.';
-  if (/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return 'Email or password is not right. First time here, or forgot it? Tap “First time? Set a password”.';
+  if (/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return 'Email or password is not right. First time? Use your invitation code. Forgot it? Tap “Forgot your password?”.';
   if (c === 'auth/admin-restricted-operation') return 'New accounts are switched off. Firebase → Authentication → Settings → User actions → turn on “Enable create (sign-up)”.';
   if (c === 'auth/network-request-failed') return 'No connection to Firebase — check the internet connection and try again.';
   if (c === 'auth/quota-exceeded') return 'Firebase’s daily email limit was reached — try again tomorrow.';
   if (c === 'auth/missing-email') return 'Enter your email address first.';
-  if (c === 'auth/too-many-requests') return 'Too many tries — wait a few minutes, or set a new password with “First time? Set a password”.';
+  if (c === 'auth/too-many-requests') return 'Too many tries — wait a few minutes and try again.';
   if (c === 'auth/invalid-email') return 'That email address doesn’t look right.';
   if (c === 'auth/popup-blocked') return 'The sign-in window was blocked. Allow pop-ups for this site and try again.';
   if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') return 'Sign-in window closed before finishing.';
@@ -172,8 +201,14 @@ function fbSignInHTML() {
     <label class="f"><span>Email</span><input id="fb-email" type="email" autocomplete="username" placeholder="name@example.com" value="${esc(FB.resetSent || FB.lastEmail || '')}" ${dis}></label>
     <label class="f"><span>Password</span><input id="fb-pw" type="password" autocomplete="current-password" ${dis}></label>
     <button class="go" data-act="fb-email-signin" ${dis}>Sign in with email</button>
-    ${FB.authMsg ? `<p class="notice small ${FB.authMsg.bad ? 'bad' : ''}" id="auth-msg" role="status">${esc(FB.authMsg.text)}${FB.authMsg.code ? ` <span class="tiny" style="display:block;margin-top:4px;opacity:.8">Code: ${esc(FB.authMsg.code)}</span>` : ''}</p>` : ''}
-    ${FB.resetSent ? `<div class="notice small" id="reset-sent" role="status"><b>Email sent to ${esc(FB.resetSent)}.</b> It comes from <b>noreply@${esc(((window.KT_FIREBASE_CONFIG || {}).authDomain) || 'firebaseapp.com')}</b> with the subject “Reset your password …”. It can take a few minutes — look in <b>Spam / Junk / Promotions</b> too. Open the link, choose your password, then come back and sign in above.<div style="margin-top:6px"><button class="sm" data-act="fb-set-pw">Send it again</button></div></div>` : ''}
-    <button class="ghost sm" data-act="fb-set-pw" ${dis}>First time here, or forgot your password? Set a password</button>
+    <p style="display:block;overflow-wrap:anywhere" class="notice small ${FB.authMsg && FB.authMsg.bad ? 'bad' : ''}" id="auth-msg" role="status" ${FB.authMsg ? '' : 'hidden'}>${FB.authMsg ? authMsgInner(FB.authMsg) : ''}</p>
+    ${FB.resetSent ? `<div class="notice small" id="reset-sent" role="status" style="display:block;overflow-wrap:anywhere"><b>Reset email sent to ${esc(FB.resetSent)}.</b> It comes from <b>noreply@${esc(((window.KT_FIREBASE_CONFIG || {}).authDomain) || 'firebaseapp.com')}</b> — look in Spam / Junk too. Some providers (e.g. Comcast) block these emails: if nothing arrives, ask the app admin.</div>` : ''}
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><button class="ghost sm" data-act="fb-first" ${dis}>First time? Use your invitation code</button><button class="ghost sm" data-act="fb-forgot" ${dis}>Forgot your password?</button></div>
+    ${FB.firstTime ? `<div class="stack first-time" id="first-time"><div class="label">Set your password with your invitation code</div>
+      <p class="tiny muted">Only people who were invited can create a password. Use the email address and the code from your invitation email.</p>
+      <label class="f"><span>Invitation code</span><input id="fb-code" autocomplete="one-time-code" placeholder="e.g. K7M2QX9PAD" style="text-transform:uppercase" ${dis}></label>
+      <label class="f"><span>New password (8+ characters)</span><input id="fb-newpw" type="password" autocomplete="new-password" ${dis}></label>
+      <label class="f"><span>New password again</span><input id="fb-newpw2" type="password" autocomplete="new-password" ${dis}></label>
+      <button class="primary" data-act="fb-create" ${dis}>Create my password and sign in</button></div>` : ''}
     <p class="small spect-note" style="text-align:center">Spectators don’t sign in — open the event’s public link from the tournament director.</p></div>`;
 }

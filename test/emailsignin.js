@@ -1,5 +1,5 @@
-// v1.22.0: email + password accounts (any provider): first use / forgot → "Set a password" email; confirm email;
-// invitations work for them; the sign-in box no longer tells spectators to sign in
+// v1.24.0: email + password accounts only with an invitation code (no open sign-up, no Firebase emails needed);
+// Forgot password only for existing accounts; Gmail invitees use Google; spectators don't sign in
 const { chromium } = require(require('child_process').execSync('npm root -g').toString().trim() + '/playwright');
 const path = require('path'), fs = require('fs');
 (async () => {
@@ -9,46 +9,56 @@ const path = require('path'), fs = require('fs');
   const mock = fs.readFileSync('test/fbmock.js', 'utf8'), url = 'file://' + path.resolve('dist/karate-event-tracker.html');
   const signInG = async (pg) => { for (let k = 0; k < 4; k++) { await pg.waitForSelector('button[data-act="fb-signin"], .bar button[data-act="fb-signout"]', { timeout: 15000 }); if (await pg.$('.bar button[data-act="fb-signout"]')) return; await pg.waitForTimeout(400); await pg.click('button[data-act="fb-signin"]').catch(() => {}); await pg.waitForTimeout(1500); } };
   const db = p => p.evaluate(() => JSON.parse(localStorage.getItem('fbmock')));
+  const accts = p => p.evaluate(() => JSON.parse(localStorage.getItem('fbmock_auth') || '{}'));
   const A = await ctx.newPage(); await A.addInitScript(`sessionStorage.setItem('nextuid','u_admin');` + mock); A.on('pageerror', e => errors.push('A: ' + e.message)); await A.goto(url); await signInG(A);
   await A.click('text=Become director'); await A.waitForSelector('text=Manage access', { timeout: 10000 });
-  await A.fill('#ai-email', 'sam@club.org'); await A.selectOption('#ai-role', 'member'); await A.click('#f-app-invite button[type="submit"]'); await A.waitForTimeout(500);
-  const body = await A.inputValue('#inv-body');
-  ok('invitation for a non-Google email explains “Set a password”', /Set a password/.test(body) && /sam@club\.org/.test(body));
-  await A.click('#modal button.primary[data-act="modal-close"]');
+  for (const [email, role] of [['sam@club.org', 'member'], ['gina@gmail.com', 'organizer']]) {
+    await A.fill('#ai-email', email); await A.selectOption('#ai-role', role); await A.click('#f-app-invite button[type="submit"]'); await A.waitForTimeout(600);
+    if (email === 'sam@club.org') {
+      const body = await A.inputValue('#inv-body'), code = ((await db(A))['invites/sam@club.org'] || {}).code || '';
+      ok('non-Gmail invite: 10-character code in the invitation, with the steps', code.length === 10 && body.includes(code) && /First time\? Use your invitation code/.test(body));
+      ok('…only the hash of the code is public', Object.keys(await db(A)).some(k => k.startsWith('invcodes/') && !k.includes(code)));
+    } else ok('Gmail invite: no code, “Sign in with Google”', !((await db(A))['invites/gina@gmail.com'] || {}).code && /Sign in with Google/.test(await A.inputValue('#inv-body')));
+    await A.click('#modal button.primary[data-act="modal-close"]'); await A.waitForTimeout(200);
+  }
+  const code = (await db(A))['invites/sam@club.org'].code;
   // Sam's browser
   const S = await ctx.newPage(); S.on('pageerror', e => errors.push('S: ' + e.message)); await S.addInitScript(mock); await S.goto(url);
   await S.waitForSelector('#fb-email');
   const txt = await S.textContent('#main');
-  ok('sign-in box: Google + email/password', !!(await S.$('button[data-act="fb-signin"]')) && !!(await S.$('#fb-pw')) && !!(await S.$('button[data-act="fb-email-signin"]')));
-  ok('sign-in box: spectators don’t sign in (no “spectators sign in with Google”)', /Spectators don’t sign in/.test(txt) && !/spectators sign in with a Google/i.test(txt));
-  await S.screenshot({ path: 'test/shots/signin-box.png' });
-  await S.fill('#fb-email', 'sam@club.org'); await S.click('button[data-act="fb-set-pw"]'); await S.waitForTimeout(500);
-  ok('“Set a password” → link emailed, notice shown (sender, spam hint, Send again)', /Email sent to sam@club\.org/.test(await S.textContent('#main')) && /Spam/.test(await S.textContent('#reset-sent')) && !!(await S.$('#reset-sent button[data-act="fb-set-pw"]')) && (await S.evaluate(() => JSON.parse(localStorage.getItem('fbmock_mail') || '[]'))).some(m => m.type === 'reset' && m.email === 'sam@club.org'));
-  ok('…return link points back to the site', (await S.evaluate(() => JSON.parse(localStorage.getItem('fbmock_mail') || '[]'))).some(m => m.type === 'reset' && /karate-event-tracker\.html/.test(m.url)));
-  await S.click('#reset-sent button[data-act="fb-set-pw"]'); await S.waitForTimeout(300);
-  ok('“Send it again” too soon → wait message', /wait 30 seconds/.test(await S.textContent('#auth-msg')));
-  ok('…the throw-away session was signed out', await S.evaluate(() => !sessionStorage.getItem('fbuid')));
-  // Sam opens the link and picks a password (address not yet confirmed)
-  await S.evaluate(() => window.__mockResetPassword('sam@club.org', 'Kiai-2026', false));
-  await S.fill('#fb-pw', 'wrong'); await S.click('button[data-act="fb-email-signin"]'); await S.waitForTimeout(400);
-  ok('wrong password → clear message', /Email or password is not right/.test(await S.textContent('#toast')));
-  await S.fill('#fb-email', 'sam@club.org'); await S.fill('#fb-pw', 'Kiai-2026'); await S.press('#fb-pw', 'Enter'); await S.waitForTimeout(1500);
-  ok('unconfirmed address → “Confirm your email” (verification sent)', !!(await S.$('#verify-card')) && (await S.evaluate(() => JSON.parse(localStorage.getItem('fbmock_mail') || '[]'))).some(m => m.type === 'verify'));
-  ok('…invitation not used before confirming', !(await db(S))['users/e_sam']);
-  await S.evaluate(() => window.__mockVerify('sam@club.org'));
-  await S.click('button[data-act="fb-verified"]'); await S.waitForTimeout(2200);
-  ok('confirmed → signed in', !!(await S.$('.bar button[data-act="fb-signout"]')));
-  const d = await db(S);
-  ok('invitation accepted for the email account', (d['users/e_sam'] || {}).invitedAs === 'manager' && !d['invites/sam@club.org']);
-  ok('name taken from the email', (d['users/e_sam'] || {}).name === 'Sam');
-  await A.reload(); await A.waitForTimeout(1200);
-  ok('admin sees Sam (sam@club.org) as ring manager', /Sam\s*sam@club\.org/.test(await A.textContent('#acc-managers')));
-  // configuration problems are explained on the card, not only in a passing toast
+  ok('no open “Set a password” any more', !/Set a password/.test(txt) && !(await S.$('[data-act="fb-set-pw"]')));
+  ok('spectators don’t sign in', /Spectators don’t sign in/.test(txt));
+  // someone without an invitation cannot create an account
+  await S.fill('#fb-email', 'eve@club.org'); await S.click('button[data-act="fb-first"]'); await S.waitForSelector('#first-time');
+  await S.fill('#fb-code', 'ABCDEFGHJK'); await S.fill('#fb-newpw', 'Sneaky-2026'); await S.fill('#fb-newpw2', 'Sneaky-2026'); await S.click('button[data-act="fb-create"]'); await S.waitForTimeout(500);
+  ok('uninvited email + guessed code → refused, no account created', /doesn’t match/.test(await S.textContent('#auth-msg')) && !(await accts(S))['eve@club.org']);
+  // Sam: wrong code, then the right one
+  await S.fill('#fb-email', 'sam@club.org'); await S.fill('#fb-code', 'WRONGCODE1'); await S.fill('#fb-newpw', 'Kiai-2026!'); await S.fill('#fb-newpw2', 'Kiai-2026!'); await S.click('button[data-act="fb-create"]'); await S.waitForTimeout(400);
+  ok('wrong code → refused', /doesn’t match/.test(await S.textContent('#auth-msg')) && !(await accts(S))['sam@club.org']);
+  await S.fill('#fb-newpw2', 'different'); await S.fill('#fb-code', code); await S.click('button[data-act="fb-create"]'); await S.waitForTimeout(300);
+  ok('passwords must match', /different/.test(await S.textContent('#auth-msg')));
+  await S.fill('#fb-newpw', 'Kiai-2026!'); await S.fill('#fb-newpw2', 'Kiai-2026!'); await S.fill('#fb-code', code.toLowerCase()); await S.press('#fb-newpw2', 'Enter'); await S.waitForTimeout(2500);
+  ok('right code → account created, signed in straight away (no email needed)', !!(await S.$('.bar button[data-act="fb-signout"]')) && !(await S.$('#verify-card')));
+  let d = await db(S);
+  ok('invitation accepted; code and invite removed; address recorded as proven', (d['users/e_sam'] || {}).invitedAs === 'manager' && !d['invites/sam@club.org'] && !Object.keys(d).some(k => k.startsWith('invcodes/') && d[k].email === 'sam@club.org') && (d['claims/e_sam'] || {}).email === 'sam@club.org');
+  // the used code cannot be used again
+  const S2 = await ctx.newPage(); await S2.addInitScript(mock); await S2.goto(url); await S2.waitForSelector('#fb-email');
+  await S2.evaluate(() => sessionStorage.clear());
+  await S2.fill('#fb-email', 'sam@club.org'); await S2.click('button[data-act="fb-first"]'); await S2.fill('#fb-code', code); await S2.fill('#fb-newpw', 'Other-2026!'); await S2.fill('#fb-newpw2', 'Other-2026!'); await S2.click('button[data-act="fb-create"]'); await S2.waitForTimeout(500);
+  ok('a used code cannot set the password again', /doesn’t match|already exists/.test(await S2.textContent('#auth-msg')) && (await accts(S2))['sam@club.org'].pw === 'Kiai-2026!');
+  // sign in later with the password; Forgot password only sends, never creates
+  await S2.fill('#fb-pw', 'Kiai-2026!'); await S2.click('button[data-act="fb-email-signin"]'); await S2.waitForTimeout(1500);
+  ok('later: sign in with email + password', !!(await S2.$('.bar button[data-act="fb-signout"]')));
+  const S3 = await ctx.newPage(); await S3.addInitScript(mock); await S3.goto(url); await S3.waitForSelector('#fb-email');
+  await S3.fill('#fb-email', 'nobody@club.org'); await S3.click('button[data-act="fb-forgot"]'); await S3.waitForTimeout(400);
+  ok('Forgot password never creates an account', !(await accts(S3))['nobody@club.org'] && !!(await S3.$('#reset-sent')));
+  await S.screenshot({ path: 'test/shots/signin-code.png' });
+  await S3.click('button[data-act="fb-first"]'); await S3.waitForTimeout(200); await S3.screenshot({ path: 'test/shots/signin-firsttime.png' });
+  // configuration problem shown on the card
   const T = await ctx.newPage(); await T.addInitScript(mock + ';window.__mockSignupOff=true;'); await T.goto(url); await T.waitForSelector('#fb-email');
-  await T.fill('#fb-email', 'pat@club.org'); await T.click('button[data-act="fb-set-pw"]'); await T.waitForTimeout(400);
-  ok('…typed email kept after the error', (await T.inputValue('#fb-email')) === 'pat@club.org');
-  ok('Email/Password turned off → clear fix shown on the card', /Sign-in method → Email\/Password → Enable/.test(await T.textContent('#auth-msg')) && /operation-not-allowed/.test(await T.textContent('#auth-msg')));
-  await T.screenshot({ path: 'test/shots/setpw-error.png' });
+  const c2 = await A.evaluate(async () => { const e = 'pat@club.org'; return null; });
+  await T.fill('#fb-email', 'sam@club.org'); await T.click('button[data-act="fb-forgot"]'); await T.waitForTimeout(300);
+  ok('…typed email kept', (await T.inputValue('#fb-email')) === 'sam@club.org');
   console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
   await b.close(); process.exit(errors.length ? 1 : 0);
 })();

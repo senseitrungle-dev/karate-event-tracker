@@ -179,7 +179,7 @@ const ACT = {
   'event-delete': () => deleteEvent(S.evId),
   demo: () => demoChooser(),
   'demo-make': el => createDemo(el.dataset.kind),
-  'fb-signin': () => fbSignIn(), 'fb-signout': () => fbSignOut(), 'fb-email-signin': () => fbEmailSignIn(), 'fb-set-pw': () => fbSetPassword(), 'fb-verified': () => fbVerifiedContinue(), 'fb-verify-resend': () => fbResendVerify(), 'fb-claim': () => fbClaimDirector(), 'fb-access': () => accessForm(),
+  'fb-signin': () => fbSignIn(), 'fb-signout': () => fbSignOut(), 'fb-email-signin': () => fbEmailSignIn(), 'fb-forgot': () => fbForgotPassword(), 'fb-first': () => { FB.firstTime = !FB.firstTime; FB.lastEmail = fbEmailVal() || FB.lastEmail; FB.authMsg = null; render(); }, 'fb-create': () => fbCreateWithCode(), 'fb-verified': () => fbVerifiedContinue(), 'fb-verify-resend': () => fbResendVerify(), 'fb-claim': () => fbClaimDirector(), 'fb-access': () => accessForm(),
   'comp-new': () => compForm(null),
   'comp-edit': el => compForm(el.dataset.id),
   'comp-delete': async () => {
@@ -275,7 +275,7 @@ const ACT = {
   'invite-mail': el => { const i = S.invites[el.dataset.id]; if (i) inviteSheet(Object.assign({ id: el.dataset.id }, i)); },
   'invite-copy': () => copyInvite(),
   'app-add-event': el => { const id = el.dataset.id, ev = ($('#ae-ev-' + CSS.escape(id)) || {}).value, rl = ($('#ae-role-' + CSS.escape(id)) || {}).value; if (ev) addToEvent(id, ev, rl); },
-  'invite-cancel': el => guard(() => S.store.del('invites/' + el.dataset.id), 'Invite cancelled'),
+  'invite-cancel': async el => { const i = (S.invites || {})[el.dataset.id] || {}; if (await guard(() => S.store.del('invites/' + el.dataset.id), 'Invite cancelled') && i.codeHash) { try { await S.store.del('invcodes/' + i.codeHash); } catch (e) { /* gone */ } } },
   'ring-unmanage': el => { const r = S.d.rings[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'rings', r.id), { managerIds: (r.managerIds || []).filter(x => x !== el.dataset.uid) })).then(scheduleSync); },
   'staff-add': el => { const ev = curEvent(); $$('.dd-list').forEach(x => { x.hidden = true; }); guard(() => S.store.update(P.event(ev.id), { staffIds: [...new Set((ev.staffIds || []).concat(el.dataset.uid))] }), 'Staff added'); },
   'staff-remove': el => { const ev = curEvent(); guard(() => S.store.update(P.event(ev.id), { staffIds: (ev.staffIds || []).filter(x => x !== el.dataset.uid) })); },
@@ -539,6 +539,7 @@ function wire() {
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target && (e.target.id === 'fb-pw' || e.target.id === 'fb-email')) { e.preventDefault(); fbEmailSignIn(); return; }
+    if (e.key === 'Enter' && e.target && /^fb-(code|newpw2?)$/.test(e.target.id || '')) { e.preventDefault(); fbCreateWithCode(); return; }
     if (e.key === 'Escape') { if (!$('#confirm').hidden) confirmDone(false); else if (!$('#modal').hidden) closeModal(); }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bm[role="button"]')) { e.preventDefault(); e.target.click(); }
   });

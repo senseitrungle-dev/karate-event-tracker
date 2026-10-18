@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.23.1 Requirements & Design
+# Karate Event Tracker · v1.24.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -388,3 +388,14 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Diagnose**: the request result was only shown as a short toast. A failure (Email/Password sign-in not enabled in Firebase, sign-up switched off, quota, network) disappeared in a few seconds and looked like "nothing happened"; a success gave no hint where to look (Firebase sends from noreply@<project>.firebaseapp.com, often filtered into Spam/Junk/Promotions, sometimes minutes later). The code path itself sends correctly (verified with the mock).
 - **Fix**: the sign-in card now shows a lasting status box — "Sending…", then either "Email sent to … from noreply@… subject “Reset your password …” — check Spam / Junk / Promotions", with **Send it again** (30-second guard), or the exact problem with its fix and code (e.g. operation-not-allowed → enable Email/Password; admin-restricted-operation → turn on "Enable create (sign-up)"). The typed email stays in the box. The email's link now returns the person to the site after they save their password (falls back if the continue URL is refused). Console logs `[auth]` lines for support.
 - Verify: test/emailsignin.js (sent notice with sender/spam/Send again, return link, too-soon resend, error shown on the card with fix and code, email kept); regression.
+
+## 46. v1.24.0 — passwords only with an invitation code (2026-10-17)
+- **Why**: Comcast (and some other providers) silently drop Firebase's emails, even when sent through Gmail SMTP; and the v1.22 "Set a password" let anyone type any email and make Firebase create an account and send mail (spam / overload).
+- **Now**: an email + password account can only be created by someone holding an **invitation code**:
+  - When the app admin or a director invites a **non-Gmail** address on the Vercel site, the invitation gets a random **10-character code**. The invitation email — sent by the inviter from their own Gmail / Outlook / mail app — contains the code and the steps. Only SHA-256(email:code) is stored publicly (`invcodes/{hash}`); the code itself sits in the invite, readable only by the inviter, app admins and the invitee.
+  - Sign-in box: **"First time? Use your invitation code"** → email + code + new password (twice) → the app checks the hash, creates the account with the person's own password, records `claims/{uid}` (proof the address belongs to them) and signs them in straight away — **no Firebase email at all**. Wrong code / uninvited email → refused, **no account is created**. A used code is deleted when the invitation is accepted.
+  - **"Forgot your password?"** only sends Firebase's reset email for an existing account (never creates one) and warns that some providers block it; otherwise the app admin deletes the account in Firebase → Authentication → Users and re-invites.
+  - Gmail addresses keep "Sign in with Google" (no code). Messages stay on the card and typed fields are kept.
+- **Rules** (`firestore.rules` v1.24.0 — **redeploy**): `invcodes` — anyone may `get` a hash, nobody may list, only app admins / event directors create; `claims/{uid}` — the new account may create its own claim only for its own email and an existing code hash for that email; `myEmail()` accepts a verified email **or** a matching claim.
+- Limits: Firebase's sign-up endpoint itself stays open (the app needs it to create invited accounts); an account made outside the app gets no data and no roles.
+- Verify: test/emailsignin.js (code in invitation, only hash public, Gmail without code, no open sign-up, uninvited/guessed code refused without creating an account, wrong code, mismatched passwords, right code → signed in without email, invitation accepted + code removed + claim recorded, used code can't reset, later password sign-in, Forgot never creates); full regression.

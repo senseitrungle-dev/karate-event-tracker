@@ -10,7 +10,7 @@
   const isDir=d=>['director','admin'].includes(role(d));
   const isOrg=d=>isDir(d)||role(d)==='organizer';
   const A_KEY='fbmock_auth', accts=()=>JSON.parse(localStorage.getItem(A_KEY)||'{}'), saveA=a=>localStorage.setItem(A_KEY,JSON.stringify(a));
-  const em=()=>{ if(!uid()) return ''; const e=sessionStorage.getItem('fbemail'); if(!e) return uid()+'@x.test'; const a=accts()[e]; return a&&a.verified?e:''; };   // unverified email accounts: no invitations
+  const em=()=>{ if(!uid()) return ''; const e=sessionStorage.getItem('fbemail'); if(!e) return uid()+'@x.test'; const a=accts()[e]; if(a&&a.verified) return e; const c=load()['claims/'+uid()]; return c&&c.email===e?e:''; };   // verified, or created with an invitation code   // unverified email accounts: no invitations
   const inv=d=>d['invites/'+em()];
   const ev=(d,e)=>d['events/'+e]||{};
   const evDir=(d,e)=>isDir(d)||(!!uid()&&(ev(d,e).directorIds||[]).includes(uid()));
@@ -22,6 +22,8 @@
     if(p.startsWith('roles/')){ if(isDir(d))return true; if(p!=='roles/'+uid()||d[p])return false; if(v&&v.role==='director'&&!d['meta/bootstrap'])return true; const i=inv(d); return !!(v&&v.role==='organizer'&&i&&i.scope==='app'&&i.role==='organizer'); }
     if(p.startsWith('orgRequests/'))return p==='orgRequests/'+rawUid()||isDir(d);
     if(p.startsWith('blocked/'))return isDir(d);
+    if(p.startsWith('invcodes/')){ if(v===undefined){ const r=d[p]||{}; return isDir(d)||(!!uid()&&r.by===uid())||(em()!==''&&em()===r.email)||(!!r.eventId&&evDir(d,r.eventId)); } return !!uid()&&!!v.email&&(isDir(d)||(!!v.eventId&&evDir(d,v.eventId))); }
+    if(p.startsWith('claims/')){ const ru=rawUid(), e=sessionStorage.getItem('fbemail'); if(isDir(d))return true; if(p!=='claims/'+ru||!v||d[p])return false; const ic=d['invcodes/'+v.h]; return !!e&&v.email===e&&!!ic&&ic.email===e; }
     if(p.startsWith('invites/')){ if(v&&v.scope==='app')return isDir(d); return !!uid(); }
     if(p.startsWith('share/'))return !!uid();
     let m=/^events\/([^/]+)$/.exec(p);
@@ -34,6 +36,8 @@
     return evDir(d,e);
   };
   const canRead=(p,d)=>{
+    if(p.startsWith('invcodes/'))return true;
+    if(p.startsWith('claims/'))return isDir(d)||p==='claims/'+rawUid();
     if(p.startsWith('blocked/'))return isDir(d)||p==='blocked/'+rawUid();
     if(p.startsWith('share/'))return true;
     const e=evOf(p);
