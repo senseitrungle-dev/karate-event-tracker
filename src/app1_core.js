@@ -314,9 +314,12 @@ function fd(form) {
 const opt = (v, label, sel) => `<option value="${esc(v)}" ${String(v) === String(sel) ? 'selected' : ''}>${esc(label)}</option>`;
 const rankOptions = sel => `<option value="">Select rank…</option>` + KT.RANKS.map(r => opt(r.code, r.label, sel)).join('');
 function personChip(id) {
-  const p = S.profiles[id] || {};
-  return `<span class="person">${p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" alt="">` : ''}<span>${esc(p.name || ((S.people || {})[id] || {}).label || (typeof FB !== 'undefined' && FB.cache[id] && (FB.cache[id].name || FB.cache[id].email)) || 'Team member')}</span></span>`;
+  const p = S.profiles[id] || {}, mail = typeof personEmail === 'function' ? personEmail(id) : '';
+  const nm = p.name || ((S.people || {})[id] || {}).label || (typeof FB !== 'undefined' && FB.cache[id] && (FB.cache[id].name || FB.cache[id].email)) || 'Team member';
+  return `<span class="person">${p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" alt="">` : ''}<span>${esc(nm)}${mail && mail !== nm ? ` <span class="pmail">${esc(mail)}</span>` : ''}</span></span>`;
 }
+/** v1.23: "Name (email)" — the way a person is written everywhere in plain text (lists, menus, cards). */
+function personLabel(id) { const n = personName(id), m = typeof personEmail === 'function' ? personEmail(id) : ''; return m && m !== n ? (n && n !== 'Team member' ? `${n} (${m})` : m) : n; }
 async function refreshProfiles(ids) {
   if (!S.user || !ids.length) return;
   const missing = ids.filter(id => !S.profiles[id]);

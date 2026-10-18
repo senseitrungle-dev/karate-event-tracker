@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.22.0 Requirements & Design
+# Karate Event Tracker · v1.23.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -375,3 +375,10 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - Names for email accounts come from the address (sam@club.org → "Sam") until a name is set elsewhere.
 - **Firebase console**: Authentication → Sign-in method → enable **Email/Password**. `firestore.rules` v1.22.0 — **redeploy**.
 - Verify: test/emailsignin.js (sign-in box content; Set a password → reset email + session signed out; wrong password message; sign-in → Confirm your email gate with verification sent; invitation not applied until confirmed; confirm → signed in, invitation accepted, name from email; admin sees Sam with email); full regression.
+
+## 44. v1.23.0 — email addresses next to names everywhere (2026-10-17)
+- **Title bar** (Vercel site, wider screens): the signed-in email next to Sign out (phones: in the About pop-up).
+- **Home**: event cards — "Directors: Name (email), …"; App admin — every list (directors, ring managers, not assigned, access removed, requests, admins), **Directors by event** chips and the "Add director…" menu, **Events by director**.
+- **Inside events**: every person chip (ring managers on ring cards, staff, People tab) shows the email; the ring card's "Add a ring manager…" menu lists "Name (email)".
+- Helpers: `personChip(id)` adds the email; `personLabel(id)` = "Name (email)" for menus and plain text.
+- Verify: test/emails.js (bar, event card, Directors by event, Events by director, admin lists); regression.

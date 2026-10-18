@@ -135,7 +135,7 @@ async function accessForm() {
 }
 function fbBarBits() {
   if (!FB.on || !FB.user || S.pub) return '';
-  return `<button class="sm ghost" style="color:#fff" data-act="fb-signout" title="${esc(FB.user.email || '')}">Sign out</button>`;
+  return `<span class="bar-mail" title="Signed in as ${esc(FB.user.email || '')}">${esc(FB.user.email || '')}</span><button class="sm ghost" style="color:#fff" data-act="fb-signout" title="${esc(FB.user.email || '')}">Sign out</button>`;
 }
 function fbHomeBits() {
   if (!FB.on) return '';

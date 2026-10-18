@@ -610,16 +610,20 @@ body { font-weight: 450; }
 .who-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; } .who-mail { font-size: .82rem; color: var(--ink-2); font-weight: 450; overflow-wrap: anywhere; }
 .or-line { display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: .8rem; } .or-line::before, .or-line::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
 .signin-card .spect-note { color: var(--ink-2); border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+.pmail { font-size: .8em; font-weight: 450; color: var(--ink-2); overflow-wrap: anywhere; }
+.chip .pmail { color: inherit; opacity: .8; }
+.bar-mail { font-size: .78rem; color: #fff; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+@media (max-width: 760px) { .bar-mail { display: none; } }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.22.0 */
+<script>/* Karate Event Tracker v1.23.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.22.0';
+  const VERSION = '1.23.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -1985,9 +1989,12 @@ function fd(form) {
 const opt = (v, label, sel) => `<option value="${esc(v)}" ${String(v) === String(sel) ? 'selected' : ''}>${esc(label)}</option>`;
 const rankOptions = sel => `<option value="">Select rank…</option>` + KT.RANKS.map(r => opt(r.code, r.label, sel)).join('');
 function personChip(id) {
-  const p = S.profiles[id] || {};
-  return `<span class="person">${p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" alt="">` : ''}<span>${esc(p.name || ((S.people || {})[id] || {}).label || (typeof FB !== 'undefined' && FB.cache[id] && (FB.cache[id].name || FB.cache[id].email)) || 'Team member')}</span></span>`;
+  const p = S.profiles[id] || {}, mail = typeof personEmail === 'function' ? personEmail(id) : '';
+  const nm = p.name || ((S.people || {})[id] || {}).label || (typeof FB !== 'undefined' && FB.cache[id] && (FB.cache[id].name || FB.cache[id].email)) || 'Team member';
+  return `<span class="person">${p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" alt="">` : ''}<span>${esc(nm)}${mail && mail !== nm ? ` <span class="pmail">${esc(mail)}</span>` : ''}</span></span>`;
 }
+/** v1.23: "Name (email)" — the way a person is written everywhere in plain text (lists, menus, cards). */
+function personLabel(id) { const n = personName(id), m = typeof personEmail === 'function' ? personEmail(id) : ''; return m && m !== n ? (n && n !== 'Team member' ? `${n} (${m})` : m) : n; }
 async function refreshProfiles(ids) {
   if (!S.user || !ids.length) return;
   const missing = ids.filter(id => !S.profiles[id]);
@@ -2144,7 +2151,7 @@ async function accessForm() {
 }
 function fbBarBits() {
   if (!FB.on || !FB.user || S.pub) return '';
-  return `<button class="sm ghost" style="color:#fff" data-act="fb-signout" title="${esc(FB.user.email || '')}">Sign out</button>`;
+  return `<span class="bar-mail" title="Signed in as ${esc(FB.user.email || '')}">${esc(FB.user.email || '')}</span><button class="sm ghost" style="color:#fff" data-act="fb-signout" title="${esc(FB.user.email || '')}">Sign out</button>`;
 }
 function fbHomeBits() {
   if (!FB.on) return '';
@@ -2486,7 +2493,7 @@ function ringsHTML() {
     const guest = guestItems(r.id);
     return `<div class="card stack"><div class="row between"><h3>${esc(r.name)}</h3><div class="row"><button class="sm" data-act="ring-edit" data-id="${esc(r.id)}">Rename</button></div></div>
       <div><div class="label">Managers</div><div class="pill-list" style="margin-top:6px">${(r.managerIds || []).map(id => `${personChip(id)}<button class="sm ghost" data-act="ring-unmanage" data-id="${esc(r.id)}" data-uid="${esc(id)}" aria-label="Remove manager">✕</button>`).join('') || '<span class="small muted">No manager assigned — only directors can score this ring.</span>'}</div>
-      ${isLocal() ? '<p class="tiny muted" style="margin-top:6px">People can be assigned once the tracker is shared from claude.ai. In local mode, use “View as Ring manager” to preview their access.</p>' : `${(() => { const cand = rosterIds().filter(id => !(r.managerIds || []).includes(id)); return cand.length ? `<select id="ring-addmgr-${esc(r.id)}" data-change="ring-addmgr" data-ring="${esc(r.id)}" style="margin-top:8px" aria-label="Add a ring manager to ${esc(r.name)}">${opt('', 'Add a ring manager…', '')}${cand.map(id => opt(id, personName(id) + (managerRing(id) ? ` (from ${ringName(managerRing(id))})` : directorIds().includes(id) ? ' (director)' : ''), '')).join('')}</select>` : ''; })()}
+      ${isLocal() ? '<p class="tiny muted" style="margin-top:6px">People can be assigned once the tracker is shared from claude.ai. In local mode, use “View as Ring manager” to preview their access.</p>' : `${(() => { const cand = rosterIds().filter(id => !(r.managerIds || []).includes(id)); return cand.length ? `<select id="ring-addmgr-${esc(r.id)}" data-change="ring-addmgr" data-ring="${esc(r.id)}" style="margin-top:8px" aria-label="Add a ring manager to ${esc(r.name)}">${opt('', 'Add a ring manager…', '')}${cand.map(id => opt(id, personLabel(id) + (managerRing(id) ? ` (from ${ringName(managerRing(id))})` : directorIds().includes(id) ? ' (director)' : ''), '')).join('')}</select>` : ''; })()}
         <div class="dd" style="margin-top:8px"><input id="mgr-q-${esc(r.id)}" type="search" placeholder="Search your organization by name or email…" data-input="mgr-search" data-ring="${esc(r.id)}" autocomplete="off"><div class="dd-list" id="mgr-dd-${esc(r.id)}" hidden></div></div>
         <p class="tiny muted" style="margin-top:4px">Not listed? Invite them by email on the <a href="#" data-act="tab" data-v="people">People</a> tab.</p>`}</div>
       <div><div class="row between"><div class="label">Judges</div><span class="tiny muted">${plural(ringJudges(r.id).length, 'judge')}</span></div><div class="pill-list" style="margin-top:6px">${ringJudgesSummary(r.id)}</div>
@@ -4516,7 +4523,7 @@ function recomputeDirector() {
 
 function homeEventCard(e) {
   const r = eventRoleOf(e), open = canOpenEvent(e), req = (S.myReqs || {})[e.id];
-  const dirNames = evDirectors(e).map(personName).filter(n => n && n !== 'Team member');
+  const dirNames = evDirectors(e).map(personLabel).filter(n => n && n !== 'Team member');
   const badge = r === 'director' ? '<span class="chip ok">Director</span>' : r === 'manager' ? '<span class="chip">Ring manager</span>' : e.live ? '<span class="chip aka">● Live</span>' : '<span class="chip plain">🔒 No access</span>';
   const body = `<div class="row"><span class="chip ${e.kind === 'tournament' ? 'aka' : ''}">${esc(KT.EVENT_KINDS[e.kind] || e.kind)}</span>${e.kind === 'tournament' && e.level ? `<span class="chip plain">${esc(e.level)}</span>` : ''}${e.demo ? '<span class="chip warn">Demo</span>' : ''}${e.archived ? '<span class="chip plain">🔒 Archived</span>' : ''}${isLocal() ? '' : badge}</div>
       <h3>${esc(e.name)}</h3>
@@ -4734,8 +4741,8 @@ function accessByEventHTML() {
     <div class="tw"><table class="acc"><thead><tr><th>Event</th><th>Directors</th><th></th></tr></thead><tbody>${evs.map(e => {
       const ds = evDirectors(e), ch = directorChoices(e);
       return `<tr><td><b>${esc(e.name)}</b><div class="tiny muted">${fmtDate(e.startDate)}${e.live ? ' · ● Live' : ''}</div></td>
-        <td><div class="pill-list">${ds.map(id => `<span class="chip plain acc-chip">${esc(personName(id))}<button class="ghost x" data-act="evdir-remove" data-ev="${esc(e.id)}" data-id="${esc(id)}" aria-label="Remove ${esc(personName(id))} from ${esc(e.name)}">✕</button></span>`).join('') || '<span class="tiny muted">No director — only app admins</span>'}</div></td>
-        <td>${ch.length ? `<select id="evdir-${esc(e.id)}" data-change="evdir-add" data-ev="${esc(e.id)}" aria-label="Add a director to ${esc(e.name)}">${opt('', 'Add director…', '')}${ch.map(id => opt(id, personName(id), '')).join('')}</select>` : ''}</td></tr>`;
+        <td><div class="pill-list">${ds.map(id => `<span class="chip plain acc-chip">${esc(personName(id))}${personEmail(id) ? ` <span class="pmail">${esc(personEmail(id))}</span>` : ''}<button class="ghost x" data-act="evdir-remove" data-ev="${esc(e.id)}" data-id="${esc(id)}" aria-label="Remove ${esc(personName(id))} from ${esc(e.name)}">✕</button></span>`).join('') || '<span class="tiny muted">No director — only app admins</span>'}</div></td>
+        <td>${ch.length ? `<select id="evdir-${esc(e.id)}" data-change="evdir-add" data-ev="${esc(e.id)}" aria-label="Add a director to ${esc(e.name)}">${opt('', 'Add director…', '')}${ch.map(id => opt(id, personLabel(id), '')).join('')}</select>` : ''}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 function accessByDirectorHTML() {
@@ -4745,7 +4752,7 @@ function accessByDirectorHTML() {
   const ids = Object.keys(map).sort((a, b) => personName(a).localeCompare(personName(b)));
   if (!ids.length) return '';
   return `<div class="label" style="margin-top:14px">Events by director</div>
-    <div class="tw"><table class="acc"><thead><tr><th>Director</th><th>Can open and manage</th></tr></thead><tbody>${ids.map(id => `<tr><td><b>${esc(personName(id))}</b>${organizerIds().includes(id) ? '<div class="tiny muted">Approved tournament director</div>' : ''}</td>
+    <div class="tw"><table class="acc"><thead><tr><th>Director</th><th>Can open and manage</th></tr></thead><tbody>${ids.map(id => `<tr><td><b>${esc(personName(id))}</b>${personEmail(id) ? `<div class="pmail">${esc(personEmail(id))}</div>` : ''}${organizerIds().includes(id) ? '<div class="tiny muted">Approved tournament director</div>' : ''}</td>
       <td>${map[id].map(e => `<span class="chip">${esc(e.name)}</span>`).join(' ') || '<span class="tiny muted">No events yet</span>'}</td></tr>`).join('')}</tbody></table></div>`;
 }
 async function setEventDirector(eid, id, on) {

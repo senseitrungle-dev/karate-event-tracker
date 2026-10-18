@@ -6,7 +6,7 @@
 
 function homeEventCard(e) {
   const r = eventRoleOf(e), open = canOpenEvent(e), req = (S.myReqs || {})[e.id];
-  const dirNames = evDirectors(e).map(personName).filter(n => n && n !== 'Team member');
+  const dirNames = evDirectors(e).map(personLabel).filter(n => n && n !== 'Team member');
   const badge = r === 'director' ? '<span class="chip ok">Director</span>' : r === 'manager' ? '<span class="chip">Ring manager</span>' : e.live ? '<span class="chip aka">● Live</span>' : '<span class="chip plain">🔒 No access</span>';
   const body = `<div class="row"><span class="chip ${e.kind === 'tournament' ? 'aka' : ''}">${esc(KT.EVENT_KINDS[e.kind] || e.kind)}</span>${e.kind === 'tournament' && e.level ? `<span class="chip plain">${esc(e.level)}</span>` : ''}${e.demo ? '<span class="chip warn">Demo</span>' : ''}${e.archived ? '<span class="chip plain">🔒 Archived</span>' : ''}${isLocal() ? '' : badge}</div>
       <h3>${esc(e.name)}</h3>
@@ -224,8 +224,8 @@ function accessByEventHTML() {
     <div class="tw"><table class="acc"><thead><tr><th>Event</th><th>Directors</th><th></th></tr></thead><tbody>${evs.map(e => {
       const ds = evDirectors(e), ch = directorChoices(e);
       return `<tr><td><b>${esc(e.name)}</b><div class="tiny muted">${fmtDate(e.startDate)}${e.live ? ' · ● Live' : ''}</div></td>
-        <td><div class="pill-list">${ds.map(id => `<span class="chip plain acc-chip">${esc(personName(id))}<button class="ghost x" data-act="evdir-remove" data-ev="${esc(e.id)}" data-id="${esc(id)}" aria-label="Remove ${esc(personName(id))} from ${esc(e.name)}">✕</button></span>`).join('') || '<span class="tiny muted">No director — only app admins</span>'}</div></td>
-        <td>${ch.length ? `<select id="evdir-${esc(e.id)}" data-change="evdir-add" data-ev="${esc(e.id)}" aria-label="Add a director to ${esc(e.name)}">${opt('', 'Add director…', '')}${ch.map(id => opt(id, personName(id), '')).join('')}</select>` : ''}</td></tr>`;
+        <td><div class="pill-list">${ds.map(id => `<span class="chip plain acc-chip">${esc(personName(id))}${personEmail(id) ? ` <span class="pmail">${esc(personEmail(id))}</span>` : ''}<button class="ghost x" data-act="evdir-remove" data-ev="${esc(e.id)}" data-id="${esc(id)}" aria-label="Remove ${esc(personName(id))} from ${esc(e.name)}">✕</button></span>`).join('') || '<span class="tiny muted">No director — only app admins</span>'}</div></td>
+        <td>${ch.length ? `<select id="evdir-${esc(e.id)}" data-change="evdir-add" data-ev="${esc(e.id)}" aria-label="Add a director to ${esc(e.name)}">${opt('', 'Add director…', '')}${ch.map(id => opt(id, personLabel(id), '')).join('')}</select>` : ''}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 function accessByDirectorHTML() {
@@ -235,7 +235,7 @@ function accessByDirectorHTML() {
   const ids = Object.keys(map).sort((a, b) => personName(a).localeCompare(personName(b)));
   if (!ids.length) return '';
   return `<div class="label" style="margin-top:14px">Events by director</div>
-    <div class="tw"><table class="acc"><thead><tr><th>Director</th><th>Can open and manage</th></tr></thead><tbody>${ids.map(id => `<tr><td><b>${esc(personName(id))}</b>${organizerIds().includes(id) ? '<div class="tiny muted">Approved tournament director</div>' : ''}</td>
+    <div class="tw"><table class="acc"><thead><tr><th>Director</th><th>Can open and manage</th></tr></thead><tbody>${ids.map(id => `<tr><td><b>${esc(personName(id))}</b>${personEmail(id) ? `<div class="pmail">${esc(personEmail(id))}</div>` : ''}${organizerIds().includes(id) ? '<div class="tiny muted">Approved tournament director</div>' : ''}</td>
       <td>${map[id].map(e => `<span class="chip">${esc(e.name)}</span>`).join(' ') || '<span class="tiny muted">No events yet</span>'}</td></tr>`).join('')}</tbody></table></div>`;
 }
 async function setEventDirector(eid, id, on) {
