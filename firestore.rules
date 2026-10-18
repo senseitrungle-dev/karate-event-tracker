@@ -1,5 +1,5 @@
 rules_version = '2';
-// Karate Event Tracker v1.24.0 — Firestore security rules
+// Karate Event Tracker v1.25.0 — Firestore security rules
 // App admin            = roles/{uid}.role in ['admin','director']  (every event; approves tournament directors)
 // Tournament director  = roles/{uid}.role == 'organizer'           (may create events)
 // Event director       = uid in events/{e}.directorIds              (full control of that event only)
@@ -23,7 +23,8 @@ service cloud.firestore {
     }
     // approved & archived events are read-only (only the event document itself can be changed, to reopen it)
     function open_(e) { return ev(e).get('locked', false) != true; }
-    function isPublic(e) { return ev(e).get('public', false) == true; }
+    // v1.25: a public link can be handed out before the start — its data opens only while the event is live
+    function isPublic(e) { return ev(e).get('public', false) == true && ev(e).get('live', false) == true; }
     function ring(e, rid) { return get(/databases/$(database)/documents/events/$(e)/rings/$(rid)).data; }
     function managesRing(e, rid) { return signedIn() && rid is string && rid != '' && request.auth.uid in ring(e, rid).get('managerIds', []); }
     function managesDiv(e, did) {

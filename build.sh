@@ -11,6 +11,7 @@ echo '<style>'; cat src/style.css; echo '</style>'
 echo '<header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>'
 echo "<script>/* Karate Event Tracker v$V */"
 cat src/logic.js
+cat src/vendor_qrcode.js
 echo '(function () {'
 echo "'use strict';"
 cat src/app1_core.js src/logos.js src/app0_firebase.js src/app2_views.js src/app3_forms.js src/app4_score.js src/app6_live.js src/app7_public.js src/app8_people.js src/app9_access.js src/app5_actions.js

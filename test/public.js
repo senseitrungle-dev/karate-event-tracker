@@ -52,7 +52,7 @@ const path = require('path'), fs = require('fs');
     // stop sharing
     await d.click('button[data-act="live-end"]'); await d.click('#confirm button:has-text("End live")'); await d.waitForTimeout(600);
     await v.waitForTimeout(600);
-    ok('End live cuts off the open public page', /no longer shared/.test(await v.textContent('#main')));
+    ok('End live: the open public page says live was turned off (no results)', /turned off by the tournament director/.test(await v.textContent('#main')) && !(await v.$('.tab, .bn')));
     await ctx.close();
   }
   /* ---------- Firebase mock: signed-out visitor, read rules ---------- */

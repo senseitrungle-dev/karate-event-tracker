@@ -610,3 +610,14 @@ body { font-weight: 450; }
 .bar-mail { font-size: .78rem; color: #fff; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 @media (max-width: 760px) { .bar-mail { display: none; } }
 .signin-card { min-width: 0; } .signin-card > * { min-width: 0; } .first-time { border-top: 1px solid var(--line); padding-top: 10px; }
+
+/* v1.25 — public link QR; stronger person boxes in the App admin card */
+.share-grid { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 560px) { .share-grid { grid-template-columns: 1fr; } .qr-box { max-width: 220px; margin: 0 auto; } }
+.qr-box { background: #fff; border: 1px solid var(--line-2); border-radius: 10px; padding: 6px; line-height: 0; }
+.qr-box svg { width: 100%; height: auto; display: block; }
+.pub-wait h1 { margin: 6px 0 4px; } .pub-wait .pub-logo .logo svg { height: 72px; }
+.admin-card .jlist { gap: 8px; }
+.admin-card .jrow2.pr { border: 2px solid var(--line-2); border-radius: 12px; padding: 10px 12px; background: var(--panel); box-shadow: 0 1px 0 rgba(0,0,0,.04); }
+.admin-card .jrow2.pr:first-child { border-top: 2px solid var(--line-2); }
+.admin-card .jrow2.pr .who-line b { font-size: 1.02rem; }

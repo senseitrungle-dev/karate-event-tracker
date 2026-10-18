@@ -99,7 +99,7 @@ function mainHTML() {
   if (FB.needSignIn || FB.needVerify) return fbSignInHTML();
   if (!S.store) return `<div class="empty"><div class="mark-lg"></div><p>Connecting to the event database…</p></div>`;
   if (S.blocked && !S.pub) return blockedHTML();
-  if (S.pub && !S.evId) return publicMissingHTML();
+  if (S.pub && (!S.evId || (S.pub.wait && !S.pub.error))) return publicMissingHTML();
   if (!S.evId) return homeHTML();
   const ev = curEvent();
   if (!ev) return `<div class="empty"><p>This event is no longer available.</p><button data-act="home">All events</button></div>`;
@@ -182,7 +182,7 @@ function overviewHTML() {
       ${statBtn('mat', 'Matches', `<b>${fought}<span class="muted" style="font-size:1rem">/${playable}</span></b><div class="meter"><i style="width:${playable ? fought / playable * 100 : 0}%"></i></div>`)}
       ${statBtn(go('rings', 'mat'), 'Rings', `<b>${DC.rings.length}</b><div class="small muted">${DC.teams.length} teams entered</div>`)}</div>
     ${warn.length ? `<div class="stack">${warn.map(w => `<div class="notice warn">${w}</div>`).join('')}</div>` : ''}
-    ${liveCardHTML()}${archiveCardHTML()}${codeCardHTML()}
+    ${liveCardHTML()}${curEvent() && curEvent().kind === 'tournament' ? shareCardHTML() : ''}${archiveCardHTML()}${codeCardHTML()}
     <div class="grid2">${steps}<div class="stack"><div class="section-h"><h2>On the mat</h2></div>${ringBoardHTML(DC.rings)}</div></div>`;
 }
 

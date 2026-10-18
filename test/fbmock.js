@@ -41,11 +41,11 @@
     if(p.startsWith('blocked/'))return isDir(d)||p==='blocked/'+rawUid();
     if(p.startsWith('share/'))return true;
     const e=evOf(p);
-    if(!uid()){ return !!(e&&ev(d,e).public===true&&!p.startsWith('pv/')); }
+    if(!uid()){ if(/^events\/[^/]+$/.test(p)) return ev(d,e).public===true; return !!(e&&ev(d,e).public===true&&ev(d,e).live===true&&!p.startsWith('pv/')); }
     if(/^events\/[^/]+$/.test(p)||!e)return true;
     if(p.startsWith('pv/'))return evDir(d,e);
     if(/^events\/[^/]+\/requests\/([^/]+)$/.test(p))return evDir(d,e)||p.endsWith('/'+uid());
-    return evMem(d,e)||ev(d,e).public===true;
+    return evMem(d,e)||(ev(d,e).public===true&&ev(d,e).live===true);
   };
   const canList=(col,d)=>{ if(uid())return canRead(col+'/x',d)||col==='events'||col==='users'||col==='roles'||col==='invites'||col==='orgRequests'; if(col==='events'||col==='share')return false; return canRead(col+'/x',d); };
   const deny=()=>Promise.reject({code:'permission-denied',message:'denied'});

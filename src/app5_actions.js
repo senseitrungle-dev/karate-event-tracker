@@ -274,6 +274,7 @@ const ACT = {
   'dir-remove': async el => { if (!(await confirmBox(`Remove ${personName(el.dataset.id)} as director of this event? They keep any other role here and their other events.`, 'Remove as director', true))) return; setDirector(el.dataset.id, false); },
   'invite-mail': el => { const i = S.invites[el.dataset.id]; if (i) inviteSheet(Object.assign({ id: el.dataset.id }, i)); },
   'invite-copy': () => copyInvite(),
+  'share-qr-png': () => shareQrPng(),
   'app-add-event': el => { const id = el.dataset.id, ev = ($('#ae-ev-' + CSS.escape(id)) || {}).value, rl = ($('#ae-role-' + CSS.escape(id)) || {}).value; if (ev) addToEvent(id, ev, rl); },
   'invite-cancel': async el => { const i = (S.invites || {})[el.dataset.id] || {}; if (await guard(() => S.store.del('invites/' + el.dataset.id), 'Invite cancelled') && i.codeHash) { try { await S.store.del('invcodes/' + i.codeHash); } catch (e) { /* gone */ } } },
   'ring-unmanage': el => { const r = S.d.rings[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'rings', r.id), { managerIds: (r.managerIds || []).filter(x => x !== el.dataset.uid) })).then(scheduleSync); },

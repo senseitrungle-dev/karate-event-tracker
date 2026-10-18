@@ -45,7 +45,7 @@ const path = require('path');
   ok('LIVE indicator off after End live', !/LIVE/.test(await d.textContent('.bar')));
   ok('End live returns to the checklist with end time', /Live ended/.test(await d.textContent('#main')));
   await v.waitForTimeout(500);
-  ok('public page shut off', /no longer shared/.test(await v.textContent('#main')));
+  ok('public page says live was turned off', /turned off by the tournament director/.test(await v.textContent('#main')));
   console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
   await b.close(); process.exit(errors.length ? 1 : 0);
 })();

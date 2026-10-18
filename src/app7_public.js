@@ -33,33 +33,73 @@ async function startPublic() {
   if (!sh || !sh.eventId) { S.pub.error = 'This link is not valid, or the event is no longer shared publicly.'; S.loadedEvents = true; render(); return; }
   S.pub.evId = sh.eventId;
   const id = sh.eventId;
+  const closeEv = () => { if (S.evId) { S.unsub.forEach(u => { try { u(); } catch (e) { /* ignore */ } }); S.unsub = []; S.evId = null; } };
   S.pubUnsub = S.store.watchDoc(P.event(id), d => {
-    if (!d || !d.public || d.shareToken !== S.pub.token) { S.events = {}; S.pub.error = 'This event is no longer shared publicly.'; if (S.evId) { S.unsub.forEach(u => { try { u(); } catch (e) { /* ignore */ } }); S.unsub = []; S.evId = null; } }
-    else { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; if (S.evId !== id) openEvent(id); }
+    if (!d || !d.public || d.shareToken !== S.pub.token) { S.events = {}; S.pub.error = 'This event is no longer shared publicly.'; S.pub.wait = null; closeEv(); }
+    else if (!d.live) { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; S.pub.wait = Object.assign({}, d, { id }); closeEv(); }   // v1.25: link handed out before the start
+    else { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; S.pub.wait = null; if (S.evId !== id) openEvent(id); }
     S.loadedEvents = true; render();
   }, e => { S.pub.error = 'This event is not shared publicly.'; S.loadedEvents = true; render(); dbErr(e); });
 }
+/** v1.25: the public page before the director goes live (or after live ended) — event details, no results yet. */
+function publicWaitHTML(ev) {
+  const ended = !!ev.endedAt;
+  const when = `${fmtDate(ev.startDate)}${ev.endDate && ev.endDate !== ev.startDate ? ' – ' + fmtDate(ev.endDate) : ''}`;
+  return `<div class="card empty pub-wait" style="margin-top:32px" id="pub-wait"><div class="pub-logo">${logoHTML()}</div>
+    <div class="label">${esc(KT.EVENT_KINDS[ev.kind] || 'Tournament')}${ev.level ? ' · ' + esc(ev.level) : ''}</div><h1>${esc(ev.name || 'Tournament')}</h1>
+    <p class="muted">${esc(when)}${ev.location ? ' · ' + esc(ev.location) : ''}</p>
+    ${ended ? '<p class="notice" style="display:block">The live results have been turned off by the tournament director. Thank you for following!</p>'
+      : '<p class="notice" style="display:block"><b>The tournament hasn’t started yet.</b> Keep this page open (or come back later): it switches to live brackets, rings and results by itself as soon as the director starts the tournament.</p>'}
+    <p class="tiny muted">Karate Event Tracker · no sign-in needed</p></div>`;
+}
 function publicMissingHTML() {
+  if (S.pub && S.pub.wait && !S.pub.error) return publicWaitHTML(S.pub.wait);
   return `<div class="card empty" style="margin-top:40px"><div class="mark-lg"></div><h2>${S.pub.error ? 'Event not available' : 'Opening the event…'}</h2><p class="muted" style="max-width:48ch">${esc(S.pub.error || 'Loading the live results.')}</p></div>`;
 }
 
-/* ---------- director: share card on the Dashboard ---------- */
+/* ---------- director: share card on the Dashboard (v1.25: link + QR before the start) ---------- */
 function shareCardHTML() {
   const ev = curEvent(); if (!ev || !isDirector() || isPublicView()) return '';
   const on = !!(ev.public && ev.shareToken), link = on ? publicLink(ev.shareToken) : '';
+  const state = !on ? ['plain', 'Off'] : ev.live ? ['aka', '● Live'] : ev.endedAt ? ['plain', 'Live ended'] : ['warn', 'Waiting for the start'];
   let body;
-  if (!on) body = `<p class="small muted">Give spectators a link to this event only: they open it straight into this event (Dashboard, Follow, Rings, Divisions, brackets and results) without signing in, and cannot see any other event. Private details (date of birth, contacts) are never shared.</p><div><button class="primary" data-act="share-on">Create public link</button></div>`;
-  else if (link) body = `<div class="share-link"><input id="share-url" readonly value="${esc(link)}" aria-label="Public link" onclick="this.select()"><button class="sm primary" data-act="share-copy">Copy</button><a class="btn sm" href="${esc(link)}" target="_blank" rel="noopener">Open</a></div>
-    <p class="tiny muted">Anyone with this link can watch this event without signing in. Stop sharing to turn the link off; a new link is created if you share again.</p><div><button class="sm danger" data-act="share-off">Stop sharing</button></div>`;
+  if (!on && S.store && S.store.mode === 'cloud') body = `<p class="small muted">Public spectator links and QR codes (no sign-in) are made on the Vercel + Firebase site. On claude.ai, share the page with people instead.</p>`;
+  else if (!on) body = `<p class="small muted">Create the spectators’ link and QR code now and send them out before the tournament (email, website, flyers, posters at the venue). Until you <b>Go live</b> the page shows the event and “hasn’t started yet”; when you go live it switches to live brackets, rings and results by itself, and stays live until you end it. Only this event is visible; private details are never shared.</p><div><button class="primary" data-act="share-on">Create public link &amp; QR code</button></div>`;
+  else if (link) body = `<div class="share-grid"><div class="qr-box" id="share-qr" title="QR code for the public page">${qrSvg(link)}</div>
+    <div class="stack" style="min-width:0"><div class="share-link"><input id="share-url" readonly value="${esc(link)}" aria-label="Public link" onclick="this.select()"><button class="sm primary" data-act="share-copy">Copy link</button><a class="btn sm" href="${esc(link)}" target="_blank" rel="noopener">Open</a></div>
+      <div class="row" style="flex-wrap:wrap;gap:6px"><button class="sm" data-act="share-qr-png">Download QR code (PNG)</button></div>
+      <p class="tiny muted">${ev.live ? 'Spectators see the tournament live now.' : ev.endedAt ? 'Live has ended — the page says so. Go live again to reopen it, or stop sharing to switch the link off.' : 'Before you go live the page shows the event details and “hasn’t started yet”; it turns live by itself when you press Go live.'} Stop sharing turns the link off (a new link and QR code are made if you share again).</p>
+      <div><button class="sm danger" data-act="share-off">Stop sharing</button></div></div></div>`;
   else body = `<p class="small">Public sharing is on for this event, but this copy of the app cannot hand out a sign-in-free link: on claude.ai, visitors who aren't signed in get no data. Use the Vercel + Firebase site for public spectator links.</p><div><button class="sm danger" data-act="share-off">Stop sharing</button></div>`;
-  return `<div class="card stack share-card"><div class="row between"><h3>Public spectator link</h3><span class="chip ${on ? 'ok' : 'plain'}">${on ? 'Shared' : 'Off'}</span></div>${body}</div>`;
+  return `<div class="card stack share-card"><div class="row between"><h3>Public spectator link</h3><span class="chip ${state[0]}" id="share-state">${state[1]}</span></div>${body}</div>`;
+}
+/** QR code of a link as inline SVG (vendored qrcode-generator, error correction M). */
+function qrModules(text) { const q = qrcode(0, 'M'); q.addData(text); q.make(); return q; }
+function qrSvg(text) {
+  try {
+    const q = qrModules(text), n = q.getModuleCount(), m = 4; let d = '';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c + m} ${r + m}h1v1h-1z`;
+    return `<svg viewBox="0 0 ${n + 2 * m} ${n + 2 * m}" role="img" aria-label="QR code" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+  } catch (e) { return '<span class="tiny muted">QR code unavailable</span>'; }
+}
+/** Download a print-quality PNG of the QR code with the event name under it. */
+function shareQrPng() {
+  const ev = curEvent(), link = ev && publicLink(ev.shareToken); if (!link) return;
+  const q = qrModules(link), n = q.getModuleCount(), cell = 16, m = 4, w = (n + 2 * m) * cell, foot = 90;
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = w + foot;
+  const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) g.fillRect((c + m) * cell, (r + m) * cell, cell, cell);
+  g.textAlign = 'center'; g.font = 'bold 34px system-ui, sans-serif'; g.fillText(String(ev.name || 'Tournament').slice(0, 40), w / 2, w + 30);
+  g.font = '24px system-ui, sans-serif'; g.fillText('Live results — scan to follow', w / 2, w + 66);
+  cv.toBlob(bl => { const a = document.createElement('a'); a.href = URL.createObjectURL(bl); a.download = `${String(ev.name || 'event').replace(/[^\w-]+/g, '-')}-QR.png`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }, 'image/png');
+  toast('QR code downloaded');
 }
 async function shareOn() {
   const ev = curEvent(); if (!ev) return;
   const token = newShareToken();
   if (!(await guard(() => S.store.set('share/' + token, { eventId: ev.id, at: new Date().toISOString() })))) return;
   if (ev.shareToken && ev.shareToken !== token) await guard(() => S.store.del('share/' + ev.shareToken));
-  await guard(() => S.store.update(P.event(ev.id), { public: true, shareToken: token }), 'Public link created');
+  await guard(() => S.store.update(P.event(ev.id), { public: true, shareToken: token }), ev.live ? 'Public link created' : 'Public link and QR code ready — the page waits for the start');
 }
 async function shareOff() {
   const ev = curEvent(); if (!ev) return;
@@ -155,7 +195,7 @@ function liveCardHTML() {
     const link = ev.public && ev.shareToken ? publicLink(ev.shareToken) : '';
     const bs = DC.divs.filter(d => S.d.brackets[d.id]).map(d => bracketState(d.id)), done = bs.length && bs.every(b => b.complete);
     return `<div class="card stack live-card2"><div class="row between"><h3>Tournament is live</h3><span class="chip aka">● Live${ev.liveAt ? ' since ' + esc(new Date(ev.liveAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) : ''}</span></div>
-      ${link ? `<div class="share-link"><input id="share-url" readonly value="${esc(link)}" aria-label="Public link" onclick="this.select()"><button class="sm primary" data-act="share-copy">Copy link</button><a class="btn go" id="share-open" href="${esc(link)}" target="_blank" rel="noopener">Open public page</a></div>
+      ${link ? `<div class="share-link"><button class="sm primary" data-act="share-copy">Copy link</button><a class="btn go" id="share-open" href="${esc(link)}" target="_blank" rel="noopener">Open public page</a></div>
         <p class="tiny muted">Spectators open this link without signing in and see only this event.</p>`
         : `<p class="small muted">${S.store && S.store.mode === 'cloud' ? 'On claude.ai the event is live for the people you shared the page with. A public link for spectators without an account is created when you go live on the Vercel + Firebase site.' : 'Public link unavailable here.'}</p>`}
       <div class="row"><span class="small ${done ? '' : 'muted'}" style="margin-right:auto">${done ? 'Every division is finished.' : 'End live when the tournament is complete.'}</span><button class="${done ? 'danger primary' : 'danger'}" data-act="live-end">End live</button></div></div>`;
@@ -164,7 +204,7 @@ function liveCardHTML() {
   return `<div class="card stack"><div class="row between"><h3>Ready to go live?</h3><span class="chip ${hardOk ? 'ok' : 'warn'}">${checks.filter(c => c.ok).length}/${checks.length}</span></div>
     <ul class="checks">${checks.map(c => `<li class="${c.ok ? 'ok' : c.hard ? 'no' : 'adv'}"><span class="ck">${c.ok ? '✓' : c.hard ? '✗' : '!'}</span><span><b>${esc(c.label)}</b><span class="tiny muted">${esc(c.detail)}</span></span>${c.ok ? '' : `<button class="sm" data-act="tab" data-v="${c.tab}">Open</button>`}</li>`).join('')}</ul>
     <div class="row"><button class="go" data-act="live-go" ${hardOk ? '' : 'disabled'}>Go live</button>${hardOk ? '' : '<button class="sm ghost" data-act="live-go" data-force="1">Go live anyway…</button>'}
-    <span class="tiny muted">${S.store && S.store.mode === 'cloud' ? 'Public spectator links need the Vercel + Firebase site.' : 'Going live publishes a link spectators can open without signing in.'}</span></div>
+    <span class="tiny muted">${S.store && S.store.mode === 'cloud' ? 'Public spectator links need the Vercel + Firebase site.' : 'Going live switches the public spectator page (below) to live results.'}</span></div>
     ${ev.endedAt ? `<p class="tiny muted">Live ended ${esc(new Date(ev.endedAt).toLocaleString())}.</p>` : ''}</div>`;
 }
 async function goLive(force) {
@@ -183,9 +223,8 @@ async function goLive(force) {
 async function endLive() {
   const ev = curEvent(); if (!ev) return;
   const bs = DC.divs.filter(d => S.d.brackets[d.id]).map(d => bracketState(d.id)), done = bs.length && bs.every(b => b.complete);
-  if (!(await confirmBox(done ? 'End live? The public link stops working; results stay in the tracker.' : 'Some divisions are not finished. End live anyway? The public link stops working.', 'End live', true))) return;
-  await guard(() => S.store.update(P.event(ev.id), { live: false, public: false, shareToken: '', endedAt: new Date().toISOString() }), 'Live ended');
-  if (ev.shareToken) await guard(() => S.store.del('share/' + ev.shareToken));
+  if (!(await confirmBox((done ? 'End live?' : 'Some divisions are not finished. End live anyway?') + ' The public page stops showing results and says the live results were turned off; the link and QR code keep working if you go live again (Stop sharing switches them off).', 'End live', true))) return;
+  await guard(() => S.store.update(P.event(ev.id), { live: false, endedAt: new Date().toISOString() }), 'Live ended');
 }
 /* ---------- ring readiness (ring manager or director) ---------- */
 function ringReadyHTML(r) {

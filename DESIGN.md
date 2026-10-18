@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.24.0 Requirements & Design
+# Karate Event Tracker · v1.25.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -399,3 +399,14 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Rules** (`firestore.rules` v1.24.0 — **redeploy**): `invcodes` — anyone may `get` a hash, nobody may list, only app admins / event directors create; `claims/{uid}` — the new account may create its own claim only for its own email and an existing code hash for that email; `myEmail()` accepts a verified email **or** a matching claim.
 - Limits: Firebase's sign-up endpoint itself stays open (the app needs it to create invited accounts); an account made outside the app gets no data and no roles.
 - Verify: test/emailsignin.js (code in invitation, only hash public, Gmail without code, no open sign-up, uninvited/guessed code refused without creating an account, wrong code, mismatched passwords, right code → signed in without email, invitation accepted + code removed + claim recorded, used code can't reset, later password sign-in, Forgot never creates); full regression.
+
+## 47. v1.25.0 — public link + QR code before the start; stronger person borders (2026-10-17)
+- **App admin**: every person (directors, ring managers, not assigned, access removed, requests) sits in its own box with a 2px border, 8px apart.
+- **Public spectator link card** on the director's Dashboard (tournaments, Vercel + Firebase site), state chip Off / Waiting for the start / ● Live / Live ended:
+  - **Create public link & QR code** any time before the tournament → link (Copy, Open), QR code on screen, **Download QR code (PNG)** (event name + "Live results — scan to follow") for emails, flyers and venue posters.
+  - **Before Go live** the public page shows logo, event name, dates, location and "The tournament hasn't started yet" — no tabs, no data (rules: event doc readable when shared, everything else only when shared **and** live). It switches to live by itself when the director presses Go live (same link).
+  - **End live**: page says "The live results have been turned off by the tournament director"; link and QR stay valid for the next Go live. **Stop sharing** turns the link off (sharing again makes a new link/QR).
+  - Go live still creates a link if none exists (as before). On claude.ai the card explains public links need the Vercel site.
+- QR: vendored qrcode-generator 2.0.4 (MIT), error correction M, drawn as SVG and canvas PNG.
+- **Rules** (`firestore.rules` v1.25.0 — **redeploy**): `isPublic(e)` = public && live; the event doc alone stays readable while shared (for the waiting page).
+- Verify: test/publink.js (card before start, QR + waiting chip, PNG download decodes to the link, spectator waiting page, data closed until live, auto-switch to live, End live → turned off with link kept, Stop sharing → off, admin borders 2px); public.js / golive.js updated for End-live wording; full regression.
