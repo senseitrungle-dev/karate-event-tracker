@@ -9,7 +9,7 @@ function personName(id) { const p = S.profiles[id] || {}; return p.name || (FB.o
 function personEmail(id) { const p = S.profiles[id] || {}; return p.email || (FB.on && FB.cache[id] && FB.cache[id].email) || ''; }
 /** Everyone known to the tracker: people who opened it with edit access (claude.ai) or signed in (Firebase), plus assigned ids. */
 function rosterIds() {
-  const ids = new Set(Object.keys(S.people || {}));
+  const ids = new Set(Object.keys(S.people || {}).filter(id => !(typeof isBlocked === 'function' && isBlocked(id))));
   DC.rings.forEach(r => (r.managerIds || []).forEach(i => ids.add(i)));
   directorIds().forEach(i => ids.add(i));
   if (S.myId) ids.add(S.myId);
@@ -41,7 +41,7 @@ function peopleHTML() {
         <label class="f" id="inv-ring-f"><span>Ring</span><select name="ringId" id="inv-ring">${DC.rings.map(r => opt(r.id, r.name, '')).join('')}</select></label>
         ${!FB.on ? `<label class="f span"><span>Link to this tracker (copy it from the browser address bar on claude.ai)</span><input name="appUrl" id="inv-url" value="${esc((S.access && S.access.appUrl) || '')}" placeholder="https://claude.ai/…"></label>` : ''}
         <div class="span row"><button class="primary" type="submit">Create invite</button></div></form>
-      <p class="tiny muted">${FB.on ? 'They sign in with Google using this email; the role is applied automatically when they first sign in.' : 'After creating the invite you can open it in Gmail, Outlook or your mail app, or copy it. claude.ai only lets people in whom you share the page with, so also add this email in the page’s <b>Share</b> menu as an <b>Editor</b> (ring managers need edit access to record scores). When they open the tracker they enter the invitation code from the email and get their role; you can also assign them yourself under “Not assigned” once they have opened it.'}</p>
+      <p class="tiny muted">${FB.on ? 'They sign in with this email — with Google for Gmail/Google accounts, otherwise with email and a password they set themselves (“First time? Set a password”); the role is applied automatically when they first sign in.' : 'After creating the invite you can open it in Gmail, Outlook or your mail app, or copy it. claude.ai only lets people in whom you share the page with, so also add this email in the page’s <b>Share</b> menu as an <b>Editor</b> (ring managers need edit access to record scores). When they open the tracker they enter the invitation code from the email and get their role; you can also assign them yourself under “Not assigned” once they have opened it.'}</p>
       ${inv.length ? `<div class="label" style="margin-top:6px">Waiting for them to open it</div><div class="jlist">${inv.map(i => `<div class="jrow2"><span style="min-width:0"><b>${esc(i.email)}</b><span class="dojo">${esc(ROLE_NAME[i.role] || i.role)}${i.role === 'manager' ? ' · ' + esc(ringName(i.ringId)) : ''}${i.code ? ' · code <b>' + esc(i.code) + '</b>' : ''}</span></span><button class="sm" data-act="invite-mail" data-id="${esc(i.id)}">Send / copy</button><button class="sm danger" data-act="invite-cancel" data-id="${esc(i.id)}">Cancel</button></div>`).join('')}</div>` : ''}</div>
     <div class="grid2" style="margin-top:14px"><div class="card stack"><div class="row between"><h3>Directors of this event</h3><span class="chip">${dirs.length}</span></div><div class="jlist">${dirs.map(dirRow).join('') || '<span class="small muted">Only app admins.</span>'}</div><p class="tiny muted">Directors have full control of this event only. App admins can also open every event. <b>Remove from event</b> takes away a person’s roles in this event only — they keep their access to every other event.</p></div>
       <div class="card stack"><div class="row between"><h3>Not assigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${un.slice().sort((a, b) => ((ev.staffIds || []).includes(b) ? 1 : 0) - ((ev.staffIds || []).includes(a) ? 1 : 0)).map(id => row(id, `${(ev.staffIds || []).includes(id) ? '<span class="chip warn" title="Added to this event by the app admin">Added · pick a ring</span>' : ''}${ringSel(id, 'Assign…')}`)).join('') || `<span class="small muted">Everyone who has ${where} has a role.</span>`}</div>
@@ -90,7 +90,7 @@ function inviteParts(i) {
   const url = FB.on ? location.origin + location.pathname : (i.appUrl || (S.access && S.access.appUrl) || '');
   const what = i.role === 'director' ? `a director of ${ev.name || 'our tournament'}` : `ring manager of ${ringName(i.ringId)} at ${ev.name || 'our tournament'}`;
   const steps = FB.on
-    ? [`1. Open ${url || 'the tracker site'}`, `2. Sign in with Google using this email address (${i.email}).`, `3. You’ll be set up as ${what} automatically.`]
+    ? [`1. Open ${url || 'the tracker site'}`, ...signInSteps(i.email, 2), `${4}. You’ll be set up as ${what} automatically.`]
     : [`1. If you don’t have a Claude account yet, create a free one at https://claude.ai using this email address (${i.email}).`,
        `2. Open the tracker: ${url || '(link to follow)'}`,
        `3. If it says you don’t have access, click “Request access” — I’ll approve it.`,
@@ -105,7 +105,7 @@ function appInviteParts(i) {
   const org = i.role === 'organizer';
   const what = org ? 'a tournament director — you can create your own events, and be added to others' : 'a ring manager — a tournament director will add you to their event and ring';
   const steps = FB.on
-    ? [`1. Open ${url || 'the tracker site'}`, `2. Sign in with Google using this email address (${i.email}).`, `3. Your invitation is accepted automatically.`, org ? '4. Use “New event” to create your tournament; events you are added to also appear on your list.' : '4. Events you are added to appear on your list when you sign in.']
+    ? [`1. Open ${url || 'the tracker site'}`, ...signInSteps(i.email, 2), '4. Your invitation is accepted automatically.', org ? '5. Use “New event” to create your tournament; events you are added to also appear on your list.' : '5. Events you are added to appear on your list when you sign in.']
     : [`1. If you don’t have a Claude account yet, create a free one at https://claude.ai using this email address (${i.email}).`,
        `2. Open the tracker: ${url || '(link to follow)'}`,
        `3. If it says you don’t have access, click “Request access” — I’ll approve it.`,
@@ -113,6 +113,13 @@ function appInviteParts(i) {
   const subject = `Invitation: ${org ? 'Tournament director' : 'Ring manager'} — Karate Event Tracker`;
   const body = [`Hello,`, ``, `You’re invited to the Karate Event Tracker as ${what}.`, ``, ...steps, ``, `Thank you!`].join('\n');
   return { to: i.email, subject, body };
+}
+/** v1.22: how to sign in with the invited address — Google, or any other email with a password they set themselves. */
+function signInSteps(email, n) {
+  const google = /@(gmail|googlemail)\.com$/i.test(email);
+  return google ? [`${n}. Tap “Sign in with Google” and choose ${email}.`, `${n + 1}. (No password to set up — your Google account is used.)`]
+    : [`${n}. First time: enter ${email} under “Sign in with email” and tap “First time here, or forgot your password? Set a password”. Open the email we send you (check spam) and choose your password.`,
+       `${n + 1}. Back on the site, sign in with ${email} and your new password. (If ${email} is a Google Workspace address you can use “Sign in with Google” instead.)`];
 }
 /* The claude.ai page runs in a sandboxed frame that may not be allowed to open the mail app by itself, so the
    invitation is shown in a sheet: copy it, or open it in the mail app / Gmail / Outlook with a deliberate tap. */
@@ -228,8 +235,9 @@ async function notePresence() {
 }
 function recomputeDirector() {
   if (FB.on || isLocal()) return;
-  const was = [S.isAdmin, S.isOrganizer].join();
+  const was = [S.isAdmin, S.isOrganizer, S.blocked].join();
   S.isAdmin = !!S.isOwnerFlag || ((S.access && S.access.admins) || []).includes(S.myId);
   S.isOrganizer = S.isAdmin || ((S.access && S.access.directors) || []).includes(S.myId);
-  if (was !== [S.isAdmin, S.isOrganizer].join()) render();
+  S.blocked = !S.isOwnerFlag && ((S.access && S.access.blocked) || []).some(b => b && b.id === S.myId);   // v1.21
+  if (was !== [S.isAdmin, S.isOrganizer, S.blocked].join()) render();
 }

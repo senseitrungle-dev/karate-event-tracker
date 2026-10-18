@@ -1,5 +1,5 @@
 rules_version = '2';
-// Karate Event Tracker v1.20.0 — Firestore security rules
+// Karate Event Tracker v1.22.0 — Firestore security rules
 // App admin            = roles/{uid}.role in ['admin','director']  (every event; approves tournament directors)
 // Tournament director  = roles/{uid}.role == 'organizer'           (may create events)
 // Event director       = uid in events/{e}.directorIds              (full control of that event only)
@@ -8,7 +8,10 @@ rules_version = '2';
 // admins) read its data — or anyone while the event is live and public. Private competitor data (pv/) is director-only.
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
+    function authed() { return request.auth != null; }
+    // v1.21: someone whose access the app admin removed is treated as signed out until restored
+    function blocked() { return exists(/databases/$(database)/documents/blocked/$(request.auth.uid)); }
+    function signedIn() { return authed() && !blocked(); }
     function roleDoc() { return /databases/$(database)/documents/roles/$(request.auth.uid); }
     function myRole() { return signedIn() && exists(roleDoc()) ? get(roleDoc()).data.role : ''; }
     function isAdmin() { return myRole() in ['admin', 'director']; }
@@ -29,7 +32,8 @@ service cloud.firestore {
     }
     function isStaff(e) { return signedIn() && request.auth.uid in ev(e).get('staffIds', []); }
     // invitations: invites/{email}; the invited person applies their own invite on first sign-in
-    function myEmail() { return signedIn() && request.auth.token.email != null ? request.auth.token.email.lower() : ''; }
+    // v1.22: only a confirmed address counts (Google accounts always are; email + password accounts after the email link)
+    function myEmail() { return signedIn() && request.auth.token.email != null && request.auth.token.email_verified == true ? request.auth.token.email.lower() : ''; }
     function myInvite() { return /databases/$(database)/documents/invites/$(myEmail()); }
     function invitedAs(role) { return myEmail() != '' && exists(myInvite()) && get(myInvite()).data.role == role; }
     function addsOnlyMe(field) {
@@ -64,8 +68,16 @@ service cloud.firestore {
     }
     // "I'd like to run my own tournament" — each person writes only their own request; app admins decide
     match /orgRequests/{uid} {
-      allow create: if signedIn() && request.auth.uid == uid;
-      allow read, delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create: if authed() && request.auth.uid == uid;          // also "let me back in" after access was removed
+      allow read, delete: if isAdmin() || (authed() && request.auth.uid == uid);
+    }
+    match /blocked/{uid} {                                           // v1.21: access removed by the app admin
+      allow read: if isAdmin() || (authed() && request.auth.uid == uid);
+      allow write: if isAdmin();
+    }
+    match /meta/access {                                             // v1.21: app-level roster (managers / not assigned)
+      allow read: if signedIn();
+      allow write: if isAdmin();
     }
     match /invites/{email} {
       allow read: if isAdmin() || (myEmail() != '' && myEmail() == email) || (signedIn() && resource.data.get('by', '') == request.auth.uid);

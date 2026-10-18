@@ -602,3 +602,6 @@ body { font-weight: 450; }
 .board.await-hantei .corner button[data-t="hantei"] { background: var(--go); color: #fff; border-color: var(--go); font-weight: 800; box-shadow: 0 0 0 4px color-mix(in srgb, var(--go) 35%, transparent); }
 .board.await-hantei .corner button:not([data-t="hantei"]) { opacity: .45; }
 .jrow2.pr .pctl select { max-width: 260px; }
+.who-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; } .who-mail { font-size: .82rem; color: var(--ink-2); font-weight: 450; overflow-wrap: anywhere; }
+.or-line { display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: .8rem; } .or-line::before, .or-line::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
+.signin-card .spect-note { color: var(--ink-2); border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }

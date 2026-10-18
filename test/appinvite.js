@@ -39,7 +39,7 @@ const path = require('path'), fs = require('fs');
   ok('non-admin cannot create an app invitation', rogue === 'permission-denied');
   // admin adds them to the event
   await home(A);
-  ok('admin sees both under Accepted', /Accepted — add to an event/.test(await A.textContent('.admin-card')));
+  ok('admin sees them as director / ring manager', /u_dee/.test(await A.textContent('#acc-directors')) && /u_mia/.test(await A.textContent('#acc-managers')));
   await A.selectOption('#ae-ev-u_mia', eid); await A.selectOption('#ae-role-u_mia', 'manager'); await A.click('button[data-act="app-add-event"][data-id="u_mia"]'); await A.waitForTimeout(500);
   await A.selectOption('#ae-ev-u_dee', eid); await A.selectOption('#ae-role-u_dee', 'director'); await A.click('button[data-act="app-add-event"][data-id="u_dee"]'); await A.waitForTimeout(500);
   d = await db(A);

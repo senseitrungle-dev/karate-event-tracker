@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.20.0
+# Karate Event Tracker · v1.22.0
 
 Web app for karate tournaments, training camps and other events. Runs on phones (native-style bottom navigation; installable to the home screen from the Vercel build), tablets and computers.
 Plain HTML/CSS/JS with the rules engine (`src/logic.js`) kept separate from the UI, so it can be reused in a native iOS/Android app later.
@@ -27,7 +27,7 @@ Plain HTML/CSS/JS with the rules engine (`src/logic.js`) kept separate from the 
 2. **Vercel + Firebase** (this repo) — Google sign-in, Firestore database, access enforced by `firestore.rules`.
 
 ## Set up Firebase + Vercel + GitHub
-1. **Firebase**: create a project at console.firebase.google.com → Build → Firestore Database (production mode) → Authentication → Sign-in method → enable **Google**.
+1. **Firebase**: create a project at console.firebase.google.com → Build → Firestore Database (production mode) → Authentication → Sign-in method → enable **Google** and **Email/Password** (for non-Gmail addresses; people set their own password from the “Set a password” email).
    Project settings → Your apps → add a **Web app** → copy its config values into `window.KT_FIREBASE_CONFIG = {…}` in `vercel/firebase-config.js` (see `firebase-config.example.js`). Don't paste the console's `const firebaseConfig = …` snippet as-is — the app only reads `window.KT_FIREBASE_CONFIG`.
 2. **Rules**: `npm i -g firebase-tools && firebase login && firebase use <project-id> && npm run deploy:rules`
    (or paste `firestore.rules` into Firestore → Rules → Publish).

@@ -611,16 +611,19 @@ body { font-weight: 450; }
 .board.await-hantei .corner button[data-t="hantei"] { background: var(--go); color: #fff; border-color: var(--go); font-weight: 800; box-shadow: 0 0 0 4px color-mix(in srgb, var(--go) 35%, transparent); }
 .board.await-hantei .corner button:not([data-t="hantei"]) { opacity: .45; }
 .jrow2.pr .pctl select { max-width: 260px; }
+.who-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; } .who-mail { font-size: .82rem; color: var(--ink-2); font-weight: 450; overflow-wrap: anywhere; }
+.or-line { display: flex; align-items: center; gap: 10px; color: var(--ink-2); font-size: .8rem; } .or-line::before, .or-line::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
+.signin-card .spect-note { color: var(--ink-2); border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.20.0 */
+<script>/* Karate Event Tracker v1.22.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.20.0';
+  const VERSION = '1.22.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -2065,7 +2068,11 @@ async function initFirebase(cfg) {
   if (!user && S.pub) { S.store = FirestoreStore(FB.fs); S.user = null; S.myId = null; S.readOnly = true; return true; } // public spectator link: no sign-in
   if (!user) { FB.needSignIn = true; S.store = { mode: 'firebase' }; render(); return false; }
   FB.user = user;
-  await FB.fs.doc('users/' + user.uid).set({ name: user.displayName || '', email: user.email || '', photo: user.photoURL || '', seenAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+  // v1.22: email + password accounts must confirm their email before they can use invitations or roles
+  if (isPwUser(user) && !user.emailVerified) { try { if (!sessionStorage.getItem('kt-verify-sent')) { sessionStorage.setItem('kt-verify-sent', '1'); await user.sendEmailVerification(); } } catch (e) { /* resend button */ } FB.needVerify = true; S.store = { mode: 'firebase' }; S.myEmail = String(user.email || '').toLowerCase(); render(); return false; }
+  { const bl = await FB.fs.doc('blocked/' + user.uid).get().catch(() => null); S.blocked = !!(bl && bl.exists); }   // v1.21: access removed by the app admin
+  if (S.blocked) { S.store = FirestoreStore(FB.fs); S.myId = user.uid; S.myEmail = String(user.email || '').toLowerCase(); S.myName = user.displayName || ''; return true; }
+  await FB.fs.doc('users/' + user.uid).set({ name: user.displayName || nameFromEmail(user.email), email: user.email || '', photo: user.photoURL || '', seenAt: new Date().toISOString() }, { merge: true }).catch(() => {});
   const roleDoc = await FB.fs.doc('roles/' + user.uid).get().catch(() => null);
   const rl = roleDoc && roleDoc.exists ? roleDoc.data().role : '';
   S.isAdmin = rl === 'director' || rl === 'admin'; S.isOrganizer = S.isAdmin || rl === 'organizer';
@@ -2073,12 +2080,47 @@ async function initFirebase(cfg) {
   S.store = FirestoreStore(FB.fs); S.user = fbUserShim(FB.fs); S.myId = user.uid; S.canWrite = null; S.myEmail = String(user.email || '').toLowerCase();
   return true;
 }
+/* ---------- v1.22: email + password sign-in (any email provider, not only Google) ---------- */
+function isPwUser(u) { return !!(u && (u.providerData || []).some(p => p && p.providerId === 'password')); }
+function nameFromEmail(e) { const n = String(e || '').split('@')[0].replace(/[._-]+/g, ' ').trim(); return n ? n.replace(/\b\w/g, c => c.toUpperCase()) : ''; }
+function fbEmailVal() { return String(($('#fb-email') || {}).value || '').trim().toLowerCase(); }
+async function fbEmailSignIn() {
+  const email = fbEmailVal(), pw = String(($('#fb-pw') || {}).value || '');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('Enter your email address.', true); return; }
+  if (!pw) { toast('Enter your password — or tap “First time? Set a password”.', true); return; }
+  try { await FB.auth.signInWithEmailAndPassword(email, pw); location.reload(); }
+  catch (e) { console.error(e); toast(fbAuthHelp(e), true); }
+}
+/** First use or forgotten password: make sure the account exists, then email a link to choose a password. */
+async function fbSetPassword() {
+  const email = fbEmailVal();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('Enter your email address first.', true); return; }
+  try {
+    try {
+      const tmp = Array.from(crypto.getRandomValues(new Uint8Array(18)), b => (b % 36).toString(36)).join('') + 'A1!';
+      await FB.auth.createUserWithEmailAndPassword(email, tmp);   // first use: create the account with a throw-away password…
+      await FB.auth.signOut();
+    } catch (e) { if (e && e.code !== 'auth/email-already-in-use') throw e; }
+    await FB.auth.sendPasswordResetEmail(email);                   // …then they choose their own password from the email
+    FB.resetSent = email; render();
+  } catch (e) { console.error(e); toast(fbAuthHelp(e), true); }
+}
+async function fbResendVerify() { try { await FB.auth.currentUser.sendEmailVerification(); toast('Verification email sent'); } catch (e) { toast(fbAuthHelp(e), true); } }
+async function fbVerifiedContinue() { try { await FB.auth.currentUser.reload(); } catch (e) { /* ignore */ } if (FB.auth.currentUser && FB.auth.currentUser.emailVerified) { try { await FB.auth.currentUser.getIdToken(true); } catch (e) { /* ignore */ } location.reload(); } else toast('Not verified yet — open the link in the email first.', true); }
+function fbVerifyHTML() {
+  return `<div class="card empty" style="margin-top:40px" id="verify-card"><div class="mark-lg"></div><h2>Confirm your email</h2>
+    <p class="muted" style="max-width:52ch">Before you can use the tracker, confirm that <b>${esc(S.myEmail || '')}</b> is yours: open the link we emailed you (check spam), then come back here.</p>
+    <div class="row" style="justify-content:center;flex-wrap:wrap"><button class="primary" data-act="fb-verified">I’ve confirmed — continue</button><button data-act="fb-verify-resend">Send the email again</button><button class="ghost" data-act="fb-signout">Sign out</button></div></div>`;
+}
 /** Plain-language reasons for the usual Google sign-in failures. */
 function fbAuthHelp(e) {
   const c = (e && e.code) || '', host = location.hostname;
   if (/api-key-not-valid|invalid-api-key/.test(c)) return 'Sign-in failed: the Firebase API key is not valid. Check vercel/firebase-config.js (window.KT_FIREBASE_CONFIG) has your project\'s real values.';
   if (c === 'auth/unauthorized-domain') return `Sign-in failed: ${host} is not authorized. Firebase → Authentication → Settings → Authorized domains → add ${host} (no https://).`;
-  if (c === 'auth/operation-not-allowed') return 'Sign-in failed: Google sign-in is turned off. Firebase → Authentication → Sign-in method → enable Google.';
+  if (c === 'auth/operation-not-allowed') return 'Sign-in failed: this sign-in method is turned off. Firebase → Authentication → Sign-in method → enable Google and Email/Password.';
+  if (/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return 'Email or password is not right. First time here, or forgot it? Tap “First time? Set a password”.';
+  if (c === 'auth/too-many-requests') return 'Too many tries — wait a few minutes, or set a new password with “First time? Set a password”.';
+  if (c === 'auth/invalid-email') return 'That email address doesn’t look right.';
   if (c === 'auth/popup-blocked') return 'The sign-in window was blocked. Allow pop-ups for this site and try again.';
   if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') return 'Sign-in window closed before finishing.';
   if (/requests-from-referer|referer/.test(c + (e && e.message))) return `Sign-in failed: the API key's website restrictions block this site. Google Cloud → Credentials → Browser key → allow ${host}/* and ${(window.KT_FIREBASE_CONFIG || {}).authDomain}/*.`;
@@ -2116,7 +2158,20 @@ function fbHomeBits() {
   return h;
 }
 function fbSignInHTML() {
-  return `<div class="card empty" style="margin-top:40px"><div class="mark-lg"></div><h2>Sign in to continue</h2><p class="muted" style="max-width:48ch">Directors, ring managers and spectators sign in with a Google account. What you can change depends on the role the tournament director gives you.</p>${fbConfigBad(window.KT_FIREBASE_CONFIG) ? `<p class="notice bad small" id="cfg-bad" style="max-width:56ch">This site is not connected to your Firebase project yet: <b>vercel/firebase-config.js</b> still has the example values. Set <code>window.KT_FIREBASE_CONFIG</code> to your web app config (Firebase → Project settings → Your apps), commit and push.</p>` : ''}<button class="primary" data-act="fb-signin" ${fbConfigBad(window.KT_FIREBASE_CONFIG) ? 'disabled' : ''}>Sign in with Google</button></div>`;
+  if (FB.needVerify) return fbVerifyHTML();
+  const bad = fbConfigBad(window.KT_FIREBASE_CONFIG), dis = bad ? 'disabled' : '';
+  return `<div class="card stack signin-card" style="margin:40px auto 0;max-width:460px"><div class="mark-lg" style="margin:0 auto"></div><h2 style="text-align:center">Sign in</h2>
+    <p class="muted" style="text-align:center">For tournament directors and ring managers. What you can do depends on the role you were given.</p>
+    ${bad ? `<p class="notice bad small" id="cfg-bad">This site is not connected to your Firebase project yet: <b>vercel/firebase-config.js</b> still has the example values. Set <code>window.KT_FIREBASE_CONFIG</code> to your web app config (Firebase → Project settings → Your apps), commit and push.</p>` : ''}
+    <button class="primary" data-act="fb-signin" ${dis}>Sign in with Google</button>
+    <p class="tiny muted" style="text-align:center;margin-top:-4px">Gmail and Google Workspace accounts</p>
+    <div class="or-line"><span>or with any email</span></div>
+    <label class="f"><span>Email</span><input id="fb-email" type="email" autocomplete="username" placeholder="name@example.com" value="${esc(FB.resetSent || '')}" ${dis}></label>
+    <label class="f"><span>Password</span><input id="fb-pw" type="password" autocomplete="current-password" ${dis}></label>
+    <button class="go" data-act="fb-email-signin" ${dis}>Sign in with email</button>
+    ${FB.resetSent ? `<p class="notice small" id="reset-sent">We emailed a link to <b>${esc(FB.resetSent)}</b>. Open it (check spam), choose your password, then come back and sign in above.</p>` : ''}
+    <button class="ghost sm" data-act="fb-set-pw" ${dis}>First time here, or forgot your password? Set a password</button>
+    <p class="small spect-note" style="text-align:center">Spectators don’t sign in — open the event’s public link from the tournament director.</p></div>`;
 }
 /* ===== views ===== */
 let rq = false;
@@ -2142,7 +2197,7 @@ function doRender() {
 }
 function barHTML() {
   const ev = curEvent(), r = role();
-  if (FB.needSignIn) return `<div class="bar-in"><button class="logo-btn" data-act="app-info" aria-label="About this app" title="About this app">${logoHTML()}</button><span class="brand"><span><b>Karate Event Tracker</b><small>v${KT.VERSION}</small></span></span></div>`;
+  if (FB.needSignIn || FB.needVerify) return `<div class="bar-in"><button class="logo-btn" data-act="app-info" aria-label="About this app" title="About this app">${logoHTML()}</button><span class="brand"><span><b>Karate Event Tracker</b><small>v${KT.VERSION}</small></span></span></div>`;
   const mode = !S.store ? `<span class="chip"><span class="dot"></span>Connecting…</span>` : isLocal()
     ? `<span class="chip" title="Data stays in this browser only">Local mode</span>` : `<span class="chip" title="Connected to the shared database — changes sync instantly"><span class="dot" style="color:#6fcf97"></span>Online</span>`;
   const liveChip = ev && ev.live ? `<span class="chip aka" title="This event is live">● LIVE</span>` : '';
@@ -2216,8 +2271,9 @@ function tabsHTML() {
   return `<div class="tabs-in" role="tablist">${t.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${S.ui.tab === k}" data-act="tab" data-v="${k}">${l}</button>`).join('')}</div>`;
 }
 function mainHTML() {
-  if (FB.needSignIn) return fbSignInHTML();
+  if (FB.needSignIn || FB.needVerify) return fbSignInHTML();
   if (!S.store) return `<div class="empty"><div class="mark-lg"></div><p>Connecting to the event database…</p></div>`;
+  if (S.blocked && !S.pub) return blockedHTML();
   if (S.pub && !S.evId) return publicMissingHTML();
   if (!S.evId) return homeHTML();
   const ev = curEvent();
@@ -4224,7 +4280,7 @@ function personName(id) { const p = S.profiles[id] || {}; return p.name || (FB.o
 function personEmail(id) { const p = S.profiles[id] || {}; return p.email || (FB.on && FB.cache[id] && FB.cache[id].email) || ''; }
 /** Everyone known to the tracker: people who opened it with edit access (claude.ai) or signed in (Firebase), plus assigned ids. */
 function rosterIds() {
-  const ids = new Set(Object.keys(S.people || {}));
+  const ids = new Set(Object.keys(S.people || {}).filter(id => !(typeof isBlocked === 'function' && isBlocked(id))));
   DC.rings.forEach(r => (r.managerIds || []).forEach(i => ids.add(i)));
   directorIds().forEach(i => ids.add(i));
   if (S.myId) ids.add(S.myId);
@@ -4256,7 +4312,7 @@ function peopleHTML() {
         <label class="f" id="inv-ring-f"><span>Ring</span><select name="ringId" id="inv-ring">${DC.rings.map(r => opt(r.id, r.name, '')).join('')}</select></label>
         ${!FB.on ? `<label class="f span"><span>Link to this tracker (copy it from the browser address bar on claude.ai)</span><input name="appUrl" id="inv-url" value="${esc((S.access && S.access.appUrl) || '')}" placeholder="https://claude.ai/…"></label>` : ''}
         <div class="span row"><button class="primary" type="submit">Create invite</button></div></form>
-      <p class="tiny muted">${FB.on ? 'They sign in with Google using this email; the role is applied automatically when they first sign in.' : 'After creating the invite you can open it in Gmail, Outlook or your mail app, or copy it. claude.ai only lets people in whom you share the page with, so also add this email in the page’s <b>Share</b> menu as an <b>Editor</b> (ring managers need edit access to record scores). When they open the tracker they enter the invitation code from the email and get their role; you can also assign them yourself under “Not assigned” once they have opened it.'}</p>
+      <p class="tiny muted">${FB.on ? 'They sign in with this email — with Google for Gmail/Google accounts, otherwise with email and a password they set themselves (“First time? Set a password”); the role is applied automatically when they first sign in.' : 'After creating the invite you can open it in Gmail, Outlook or your mail app, or copy it. claude.ai only lets people in whom you share the page with, so also add this email in the page’s <b>Share</b> menu as an <b>Editor</b> (ring managers need edit access to record scores). When they open the tracker they enter the invitation code from the email and get their role; you can also assign them yourself under “Not assigned” once they have opened it.'}</p>
       ${inv.length ? `<div class="label" style="margin-top:6px">Waiting for them to open it</div><div class="jlist">${inv.map(i => `<div class="jrow2"><span style="min-width:0"><b>${esc(i.email)}</b><span class="dojo">${esc(ROLE_NAME[i.role] || i.role)}${i.role === 'manager' ? ' · ' + esc(ringName(i.ringId)) : ''}${i.code ? ' · code <b>' + esc(i.code) + '</b>' : ''}</span></span><button class="sm" data-act="invite-mail" data-id="${esc(i.id)}">Send / copy</button><button class="sm danger" data-act="invite-cancel" data-id="${esc(i.id)}">Cancel</button></div>`).join('')}</div>` : ''}</div>
     <div class="grid2" style="margin-top:14px"><div class="card stack"><div class="row between"><h3>Directors of this event</h3><span class="chip">${dirs.length}</span></div><div class="jlist">${dirs.map(dirRow).join('') || '<span class="small muted">Only app admins.</span>'}</div><p class="tiny muted">Directors have full control of this event only. App admins can also open every event. <b>Remove from event</b> takes away a person’s roles in this event only — they keep their access to every other event.</p></div>
       <div class="card stack"><div class="row between"><h3>Not assigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${un.slice().sort((a, b) => ((ev.staffIds || []).includes(b) ? 1 : 0) - ((ev.staffIds || []).includes(a) ? 1 : 0)).map(id => row(id, `${(ev.staffIds || []).includes(id) ? '<span class="chip warn" title="Added to this event by the app admin">Added · pick a ring</span>' : ''}${ringSel(id, 'Assign…')}`)).join('') || `<span class="small muted">Everyone who has ${where} has a role.</span>`}</div>
@@ -4305,7 +4361,7 @@ function inviteParts(i) {
   const url = FB.on ? location.origin + location.pathname : (i.appUrl || (S.access && S.access.appUrl) || '');
   const what = i.role === 'director' ? `a director of ${ev.name || 'our tournament'}` : `ring manager of ${ringName(i.ringId)} at ${ev.name || 'our tournament'}`;
   const steps = FB.on
-    ? [`1. Open ${url || 'the tracker site'}`, `2. Sign in with Google using this email address (${i.email}).`, `3. You’ll be set up as ${what} automatically.`]
+    ? [`1. Open ${url || 'the tracker site'}`, ...signInSteps(i.email, 2), `${4}. You’ll be set up as ${what} automatically.`]
     : [`1. If you don’t have a Claude account yet, create a free one at https://claude.ai using this email address (${i.email}).`,
        `2. Open the tracker: ${url || '(link to follow)'}`,
        `3. If it says you don’t have access, click “Request access” — I’ll approve it.`,
@@ -4320,7 +4376,7 @@ function appInviteParts(i) {
   const org = i.role === 'organizer';
   const what = org ? 'a tournament director — you can create your own events, and be added to others' : 'a ring manager — a tournament director will add you to their event and ring';
   const steps = FB.on
-    ? [`1. Open ${url || 'the tracker site'}`, `2. Sign in with Google using this email address (${i.email}).`, `3. Your invitation is accepted automatically.`, org ? '4. Use “New event” to create your tournament; events you are added to also appear on your list.' : '4. Events you are added to appear on your list when you sign in.']
+    ? [`1. Open ${url || 'the tracker site'}`, ...signInSteps(i.email, 2), '4. Your invitation is accepted automatically.', org ? '5. Use “New event” to create your tournament; events you are added to also appear on your list.' : '5. Events you are added to appear on your list when you sign in.']
     : [`1. If you don’t have a Claude account yet, create a free one at https://claude.ai using this email address (${i.email}).`,
        `2. Open the tracker: ${url || '(link to follow)'}`,
        `3. If it says you don’t have access, click “Request access” — I’ll approve it.`,
@@ -4328,6 +4384,13 @@ function appInviteParts(i) {
   const subject = `Invitation: ${org ? 'Tournament director' : 'Ring manager'} — Karate Event Tracker`;
   const body = [`Hello,`, ``, `You’re invited to the Karate Event Tracker as ${what}.`, ``, ...steps, ``, `Thank you!`].join('\n');
   return { to: i.email, subject, body };
+}
+/** v1.22: how to sign in with the invited address — Google, or any other email with a password they set themselves. */
+function signInSteps(email, n) {
+  const google = /@(gmail|googlemail)\.com$/i.test(email);
+  return google ? [`${n}. Tap “Sign in with Google” and choose ${email}.`, `${n + 1}. (No password to set up — your Google account is used.)`]
+    : [`${n}. First time: enter ${email} under “Sign in with email” and tap “First time here, or forgot your password? Set a password”. Open the email we send you (check spam) and choose your password.`,
+       `${n + 1}. Back on the site, sign in with ${email} and your new password. (If ${email} is a Google Workspace address you can use “Sign in with Google” instead.)`];
 }
 /* The claude.ai page runs in a sandboxed frame that may not be allowed to open the mail app by itself, so the
    invitation is shown in a sheet: copy it, or open it in the mail app / Gmail / Outlook with a deliberate tap. */
@@ -4443,10 +4506,11 @@ async function notePresence() {
 }
 function recomputeDirector() {
   if (FB.on || isLocal()) return;
-  const was = [S.isAdmin, S.isOrganizer].join();
+  const was = [S.isAdmin, S.isOrganizer, S.blocked].join();
   S.isAdmin = !!S.isOwnerFlag || ((S.access && S.access.admins) || []).includes(S.myId);
   S.isOrganizer = S.isAdmin || ((S.access && S.access.directors) || []).includes(S.myId);
-  if (was !== [S.isAdmin, S.isOrganizer].join()) render();
+  S.blocked = !S.isOwnerFlag && ((S.access && S.access.blocked) || []).some(b => b && b.id === S.myId);   // v1.21
+  if (was !== [S.isAdmin, S.isOrganizer, S.blocked].join()) render();
 }
 /* ===== v1.9: per-event access for several tournament directors ===== */
 /* App admin (page owner / Firebase admin) approves tournament directors ("organizers") who may create events.
@@ -4517,23 +4581,130 @@ function adminIds() {
 }
 function adminCardHTML() {
   if (isLocal() || S.pub || !isAdmin()) return '';
-  const orgs = organizerIds(), admins = adminIds(), reqs = Object.entries(S.orgReqs || {});
-  const known = rosterIdsGlobal().filter(id => !orgs.includes(id) && !admins.includes(id));
-  refreshProfiles([...orgs, ...admins, ...known, ...reqs.map(r => r[0])]);
-  const nm = id => personName(id) !== 'Team member' ? personName(id) : (((S.orgReqs || {})[id] || {}).label || 'Team member');
-  return `<details class="card admin-card" open><summary><b>App admin</b> <span class="small muted">· tournament directors who may create events</span>${reqs.length ? ` <span class="chip warn">${reqs.length} request${reqs.length > 1 ? 's' : ''}</span>` : ''}</summary>
+  const orgs = organizerIds().filter(id => !isBlocked(id)), admins = adminIds(), mgrs = appManagerIds(), un = unassignedIds(), bl = blockedMap(), reqs = Object.entries(S.orgReqs || {});
+  refreshProfiles([...orgs, ...admins, ...mgrs, ...un, ...Object.keys(bl), ...reqs.map(r => r[0])]);
+  const reqRow = ([id, q]) => isBlocked(id)
+    ? `<div class="jrow2 pr">${whoHTML(id, 'Access was removed — asks to be let back in')}<div class="pctl"><button class="sm go" data-act="acc-restore" data-id="${esc(id)}">Restore access</button><button class="sm danger" data-act="org-decline" data-id="${esc(id)}">Decline</button></div></div>`
+    : `<div class="jrow2 pr">${whoHTML(id, 'Wants to run tournaments · ' + timeAgo(q.at))}<div class="pctl"><button class="sm go" data-act="org-approve" data-id="${esc(id)}">Approve as director</button><button class="sm danger" data-act="org-decline" data-id="${esc(id)}">Decline</button></div></div>`;
+  return `<details class="card admin-card" open><summary><b>App admin</b> <span class="small muted">· who can use the app, and in which events</span>${reqs.length ? ` <span class="chip warn">${reqs.length} request${reqs.length > 1 ? 's' : ''}</span>` : ''}</summary>
     <div class="grid2" style="margin-top:10px">
-      <div class="stack"><div class="label">Requests</div>${reqs.map(([id, q]) => `<div class="jrow2"><span style="min-width:0"><b>${esc(nm(id))}</b><span class="dojo">${esc(q.email || '')} ${esc(timeAgo(q.at))}</span></span><button class="sm go" data-act="org-approve" data-id="${esc(id)}">Approve</button><button class="sm danger" data-act="org-decline" data-id="${esc(id)}">Decline</button></div>`).join('') || '<span class="small muted">No pending requests.</span>'}
-        <div class="label" style="margin-top:8px">Approved tournament directors</div>${orgs.map(id => `<div class="jrow2"><span>${esc(nm(id))}</span><span></span><button class="sm danger" data-act="org-remove" data-id="${esc(id)}">Remove</button></div>`).join('') || '<span class="small muted">None yet.</span>'}
-        ${known.length ? `<select id="org-add" data-change="org-add" aria-label="Approve someone as tournament director">${opt('', 'Approve someone who has opened the app…', '')}${known.map(id => opt(id, nm(id), '')).join('')}</select>` : ''}</div>
-      <div class="stack"><div class="label">App admins (every event)</div>${admins.map(id => `<div class="jrow2"><span>${esc(nm(id))}</span><span></span>${id === S.ownerId || id === S.myId ? `<span class="chip plain">${id === S.ownerId ? 'Owner' : 'You'}</span>` : `<button class="sm danger" data-act="admin-remove" data-id="${esc(id)}">Remove</button>`}</div>`).join('')}
+      <div class="stack">
+        <div class="label">Requests</div>${reqs.map(reqRow).join('') || '<span class="small muted">No pending requests.</span>'}
+        <div class="label" style="margin-top:8px">Approved tournament directors · ${orgs.length}</div>
+        <div class="jlist" id="acc-directors">${orgs.map(id => `<div class="jrow2 pr" data-uid="${esc(id)}">${whoHTML(id, 'Can create events', true)}<div class="pctl">${addToEventCtl(id, 'director')}<button class="sm danger" data-act="acc-unassign" data-id="${esc(id)}" data-was="director">Remove</button></div></div>`).join('') || '<span class="small muted">None yet.</span>'}</div>
+        <div class="label" style="margin-top:8px">Ring managers · ${mgrs.length}</div>
+        <div class="jlist" id="acc-managers">${mgrs.map(id => `<div class="jrow2 pr" data-uid="${esc(id)}">${whoHTML(id, '', true)}<div class="pctl">${addToEventCtl(id, 'manager')}<button class="sm danger" data-act="acc-unassign" data-id="${esc(id)}" data-was="manager">Remove</button></div></div>`).join('') || '<span class="small muted">None yet — invite ring managers below, or a director adds people on an event’s People tab.</span>'}</div>
+      </div>
+      <div class="stack">
+        <div class="label">Not assigned · ${un.length}</div>
+        <div class="jlist" id="acc-unassigned">${un.map(id => `<div class="jrow2 pr" data-uid="${esc(id)}">${whoHTML(id, 'Signed in · no role')}<div class="pctl"><button class="sm go" data-act="acc-make" data-id="${esc(id)}" data-role="director">Make director</button><button class="sm" data-act="acc-make" data-id="${esc(id)}" data-role="manager">Make ring manager</button><button class="sm danger" data-act="acc-revoke" data-id="${esc(id)}" title="Revoke access to the app">✕ Remove access</button></div></div>`).join('') || '<span class="small muted">Everyone who has signed in has a role.</span>'}</div>
+        <p class="tiny muted">People removed as director or ring manager land here. <b>✕ Remove access</b> takes away their access to the app until they ask again (they see a “Request access” button).</p>
+        <div class="label" style="margin-top:8px">Access removed · ${Object.keys(bl).length}</div>
+        <div class="jlist" id="acc-removed">${Object.entries(bl).map(([id, b]) => `<div class="jrow2 pr" data-uid="${esc(id)}">${whoHTML(id, 'Removed ' + (b.at ? fmtDate(String(b.at).slice(0, 10)) : ''), false, b)}<div class="pctl"><button class="sm" data-act="acc-restore" data-id="${esc(id)}">Restore</button></div></div>`).join('') || '<span class="small muted">Nobody.</span>'}</div>
+        ${!FB.on ? '<p class="tiny muted">On claude.ai, also remove them from the page’s <b>Share</b> menu — the app hides everything from them, but claude.ai decides who can open the page.</p>' : ''}
+        <div class="label" style="margin-top:8px">App admins (every event)</div>${admins.map(id => `<div class="jrow2 pr">${whoHTML(id, '')}<div class="pctl">${id === S.ownerId || id === S.myId ? `<span class="chip plain">${id === S.ownerId ? 'Owner' : 'You'}</span>` : `<button class="sm danger" data-act="admin-remove" data-id="${esc(id)}">Remove</button>`}</div></div>`).join('')}
         <p class="tiny muted">App admins can open and manage every event. Tournament directors open only the events they created or were added to.</p></div></div>
     ${appInviteHTML()}${accessByEventHTML()}${accessByDirectorHTML()}</details>`;
+}
+/* ---------- v1.21: people at app level — names with emails; unassign; revoke / restore access ---------- */
+function userEmail(id) { const b = blockedMap()[id] || {}; return personEmail(id) || ((S.people || {})[id] || {}).email || ((S.orgReqs || {})[id] || {}).email || b.email || ''; }
+function userName(id) { const n = personName(id); return n !== 'Team member' ? n : (((S.orgReqs || {})[id] || {}).label || (blockedMap()[id] || {}).name || userEmail(id) || 'Team member'); }
+/** name + email (+ a note, + the events they are in) */
+function whoHTML(id, note, withEvents, rec) {
+  const e = userEmail(id) || (rec && rec.email) || '';
+  const evs = withEvents ? Object.values(S.events).filter(x => evDirectors(x).includes(id) || (x.managerIds || []).includes(id) || (x.staffIds || []).includes(id)) : [];
+  return `<span class="jname" style="display:flex;flex-direction:column;min-width:0"><span class="who-line"><b>${esc(userName(id))}</b>${e ? ` <span class="who-mail">${esc(e)}</span>` : ''}</span>${note ? `<span class="dojo">${esc(note)}</span>` : ''}${evs.length ? `<span class="pill-list" style="margin-top:4px">${evs.map(x => `<span class="chip ${evDirectors(x).includes(id) ? '' : 'plain'}">${esc(x.name)} · ${evDirectors(x).includes(id) ? 'Director' : 'Ring manager'}</span>`).join(' ')}</span>` : ''}</span>`;
+}
+function addToEventCtl(id, role) {
+  const evs = allEventsSorted().filter(e => !e.locked); if (!evs.length) return '';
+  return `<select id="ae-ev-${esc(id)}" aria-label="Event for ${esc(userName(id))}">${evs.map(e => opt(e.id, e.name, '')).join('')}</select><select id="ae-role-${esc(id)}" aria-label="Role">${opt('manager', 'as Ring manager', role)}${opt('director', 'as Director', role)}</select><button class="sm go" data-act="app-add-event" data-id="${esc(id)}">Add to event</button>`;
+}
+function accessDoc() { return S.access || {}; }
+function blockedMap() { return FB.on ? (S.blockedUsers || {}) : Object.fromEntries((accessDoc().blocked || []).map(b => [b.id, b])); }
+function isBlocked(id) { return !!blockedMap()[id]; }
+/** Ring managers known to the app: invited as ring manager, made one by the admin, or managing in any event — unless unassigned. */
+function appManagerIds() {
+  const un = new Set(accessDoc().unassigned || []), adm = new Set(adminIds()), org = new Set(organizerIds());
+  const ids = new Set([...(accessDoc().managers || []), ...Object.entries(S.people || {}).filter(([, p]) => p && p.invitedAs === 'manager').map(([k]) => k),
+    ...Object.values(S.events).flatMap(e => [...(e.managerIds || []), ...(e.staffIds || [])])]);
+  return [...ids].filter(id => id && !un.has(id) && !adm.has(id) && !org.has(id) && !isBlocked(id)).sort((a, b) => userName(a).localeCompare(userName(b)));
+}
+function unassignedIds() {
+  const taken = new Set([...adminIds(), ...organizerIds(), ...appManagerIds(), ...Object.keys(S.orgReqs || {})]);
+  return [...new Set([...Object.keys(S.people || {}), ...(accessDoc().unassigned || [])])].filter(id => id && !taken.has(id) && !isBlocked(id) && id !== S.myId).sort((a, b) => userName(a).localeCompare(userName(b)));
+}
+async function saveAccess(patch) { const next = Object.assign({}, accessDoc(), patch); S.access = next; return guard(() => S.store.set('meta/access', next)); }
+/** One-shot read of a collection through the store's watch. */
+function colOnce(col) { return new Promise(res => { let off = null, done = false; try { off = S.store.watch(col, o => { if (done) return; done = true; res(o || {}); setTimeout(() => { try { if (typeof off === 'function') off(); } catch (e) { /* ignore */ } }, 0); }, () => { if (!done) { done = true; res({}); } }); } catch (e) { res({}); } }); }
+/** Take someone out of events: directors only ('director'), or every role ('all' — director, ring manager, staff, rings). */
+async function stripFromEvents(id, what) {
+  for (const e of Object.values(S.events)) {
+    const up = {};
+    if ((e.directorIds || []).includes(id)) up.directorIds = e.directorIds.filter(x => x !== id);
+    if (what === 'all') {
+      if ((e.managerIds || []).includes(id)) up.managerIds = e.managerIds.filter(x => x !== id);
+      if ((e.staffIds || []).includes(id)) up.staffIds = e.staffIds.filter(x => x !== id);
+      if (up.managerIds) {
+        const rings = await colOnce(P.col(e.id, 'rings'));
+        for (const [rid, r] of Object.entries(rings)) if ((r.managerIds || []).includes(id)) await guard(() => S.store.update(P.doc(e.id, 'rings', rid), { managerIds: r.managerIds.filter(x => x !== id) }));
+      }
+    }
+    if (Object.keys(up).length) await guard(() => S.store.update(P.event(e.id), up));
+  }
+}
+/** Remove as tournament director / ring manager → "Not assigned". */
+async function unassignUser(id, was) {
+  const who = userName(id);
+  const msg = was === 'director' ? `Remove ${who} as tournament director? They can no longer create events and are removed as director from every event (their events stay).` : `Remove ${who} as ring manager? They are taken out of every event and ring.`;
+  if (!(await confirmBox(msg + ' They move to “Not assigned”.', 'Remove', true))) return;
+  if (was === 'director') { if (organizerIds().includes(id)) await setOrganizer(id, false); await stripFromEvents(id, 'director'); }
+  else await stripFromEvents(id, 'all');
+  const a = accessDoc();
+  await saveAccess({ unassigned: [...new Set((a.unassigned || []).concat(id))], managers: (a.managers || []).filter(x => x !== id) });
+  toast(`${who} moved to Not assigned`); render();
+}
+/** From "Not assigned": make tournament director or ring manager. */
+async function makeRole(id, role) {
+  const a = accessDoc(), base = { unassigned: (a.unassigned || []).filter(x => x !== id) };
+  if (role === 'director') { await saveAccess(base); await setOrganizer(id, true); toast(`${userName(id)} is a tournament director`); }
+  else { await saveAccess(Object.assign(base, { managers: [...new Set((a.managers || []).concat(id))] })); toast(`${userName(id)} is a ring manager — add them to an event`); }
+  render();
+}
+/** Revoke app access (until they ask again). */
+async function revokeUser(id) {
+  const who = userName(id), email = userEmail(id);
+  if (!(await confirmBox(`Remove ${who}${email ? ' (' + email + ')' : ''}’s access to the app? They are taken out of every event and see only a “Request access” button until you restore them.`, 'Remove access', true))) return;
+  await stripFromEvents(id, 'all');
+  const rec = { id, name: who, email, at: new Date().toISOString(), by: S.myId || '' };
+  const a = accessDoc();
+  if (FB.on) {
+    if ((S.fbRoles || {})[id]) await guard(() => FB.fs.doc('roles/' + id).delete());
+    await guard(() => S.store.set('blocked/' + id, rec));
+    S.blockedUsers = Object.assign({}, S.blockedUsers, { [id]: rec });
+    await saveAccess({ unassigned: (a.unassigned || []).filter(x => x !== id), managers: (a.managers || []).filter(x => x !== id) });
+  } else {
+    await saveAccess({ blocked: (a.blocked || []).filter(b => b.id !== id).concat(rec), unassigned: (a.unassigned || []).filter(x => x !== id), managers: (a.managers || []).filter(x => x !== id), directors: (a.directors || []).filter(x => x !== id), admins: (a.admins || []).filter(x => x !== id) });
+  }
+  toast(`${who}’s access removed`); render();
+}
+/** Let someone back in (after they asked, or from the Access removed list) → "Not assigned". */
+async function restoreUser(id) {
+  const a = accessDoc();
+  if (FB.on) { await guard(() => S.store.del('blocked/' + id)); if (S.blockedUsers) { S.blockedUsers = Object.assign({}, S.blockedUsers); delete S.blockedUsers[id]; } await saveAccess({ unassigned: [...new Set((a.unassigned || []).concat(id))] }); }
+  else await saveAccess({ blocked: (a.blocked || []).filter(b => b.id !== id), unassigned: [...new Set((a.unassigned || []).concat(id))] });
+  try { await S.store.del('orgRequests/' + id); } catch (e) { /* none */ }
+  toast(`${userName(id)} can use the app again — give them a role`); render();
+}
+/** What a person whose access was removed sees. */
+function blockedHTML() {
+  const sent = (S.myReqs || {}).__org;
+  return `<div class="card empty" style="margin-top:40px" id="blocked-card"><div class="mark-lg"></div><h2>Your access was removed</h2>
+    <p class="muted" style="max-width:52ch">The app admin removed your access to the Karate Event Tracker. You can ask to be let back in.</p>
+    ${sent ? '<span class="chip">Request sent — waiting for the app admin</span>' : '<button class="primary" data-act="org-request">Request access</button>'}</div>`;
 }
 /* ---------- v1.20: invite people to the app by email, then add them to events ---------- */
 function appInviteHTML() {
   const pend = Object.entries(S.invites || {}).filter(([, i]) => i && i.scope === 'app').sort((a, b) => String(a[1].email).localeCompare(String(b[1].email)));
-  const acc = Object.entries(S.people || {}).filter(([, p]) => p && p.invitedAs).map(([id, p]) => ({ id, p })).sort((a, b) => personName(a.id).localeCompare(personName(b.id)));
   const evs = allEventsSorted().filter(e => !e.locked);
   const roleName = r => r === 'organizer' || r === 'director' ? 'Tournament director' : 'Ring manager';
   const where = id => evs.filter(e => evDirectors(e).includes(id) || (e.managerIds || []).includes(id) || (e.staffIds || []).includes(id))
@@ -4543,16 +4714,16 @@ function appInviteHTML() {
       <label class="f span"><span>Email</span><input name="email" id="ai-email" type="email" required placeholder="name@example.com" autocomplete="off"></label>
       <label class="f"><span>Invite as</span><select name="role" id="ai-role">${opt('organizer', 'Tournament director (can create events)', 'organizer')}${opt('member', 'Ring manager (added to events by a director)', 'organizer')}</select></label>
       <div class="row" style="align-items:flex-end"><button class="primary" type="submit">Create invite</button></div></form>
-    <p class="tiny muted">${FB.on ? 'They sign in with Google using this email; the invitation is accepted on their first sign-in.' : 'They enter the invitation code from the email to accept. Also add their email in the page’s Share menu as an Editor.'} Once accepted, add them to an event below — or a director adds them on the event’s People tab.</p>
+    <p class="tiny muted">${FB.on ? 'They sign in with this email — Google for Gmail/Google accounts, any other address with email + a password they set via “First time? Set a password”; the invitation is accepted on their first sign-in.' : 'They enter the invitation code from the email to accept. Also add their email in the page’s Share menu as an Editor.'} Once accepted they appear above as tournament director or ring manager — add them to an event there, or a director adds them on the event’s People tab.</p>
     ${pend.length ? `<div class="label" style="margin-top:8px">Waiting to be accepted</div><div class="jlist">${pend.map(([k, i]) => `<div class="jrow2"><span style="min-width:0"><b>${esc(i.email)}</b><span class="dojo">${roleName(i.role)}${i.code ? ' · code <b>' + esc(i.code) + '</b>' : ''} · ${esc(timeAgo(i.at))}</span></span><button class="sm" data-act="invite-mail" data-id="${esc(k)}">Send / copy</button><button class="sm danger" data-act="invite-cancel" data-id="${esc(k)}">Cancel</button></div>`).join('')}</div>` : ''}
-    ${acc.length ? `<div class="label" style="margin-top:8px">Accepted — add to an event</div><div class="jlist">${acc.map(({ id, p }) => `<div class="jrow2 pr"><span class="jname" style="display:flex;flex-direction:column;min-width:0"><b>${esc(personName(id))}</b><span class="dojo">${esc(p.email || personEmail(id) || '')} · ${roleName(p.invitedAs)}${organizerIds().includes(id) ? ' · can create events' : ''}</span><span class="pill-list" style="margin-top:4px">${where(id) || '<span class="tiny muted">Not in an event yet</span>'}</span></span>
-        ${evs.length ? `<div class="pctl"><select id="ae-ev-${esc(id)}" aria-label="Event for ${esc(personName(id))}">${evs.map(e => opt(e.id, e.name, '')).join('')}</select><select id="ae-role-${esc(id)}" aria-label="Role">${opt('manager', 'as Ring manager', p.invitedAs === 'director' ? 'director' : 'manager')}${opt('director', 'as Director', p.invitedAs === 'director' ? 'director' : 'manager')}</select><button class="sm go" data-act="app-add-event" data-id="${esc(id)}">Add to event</button></div>` : ''}</div>`).join('')}</div>` : ''}`;
+`;
 }
 /** Admin adds an accepted person to an event: director → directorIds; ring manager → event staff (the event's director picks the ring). */
 async function addToEvent(id, eid, role) {
   const e = S.events[eid]; if (!e || !id) return;
   if (role === 'director') { await setEventDirector(eid, id, true); return; }
   await guard(() => S.store.update(P.event(eid), { staffIds: [...new Set((e.staffIds || []).concat(id))] }), `${personName(id)} added to ${e.name} — the director assigns the ring on the People tab`);
+  if ((accessDoc().unassigned || []).includes(id)) await saveAccess({ unassigned: accessDoc().unassigned.filter(x => x !== id) });
 }
 /* ---------- app admin: who directs which event (add / remove) ---------- */
 function allEventsSorted() { return Object.values(S.events).sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || ''))); }
@@ -4594,7 +4765,7 @@ async function setOrganizer(id, on) {
     const cur = (S.access && S.access.directors) || [];
     await guard(() => S.store.set('meta/access', Object.assign({}, S.access || {}, { directors: on ? [...new Set(cur.concat(id))] : cur.filter(x => x !== id) })), on ? 'Approved as tournament director' : 'Removed');
   }
-  if (on) await guard(() => S.store.del('orgRequests/' + id));
+  if (on) { await guard(() => S.store.del('orgRequests/' + id)); if ((accessDoc().unassigned || []).includes(id)) await saveAccess({ unassigned: accessDoc().unassigned.filter(x => x !== id) }); }
 }
 async function setAdmin(id, on) {
   if (FB.on) { await guard(() => on ? FB.fs.doc('roles/' + id).set({ role: 'admin', at: new Date().toISOString() }) : FB.fs.doc('roles/' + id).delete()); return; }
@@ -4617,6 +4788,8 @@ function subscribePeople() {
     else if (S.store.watchWhere) S.store.watchWhere('invites', 'by', S.myId, o => { S.invites = o; render(); }, quiet);
     if (S.isAdmin) S.store.watch('orgRequests', o => { S.orgReqs = o; render(); }, quiet);
     else if (S.myEmail) S.store.get('invites/' + S.myEmail).then(i => { if (i) { S.invites = { [S.myEmail]: Object.assign({ id: S.myEmail }, i) }; applyMyInvites(); } }).catch(() => {});
+    if (S.isAdmin) S.store.watch('blocked', o => { S.blockedUsers = o; render(); }, quiet);       // v1.21: access removed
+    S.store.watchDoc('meta/access', a => { S.access = a || {}; render(); }, quiet);
     return;
   }
   S.store.watch('people', o => { S.people = o; render(); notePresence(); }, quiet);
@@ -4780,7 +4953,7 @@ const ACT = {
   'event-delete': () => deleteEvent(S.evId),
   demo: () => demoChooser(),
   'demo-make': el => createDemo(el.dataset.kind),
-  'fb-signin': () => fbSignIn(), 'fb-signout': () => fbSignOut(), 'fb-claim': () => fbClaimDirector(), 'fb-access': () => accessForm(),
+  'fb-signin': () => fbSignIn(), 'fb-signout': () => fbSignOut(), 'fb-email-signin': () => fbEmailSignIn(), 'fb-set-pw': () => fbSetPassword(), 'fb-verified': () => fbVerifiedContinue(), 'fb-verify-resend': () => fbResendVerify(), 'fb-claim': () => fbClaimDirector(), 'fb-access': () => accessForm(),
   'comp-new': () => compForm(null),
   'comp-edit': el => compForm(el.dataset.id),
   'comp-delete': async () => {
@@ -4864,6 +5037,10 @@ const ACT = {
   'toggle-archive': () => { S.ui.showArchive = !S.ui.showArchive; },
   'evdir-remove': async (el, e) => { if (e) e.stopPropagation(); const ev = S.events[el.dataset.ev]; if (ev && evDirectors(ev).length > 1 && !(await confirmBox(`Remove ${personName(el.dataset.id)} as director of ${ev.name}?`, 'Remove', true))) return; setEventDirector(el.dataset.ev, el.dataset.id, false); },
   'org-approve': el => setOrganizer(el.dataset.id, true),
+  'acc-unassign': el => unassignUser(el.dataset.id, el.dataset.was),
+  'acc-make': el => makeRole(el.dataset.id, el.dataset.role),
+  'acc-revoke': el => revokeUser(el.dataset.id),
+  'acc-restore': el => restoreUser(el.dataset.id),
   'org-decline': el => guard(() => S.store.del('orgRequests/' + el.dataset.id), 'Request declined'),
   'org-remove': async el => { if (await confirmBox(`Remove ${personName(el.dataset.id)} as tournament director? Their events stay; they can no longer create new ones.`, 'Remove', true)) setOrganizer(el.dataset.id, false); },
   'admin-remove': async el => { if (await confirmBox('Remove this app admin?', 'Remove', true)) setAdmin(el.dataset.id, false); },
@@ -5135,6 +5312,7 @@ function wire() {
     fn(el, e);
   });
   document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target && (e.target.id === 'fb-pw' || e.target.id === 'fb-email')) { e.preventDefault(); fbEmailSignIn(); return; }
     if (e.key === 'Escape') { if (!$('#confirm').hidden) confirmDone(false); else if (!$('#modal').hidden) closeModal(); }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bm[role="button"]')) { e.preventDefault(); e.target.click(); }
   });
@@ -5200,7 +5378,7 @@ async function init() {
   if (window.KT_FIREBASE_CONFIG && window.firebase) {
     try { if (!(await initFirebase(window.KT_FIREBASE_CONFIG))) return; }
     catch (e) { console.error(e); S.store = LocalStore(); toast('Could not reach Firebase. Working in local mode.', true); }
-    if (S.pub) { S.readOnly = true; startPublic(); } else subscribeEvents(); render(); return;
+    if (S.pub) { S.readOnly = true; startPublic(); } else if (S.blocked) { S.loadedEvents = true; } else subscribeEvents(); render(); return;
   }
   let db = null, user = null;
   const cl = window.claude && typeof window.claude.use === 'function' ? window.claude : null;

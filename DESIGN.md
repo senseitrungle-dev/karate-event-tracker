@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.20.0 Requirements & Design
+# Karate Event Tracker · v1.22.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -357,3 +357,21 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Sign-in**: invitees see exactly the events they were added to (plus any they create, for tournament directors). Directors create events as before.
 - **Rules** (`firestore.rules` v1.20.0 — **redeploy**): only app admins can create app-level invitations; an invitee may create their own `roles/{uid}` = organizer only while an app invitation for their email with role organizer exists.
 - Verify: test/appinvite.js (Firebase mock with rules: invite director + ring manager, both accept on sign-in, rights checked, non-admin cannot create app invitations, admin adds them to an event, they open it with the right role, People tab marker); full regression.
+
+## 42. v1.21.0 — app admin: emails, Not assigned, Access removed (2026-10-17)
+- **Every person in the App admin card shows name + email** (approved tournament directors, ring managers, not assigned, access removed, requests, app admins), plus the events they are in.
+- **Ring managers** is now its own list (invited as ring manager, made one by the admin, or managing/staff in any event), each with Add to event and Remove — like the tournament directors list.
+- **Remove** (director or ring manager) → the person moves to **Not assigned**: a removed tournament director can no longer create events and is taken off as director of every event (their events stay); a removed ring manager is taken out of every event and ring. From Not assigned the admin can **Make director**, **Make ring manager**, or **✕ Remove access**.
+- **✕ Remove access** → **Access removed** list (name, email, date). The person is taken out of every event; on the Vercel site Firestore treats them as signed out (`blocked/{uid}`), and the app shows only "Your access was removed — Request access". Their request appears to the admin as "asks to be let back in" with **Restore access** / Decline; **Restore** (also from the Access removed list) puts them back under Not assigned. On claude.ai the app hides everything from them, and the admin should also remove them from the page's Share menu.
+- App-level lists live in `meta/access` (`managers`, `unassigned`; on claude.ai also `blocked`).
+- **Rules** (`firestore.rules` v1.21.0 — **redeploy**): `signedIn()` excludes blocked users; `blocked/{uid}` admin-written (the person may read their own); `orgRequests` can still be created by a blocked user; `meta/access` readable when signed in, writable by app admins.
+- Verify: test/appaccess.js (emails shown; remove director/manager → Not assigned and out of events; ✕ → Access removed, blocked screen, cannot read events, request → restore → Not assigned → signs in normally; Make ring manager / Make director); full regression.
+
+## 43. v1.22.0 — sign in with any email (not only Google); spectators don't sign in (2026-10-17)
+- **Sign-in box** (Vercel site): "Sign in with Google" (Gmail / Google Workspace) **or with any email**: Email + Password + "Sign in with email" (Enter works), and **"First time here, or forgot your password? Set a password"**. The note at the bottom now says **spectators don't sign in** — they use the event's public link (the old text wrongly told spectators to sign in with Google).
+- **First use / forgot password**: the app creates the account with a throw-away password if it doesn't exist yet (and signs that session out), then Firebase emails a link where the person chooses their own password; the box confirms "We emailed a link to …".
+- **Confirm the address**: an email + password account must confirm its email before the tracker opens (a verification email is sent automatically; "I've confirmed — continue" / "Send the email again" / Sign out). Invitations and roles only apply to confirmed addresses — the rules require `email_verified`, so nobody can claim someone else's invitation by creating an account for their address.
+- **Invitation emails** explain the right steps for the address: Gmail → "Sign in with Google"; any other address → "Set a password", then sign in with email and password (Workspace addresses may also use Google).
+- Names for email accounts come from the address (sam@club.org → "Sam") until a name is set elsewhere.
+- **Firebase console**: Authentication → Sign-in method → enable **Email/Password**. `firestore.rules` v1.22.0 — **redeploy**.
+- Verify: test/emailsignin.js (sign-in box content; Set a password → reset email + session signed out; wrong password message; sign-in → Confirm your email gate with verification sent; invitation not applied until confirmed; confirm → signed in, invitation accepted, name from email; admin sees Sam with email); full regression.

@@ -14,6 +14,8 @@ function subscribePeople() {
     else if (S.store.watchWhere) S.store.watchWhere('invites', 'by', S.myId, o => { S.invites = o; render(); }, quiet);
     if (S.isAdmin) S.store.watch('orgRequests', o => { S.orgReqs = o; render(); }, quiet);
     else if (S.myEmail) S.store.get('invites/' + S.myEmail).then(i => { if (i) { S.invites = { [S.myEmail]: Object.assign({ id: S.myEmail }, i) }; applyMyInvites(); } }).catch(() => {});
+    if (S.isAdmin) S.store.watch('blocked', o => { S.blockedUsers = o; render(); }, quiet);       // v1.21: access removed
+    S.store.watchDoc('meta/access', a => { S.access = a || {}; render(); }, quiet);
     return;
   }
   S.store.watch('people', o => { S.people = o; render(); notePresence(); }, quiet);
@@ -177,7 +179,7 @@ const ACT = {
   'event-delete': () => deleteEvent(S.evId),
   demo: () => demoChooser(),
   'demo-make': el => createDemo(el.dataset.kind),
-  'fb-signin': () => fbSignIn(), 'fb-signout': () => fbSignOut(), 'fb-claim': () => fbClaimDirector(), 'fb-access': () => accessForm(),
+  'fb-signin': () => fbSignIn(), 'fb-signout': () => fbSignOut(), 'fb-email-signin': () => fbEmailSignIn(), 'fb-set-pw': () => fbSetPassword(), 'fb-verified': () => fbVerifiedContinue(), 'fb-verify-resend': () => fbResendVerify(), 'fb-claim': () => fbClaimDirector(), 'fb-access': () => accessForm(),
   'comp-new': () => compForm(null),
   'comp-edit': el => compForm(el.dataset.id),
   'comp-delete': async () => {
@@ -261,6 +263,10 @@ const ACT = {
   'toggle-archive': () => { S.ui.showArchive = !S.ui.showArchive; },
   'evdir-remove': async (el, e) => { if (e) e.stopPropagation(); const ev = S.events[el.dataset.ev]; if (ev && evDirectors(ev).length > 1 && !(await confirmBox(`Remove ${personName(el.dataset.id)} as director of ${ev.name}?`, 'Remove', true))) return; setEventDirector(el.dataset.ev, el.dataset.id, false); },
   'org-approve': el => setOrganizer(el.dataset.id, true),
+  'acc-unassign': el => unassignUser(el.dataset.id, el.dataset.was),
+  'acc-make': el => makeRole(el.dataset.id, el.dataset.role),
+  'acc-revoke': el => revokeUser(el.dataset.id),
+  'acc-restore': el => restoreUser(el.dataset.id),
   'org-decline': el => guard(() => S.store.del('orgRequests/' + el.dataset.id), 'Request declined'),
   'org-remove': async el => { if (await confirmBox(`Remove ${personName(el.dataset.id)} as tournament director? Their events stay; they can no longer create new ones.`, 'Remove', true)) setOrganizer(el.dataset.id, false); },
   'admin-remove': async el => { if (await confirmBox('Remove this app admin?', 'Remove', true)) setAdmin(el.dataset.id, false); },
@@ -532,6 +538,7 @@ function wire() {
     fn(el, e);
   });
   document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target && (e.target.id === 'fb-pw' || e.target.id === 'fb-email')) { e.preventDefault(); fbEmailSignIn(); return; }
     if (e.key === 'Escape') { if (!$('#confirm').hidden) confirmDone(false); else if (!$('#modal').hidden) closeModal(); }
     if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bm[role="button"]')) { e.preventDefault(); e.target.click(); }
   });
@@ -597,7 +604,7 @@ async function init() {
   if (window.KT_FIREBASE_CONFIG && window.firebase) {
     try { if (!(await initFirebase(window.KT_FIREBASE_CONFIG))) return; }
     catch (e) { console.error(e); S.store = LocalStore(); toast('Could not reach Firebase. Working in local mode.', true); }
-    if (S.pub) { S.readOnly = true; startPublic(); } else subscribeEvents(); render(); return;
+    if (S.pub) { S.readOnly = true; startPublic(); } else if (S.blocked) { S.loadedEvents = true; } else subscribeEvents(); render(); return;
   }
   let db = null, user = null;
   const cl = window.claude && typeof window.claude.use === 'function' ? window.claude : null;

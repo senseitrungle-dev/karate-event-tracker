@@ -22,7 +22,7 @@ function doRender() {
 }
 function barHTML() {
   const ev = curEvent(), r = role();
-  if (FB.needSignIn) return `<div class="bar-in"><button class="logo-btn" data-act="app-info" aria-label="About this app" title="About this app">${logoHTML()}</button><span class="brand"><span><b>Karate Event Tracker</b><small>v${KT.VERSION}</small></span></span></div>`;
+  if (FB.needSignIn || FB.needVerify) return `<div class="bar-in"><button class="logo-btn" data-act="app-info" aria-label="About this app" title="About this app">${logoHTML()}</button><span class="brand"><span><b>Karate Event Tracker</b><small>v${KT.VERSION}</small></span></span></div>`;
   const mode = !S.store ? `<span class="chip"><span class="dot"></span>Connecting…</span>` : isLocal()
     ? `<span class="chip" title="Data stays in this browser only">Local mode</span>` : `<span class="chip" title="Connected to the shared database — changes sync instantly"><span class="dot" style="color:#6fcf97"></span>Online</span>`;
   const liveChip = ev && ev.live ? `<span class="chip aka" title="This event is live">● LIVE</span>` : '';
@@ -96,8 +96,9 @@ function tabsHTML() {
   return `<div class="tabs-in" role="tablist">${t.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${S.ui.tab === k}" data-act="tab" data-v="${k}">${l}</button>`).join('')}</div>`;
 }
 function mainHTML() {
-  if (FB.needSignIn) return fbSignInHTML();
+  if (FB.needSignIn || FB.needVerify) return fbSignInHTML();
   if (!S.store) return `<div class="empty"><div class="mark-lg"></div><p>Connecting to the event database…</p></div>`;
+  if (S.blocked && !S.pub) return blockedHTML();
   if (S.pub && !S.evId) return publicMissingHTML();
   if (!S.evId) return homeHTML();
   const ev = curEvent();
