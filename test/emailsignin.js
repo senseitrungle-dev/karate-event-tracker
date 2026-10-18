@@ -23,7 +23,10 @@ const path = require('path'), fs = require('fs');
   ok('sign-in box: spectators don’t sign in (no “spectators sign in with Google”)', /Spectators don’t sign in/.test(txt) && !/spectators sign in with a Google/i.test(txt));
   await S.screenshot({ path: 'test/shots/signin-box.png' });
   await S.fill('#fb-email', 'sam@club.org'); await S.click('button[data-act="fb-set-pw"]'); await S.waitForTimeout(500);
-  ok('“Set a password” → link emailed, notice shown', /We emailed a link/.test(await S.textContent('#main')) && (await S.evaluate(() => JSON.parse(localStorage.getItem('fbmock_mail') || '[]'))).some(m => m.type === 'reset' && m.email === 'sam@club.org'));
+  ok('“Set a password” → link emailed, notice shown (sender, spam hint, Send again)', /Email sent to sam@club\.org/.test(await S.textContent('#main')) && /Spam/.test(await S.textContent('#reset-sent')) && !!(await S.$('#reset-sent button[data-act="fb-set-pw"]')) && (await S.evaluate(() => JSON.parse(localStorage.getItem('fbmock_mail') || '[]'))).some(m => m.type === 'reset' && m.email === 'sam@club.org'));
+  ok('…return link points back to the site', (await S.evaluate(() => JSON.parse(localStorage.getItem('fbmock_mail') || '[]'))).some(m => m.type === 'reset' && /karate-event-tracker\.html/.test(m.url)));
+  await S.click('#reset-sent button[data-act="fb-set-pw"]'); await S.waitForTimeout(300);
+  ok('“Send it again” too soon → wait message', /wait 30 seconds/.test(await S.textContent('#auth-msg')));
   ok('…the throw-away session was signed out', await S.evaluate(() => !sessionStorage.getItem('fbuid')));
   // Sam opens the link and picks a password (address not yet confirmed)
   await S.evaluate(() => window.__mockResetPassword('sam@club.org', 'Kiai-2026', false));
@@ -40,6 +43,12 @@ const path = require('path'), fs = require('fs');
   ok('name taken from the email', (d['users/e_sam'] || {}).name === 'Sam');
   await A.reload(); await A.waitForTimeout(1200);
   ok('admin sees Sam (sam@club.org) as ring manager', /Sam\s*sam@club\.org/.test(await A.textContent('#acc-managers')));
+  // configuration problems are explained on the card, not only in a passing toast
+  const T = await ctx.newPage(); await T.addInitScript(mock + ';window.__mockSignupOff=true;'); await T.goto(url); await T.waitForSelector('#fb-email');
+  await T.fill('#fb-email', 'pat@club.org'); await T.click('button[data-act="fb-set-pw"]'); await T.waitForTimeout(400);
+  ok('…typed email kept after the error', (await T.inputValue('#fb-email')) === 'pat@club.org');
+  ok('Email/Password turned off → clear fix shown on the card', /Sign-in method → Email\/Password → Enable/.test(await T.textContent('#auth-msg')) && /operation-not-allowed/.test(await T.textContent('#auth-msg')));
+  await T.screenshot({ path: 'test/shots/setpw-error.png' });
   console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
   await b.close(); process.exit(errors.length ? 1 : 0);
 })();

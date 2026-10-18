@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.23.0 Requirements & Design
+# Karate Event Tracker · v1.23.1 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -382,3 +382,9 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Inside events**: every person chip (ring managers on ring cards, staff, People tab) shows the email; the ring card's "Add a ring manager…" menu lists "Name (email)".
 - Helpers: `personChip(id)` adds the email; `personLabel(id)` = "Name (email)" for menus and plain text.
 - Verify: test/emails.js (bar, event card, Directors by event, Events by director, admin lists); regression.
+
+## 45. v1.23.1 — "Set a password" email: visible result, clear errors (2026-10-17)
+- **Locate**: on the Vercel sign-in screen, a non-Gmail user tapped "Set a password" and no email arrived.
+- **Diagnose**: the request result was only shown as a short toast. A failure (Email/Password sign-in not enabled in Firebase, sign-up switched off, quota, network) disappeared in a few seconds and looked like "nothing happened"; a success gave no hint where to look (Firebase sends from noreply@<project>.firebaseapp.com, often filtered into Spam/Junk/Promotions, sometimes minutes later). The code path itself sends correctly (verified with the mock).
+- **Fix**: the sign-in card now shows a lasting status box — "Sending…", then either "Email sent to … from noreply@… subject “Reset your password …” — check Spam / Junk / Promotions", with **Send it again** (30-second guard), or the exact problem with its fix and code (e.g. operation-not-allowed → enable Email/Password; admin-restricted-operation → turn on "Enable create (sign-up)"). The typed email stays in the box. The email's link now returns the person to the site after they save their password (falls back if the continue URL is refused). Console logs `[auth]` lines for support.
+- Verify: test/emailsignin.js (sent notice with sender/spam/Send again, return link, too-soon resend, error shown on the card with fix and code, email kept); regression.

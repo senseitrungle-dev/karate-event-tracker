@@ -67,9 +67,9 @@
     get currentUser(){ return userObj(); },
     async signInWithPopup(){ sessionStorage.setItem('fbuid', sessionStorage.getItem('nextuid')||'u1'); sessionStorage.removeItem('fbemail'); },
     async signOut(){ sessionStorage.removeItem('fbuid'); sessionStorage.removeItem('fbemail'); },
-    async createUserWithEmailAndPassword(e,pw){ const a=accts(); if(a[e]) throw {code:'auth/email-already-in-use'}; a[e]={uid:'e_'+e.split('@')[0].replace(/\W/g,''),pw,verified:false}; saveA(a); sessionStorage.setItem('fbuid',a[e].uid); sessionStorage.setItem('fbemail',e); },
+    async createUserWithEmailAndPassword(e,pw){ if(window.__mockSignupOff) throw {code:'auth/operation-not-allowed'}; const a=accts(); if(a[e]) throw {code:'auth/email-already-in-use'}; a[e]={uid:'e_'+e.split('@')[0].replace(/\W/g,''),pw,verified:false}; saveA(a); sessionStorage.setItem('fbuid',a[e].uid); sessionStorage.setItem('fbemail',e); },
     async signInWithEmailAndPassword(e,pw){ const a=accts()[e]; if(!a||a.pw!==pw) throw {code:'auth/invalid-credential'}; sessionStorage.setItem('fbuid',a.uid); sessionStorage.setItem('fbemail',e); },
-    async sendPasswordResetEmail(e){ const m=JSON.parse(localStorage.getItem('fbmock_mail')||'[]'); m.push({type:'reset',email:e}); localStorage.setItem('fbmock_mail',JSON.stringify(m)); } };
+    async sendPasswordResetEmail(e,opts){ if(window.__mockAuthFail){ throw {code:window.__mockAuthFail}; } const m=JSON.parse(localStorage.getItem('fbmock_mail')||'[]'); m.push({type:'reset',email:e,url:opts&&opts.url||''}); localStorage.setItem('fbmock_mail',JSON.stringify(m)); } };
   // test helpers: the person opens the emailed link (choose a password / confirm the address)
   window.__mockResetPassword=(e,pw,verify)=>{ const a=accts(); if(!a[e]) return false; a[e].pw=pw; if(verify) a[e].verified=true; saveA(a); return true; };
   window.__mockVerify=e=>{ const a=accts(); if(a[e]){ a[e].verified=true; saveA(a); } };

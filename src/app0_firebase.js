@@ -80,17 +80,28 @@ async function fbEmailSignIn() {
 }
 /** First use or forgotten password: make sure the account exists, then email a link to choose a password. */
 async function fbSetPassword() {
-  const email = fbEmailVal();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('Enter your email address first.', true); return; }
+  const email = fbEmailVal(); FB.lastEmail = email;
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { FB.authMsg = { bad: true, text: 'Enter your email address first, then tap “Set a password”.' }; render(); return; }
+  if (FB.resetAt && Date.now() - FB.resetAt < 30000 && FB.resetSent === email) { FB.authMsg = { bad: true, text: 'An email was just sent — wait 30 seconds before asking again.' }; render(); return; }
+  FB.authMsg = { text: 'Sending…' }; FB.resetSent = ''; render();
+  let step = 'create';
   try {
     try {
       const tmp = Array.from(crypto.getRandomValues(new Uint8Array(18)), b => (b % 36).toString(36)).join('') + 'A1!';
       await FB.auth.createUserWithEmailAndPassword(email, tmp);   // first use: create the account with a throw-away password…
       await FB.auth.signOut();
     } catch (e) { if (e && e.code !== 'auth/email-already-in-use') throw e; }
-    await FB.auth.sendPasswordResetEmail(email);                   // …then they choose their own password from the email
-    FB.resetSent = email; render();
-  } catch (e) { console.error(e); toast(fbAuthHelp(e), true); }
+    step = 'email';
+    // …then Firebase emails a link where they choose their own password; after saving it they are sent back here
+    const back = { url: location.origin + location.pathname, handleCodeInApp: false };
+    try { await FB.auth.sendPasswordResetEmail(email, back); }
+    catch (e) { if (e && /continue-uri|unauthorized-continue|invalid-continue/.test(e.code || '')) await FB.auth.sendPasswordResetEmail(email); else throw e; }
+    FB.resetSent = email; FB.resetAt = Date.now(); FB.authMsg = null; render();
+    console.info('[auth] password email requested for', email);
+  } catch (e) {
+    console.error('[auth] set password failed at', step, e);
+    FB.authMsg = { bad: true, text: fbAuthHelp(e), code: (e && e.code) || '' }; render();
+  }
 }
 async function fbResendVerify() { try { await FB.auth.currentUser.sendEmailVerification(); toast('Verification email sent'); } catch (e) { toast(fbAuthHelp(e), true); } }
 async function fbVerifiedContinue() { try { await FB.auth.currentUser.reload(); } catch (e) { /* ignore */ } if (FB.auth.currentUser && FB.auth.currentUser.emailVerified) { try { await FB.auth.currentUser.getIdToken(true); } catch (e) { /* ignore */ } location.reload(); } else toast('Not verified yet — open the link in the email first.', true); }
@@ -100,12 +111,17 @@ function fbVerifyHTML() {
     <div class="row" style="justify-content:center;flex-wrap:wrap"><button class="primary" data-act="fb-verified">I’ve confirmed — continue</button><button data-act="fb-verify-resend">Send the email again</button><button class="ghost" data-act="fb-signout">Sign out</button></div></div>`;
 }
 /** Plain-language reasons for the usual Google sign-in failures. */
-function fbAuthHelp(e) {
+function fbAuthHelp(e, via) {
   const c = (e && e.code) || '', host = location.hostname;
   if (/api-key-not-valid|invalid-api-key/.test(c)) return 'Sign-in failed: the Firebase API key is not valid. Check vercel/firebase-config.js (window.KT_FIREBASE_CONFIG) has your project\'s real values.';
   if (c === 'auth/unauthorized-domain') return `Sign-in failed: ${host} is not authorized. Firebase → Authentication → Settings → Authorized domains → add ${host} (no https://).`;
-  if (c === 'auth/operation-not-allowed') return 'Sign-in failed: this sign-in method is turned off. Firebase → Authentication → Sign-in method → enable Google and Email/Password.';
+  if (c === 'auth/operation-not-allowed' && via === 'google') return 'Sign-in failed: Google sign-in is turned off. Firebase → Authentication → Sign-in method → enable Google.';
+  if (c === 'auth/operation-not-allowed') return 'Email and password sign-in is turned off for this site. App admin: Firebase console → Authentication → Sign-in method → Email/Password → Enable → Save.';
   if (/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return 'Email or password is not right. First time here, or forgot it? Tap “First time? Set a password”.';
+  if (c === 'auth/admin-restricted-operation') return 'New accounts are switched off. Firebase → Authentication → Settings → User actions → turn on “Enable create (sign-up)”.';
+  if (c === 'auth/network-request-failed') return 'No connection to Firebase — check the internet connection and try again.';
+  if (c === 'auth/quota-exceeded') return 'Firebase’s daily email limit was reached — try again tomorrow.';
+  if (c === 'auth/missing-email') return 'Enter your email address first.';
   if (c === 'auth/too-many-requests') return 'Too many tries — wait a few minutes, or set a new password with “First time? Set a password”.';
   if (c === 'auth/invalid-email') return 'That email address doesn’t look right.';
   if (c === 'auth/popup-blocked') return 'The sign-in window was blocked. Allow pop-ups for this site and try again.';
@@ -115,7 +131,7 @@ function fbAuthHelp(e) {
 }
 /** Google always shows the account chooser, so a different account can be picked after signing out. */
 function fbProvider() { const pr = new firebase.auth.GoogleAuthProvider(); if (pr.setCustomParameters) pr.setCustomParameters({ prompt: 'select_account' }); return pr; }
-async function fbSignIn() { try { await FB.auth.signInWithPopup(fbProvider()); location.reload(); } catch (e) { console.error(e); toast(fbAuthHelp(e), true); } }
+async function fbSignIn() { try { await FB.auth.signInWithPopup(fbProvider()); location.reload(); } catch (e) { console.error(e); toast(fbAuthHelp(e, 'google'), true); } }
 /** True when firebase-config.js still has the example placeholders. */
 function fbConfigBad(cfg) { return !cfg || !cfg.projectId || /YOUR_/.test(String(cfg.apiKey || '') + String(cfg.projectId)); }
 async function fbSignOut() { await FB.auth.signOut(); location.reload(); }
@@ -153,10 +169,11 @@ function fbSignInHTML() {
     <button class="primary" data-act="fb-signin" ${dis}>Sign in with Google</button>
     <p class="tiny muted" style="text-align:center;margin-top:-4px">Gmail and Google Workspace accounts</p>
     <div class="or-line"><span>or with any email</span></div>
-    <label class="f"><span>Email</span><input id="fb-email" type="email" autocomplete="username" placeholder="name@example.com" value="${esc(FB.resetSent || '')}" ${dis}></label>
+    <label class="f"><span>Email</span><input id="fb-email" type="email" autocomplete="username" placeholder="name@example.com" value="${esc(FB.resetSent || FB.lastEmail || '')}" ${dis}></label>
     <label class="f"><span>Password</span><input id="fb-pw" type="password" autocomplete="current-password" ${dis}></label>
     <button class="go" data-act="fb-email-signin" ${dis}>Sign in with email</button>
-    ${FB.resetSent ? `<p class="notice small" id="reset-sent">We emailed a link to <b>${esc(FB.resetSent)}</b>. Open it (check spam), choose your password, then come back and sign in above.</p>` : ''}
+    ${FB.authMsg ? `<p class="notice small ${FB.authMsg.bad ? 'bad' : ''}" id="auth-msg" role="status">${esc(FB.authMsg.text)}${FB.authMsg.code ? ` <span class="tiny" style="display:block;margin-top:4px;opacity:.8">Code: ${esc(FB.authMsg.code)}</span>` : ''}</p>` : ''}
+    ${FB.resetSent ? `<div class="notice small" id="reset-sent" role="status"><b>Email sent to ${esc(FB.resetSent)}.</b> It comes from <b>noreply@${esc(((window.KT_FIREBASE_CONFIG || {}).authDomain) || 'firebaseapp.com')}</b> with the subject “Reset your password …”. It can take a few minutes — look in <b>Spam / Junk / Promotions</b> too. Open the link, choose your password, then come back and sign in above.<div style="margin-top:6px"><button class="sm" data-act="fb-set-pw">Send it again</button></div></div>` : ''}
     <button class="ghost sm" data-act="fb-set-pw" ${dis}>First time here, or forgot your password? Set a password</button>
     <p class="small spect-note" style="text-align:center">Spectators don’t sign in — open the event’s public link from the tournament director.</p></div>`;
 }
