@@ -1,0 +1,54 @@
+// v1.26.0: competitor import reads the WTKF National Federation registration sheet as-is
+const { chromium } = require(require('child_process').execSync('npm root -g').toString().trim() + '/playwright');
+const path = require('path');
+(async () => {
+  const b = await chromium.launch(); const errors = [];
+  const ok = (name, v) => { console.log((v ? 'PASS ' : 'FAIL ') + name); if (!v) errors.push('assert: ' + name); };
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } }); await ctx.route(/fonts\./, r => r.abort());
+  const p = await ctx.newPage(); p.on('pageerror', e => errors.push(e.message));
+  await p.goto('file://' + path.resolve('dist/karate-event-tracker.html'));
+  await p.click('button:has-text("Create demo tournament") >> nth=0'); await p.click('button[data-kind="local"]'); await p.waitForSelector('text=Director checklist', { timeout: 30000 });
+  await p.click('.tab:has-text("Competitors")'); await p.waitForTimeout(200);
+  const comps = () => p.evaluate(() => { const d = JSON.parse(localStorage.getItem('kt-local-v1') || '{}'), out = {}, pv = {};
+    for (const [k, v] of Object.entries(d)) { let m; if ((m = k.match(/^pv\/.+\/([^/]+)$/))) pv[m[1]] = v; else if ((m = k.match(/^events\/.+\/competitors\/([^/]+)$/))) out[m[1]] = Object.assign({}, v); }
+    return Object.entries(out).map(([id, c]) => Object.assign(c, pv[id] || {}, { id })); });
+  const find = async f => (await comps()).find(f);
+  const count = async () => (await comps()).length;
+  const n0 = await count();
+  const openImp = async f => { await p.click('button:has-text("Import CSV")'); await p.setInputFiles('#imp-file', f); await p.waitForTimeout(400); return p.textContent('#imp-preview'); };
+  let pv = await openImp('test/fixtures/wtkf-federation-sheet.csv');
+  await p.screenshot({ path: 'test/shots/fedimport-preview.png' });
+  console.log('  ', pv.slice(0, 260).replace(/\s+/g, ' '));
+  ok('recognised as WTKF National Federation sheet with country + federation', /WTKF National Federation sheet/.test(pv) && /Poland/.test(pv) && /Polish Traditional Karate Union/.test(pv));
+  ok('29 athletes ready (empty slots, judges/coaches, photographer skipped)', /29 competitors ready/.test(pv) && /Judges\/coaches information/i.test(pv));
+  ok('warns about lost accents (“?” in names)', /lost its accented letters/.test(pv));
+  ok('preview table lists the athletes', (await p.$$('#imp-preview table.imp-tbl tbody tr')).length === 29);
+  await p.click('button[data-act="imp-run"]'); await p.waitForTimeout(1500);
+  ok('29 competitors imported', (await count()) === n0 + 29);
+  const c = await find(x => x.lastName === 'Marszelewski');
+  ok('name case, birth date dd.mm.yyyy, gender, rank, country, dojo', c && c.firstName === 'Maksymilian' && c.dob === '2011-06-10' && c.gender === 'M' && c.rank === 'd1' && c.country === 'Poland' && c.dojo === 'Polish Traditional Karate Union');
+  ok('X columns → events', c && ['IKATA', 'FUKUGO', 'IKUMITE'].every(e => c.events.includes(e)) && c.events.length === 3);
+  const l = await find(x => x.lastName === 'Kisiel' && x.firstName === 'Lena');
+  ok('Mixed Enbu + Team Kata ticked', l && l.events.includes('ENBU') && l.events.includes('TKATA'));
+  const w = await find(x => x.lastName === 'Wronski');
+  ok('Man/Man Enbu + Team Kumite, 7.12-style dates', w && w.events.includes('ENBU') && w.events.includes('TKUMITE') && (await find(x => x.firstName === 'Wiktor' && x.lastName === 'Janusz')).dob === '2005-12-07');
+  ok('fee 120 recorded', (await find(x => x.lastName === 'Marszelewski')).feeAmount === '120');
+  pv = await openImp('test/fixtures/wtkf-federation-sheet.csv');
+  ok('importing the same sheet again → all skipped as already registered', /0 competitors ready/.test(pv) && /already registered/.test(pv));
+  await p.click('button[data-act="modal-close"]');
+  pv = await openImp('test/fixtures/wtkf-federation-cp1250.csv');
+  ok('Windows-1250 file: Polish letters decoded; lost-accent names offered as corrections', /Łukasik, Simona/.test(pv) && /Wroński, Jan/.test(pv) && /Pietras, Jędrzej/.test(pv) && /0 competitors ready/.test(pv) && /3 names will be corrected/.test(pv));
+  await p.click('button[data-act="imp-run"]'); await p.waitForTimeout(800);
+  ok('…names corrected, nobody added', (await count()) === n0 + 29 && !!(await find(x => x.lastName === 'Łukasik' && x.firstName === 'Simona')) && !!(await find(x => x.firstName === 'Jędrzej')));
+  pv = await openImp('test/fixtures/wtkf-federation-utf8.csv');
+  ok('UTF-8 file decoded; now all already registered', /Łukasik/.test(pv) && /0 competitors ready/.test(pv) && !/will be corrected/.test(pv));
+  await p.click('button[data-act="modal-close"]');
+  await p.screenshot({ path: 'test/shots/fedimport.png' });
+  // generic CSV still works, plus DD.MM.YYYY and per-event X columns
+  await p.click('button:has-text("Import CSV")');
+  await p.fill('#imp-text', 'first_name,last_name,gender,dob,rank,dojo,events\nAiko,Tanaka,F,2001-04-12,Shodan,Hoshi Dojo,Individual Kata;Individual Kumite\n"Ng, Jr",Chen,M,3/7/1990,2nd Dan,"Dojo, East",Kumite');
+  await p.click('button[data-act="imp-preview"]');
+  ok('generic CSV unchanged', /2 competitors ready/.test(await p.textContent('#imp-preview')));
+  console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
+  await b.close(); process.exit(errors.length ? 1 : 0);
+})();

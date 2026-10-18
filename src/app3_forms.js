@@ -84,9 +84,10 @@ async function saveComp(form) {
 }
 
 function importForm() {
-  openModal(sheet('Import competitors', `<p class="small">Paste CSV text or choose a .csv file. The first row must be column headings. Recognised columns:</p>
+  openModal(sheet('Import competitors', `<p class="small">Paste CSV text or choose a .csv file. It needs a row of column headings (it doesn’t have to be the first row). Recognised columns:</p>
     <p class="tiny mono muted">first_name, last_name, gender, dob, rank, dojo, state, country, email, phone, emergency_name, emergency_phone, waiver, paid, events</p>
-    <p class="tiny muted">Dates as YYYY-MM-DD or M/D/YYYY · ranks like “3rd Kyu”, “Shodan”, “2nd Dan”, k3, d2 · events separated by “;” (Individual Kata; Individual Kumite; Team Kata; Team Kumite; Fukugo; Enbu).</p>
+    <p class="tiny muted">Dates as YYYY-MM-DD, DD.MM.YYYY or M/D/YYYY · ranks like “3rd Kyu”, “Shodan”, “2nd Dan”, “1 dan”, k3, d2 · events either separated by “;” in an events column (Individual Kata; Individual Kumite; Team Kata; Team Kumite; Fukugo; Enbu) or one column per event marked X.</p>
+    <p class="tiny muted"><b>WTKF National Federation registration sheet</b>: choose the .csv as it is (File → Save As → CSV UTF-8 in Excel). The country and federation are read from the top of the sheet; the judges/coaches and photographer sections are skipped. Names typed in capitals are changed to Name Case. People already registered (same name and birth date) are skipped.</p>
     <input type="file" id="imp-file" accept=".csv,text/csv" data-change="imp-file">
     <textarea id="imp-text" rows="10" placeholder="first_name,last_name,gender,dob,rank,dojo,events&#10;Aiko,Tanaka,F,2001-04-12,Shodan,Hoshi Dojo,Individual Kata;Individual Kumite"></textarea>
     <div id="imp-preview" class="small muted"></div>`,
@@ -107,30 +108,102 @@ function parseCSV(text) {
 }
 const EV_ALIASES = { 'individual kata': 'IKATA', kata: 'IKATA', ikata: 'IKATA', 'individual kumite': 'IKUMITE', kumite: 'IKUMITE', ikumite: 'IKUMITE', 'team kata': 'TKATA', tkata: 'TKATA',
   'team kumite': 'TKUMITE', tkumite: 'TKUMITE', fukugo: 'FUKUGO', fukogo: 'FUKUGO', enbu: 'ENBU' };
+/* v1.26: also reads the WTKF "Informational Spreadsheet for National Federations" (title rows, COUNTRY / National Federation,
+   ATHLETES INFORMATION table with an X per event, then JUDGES/COACHES and PHOTOGRAPHER sections which are skipped). */
+const EV_COLS = { individualkata: 'IKATA', kata: 'IKATA', individualkumite: 'IKUMITE', kumite: 'IKUMITE', teamkata: 'TKATA', teamkumite: 'TKUMITE',
+  fukugo: 'FUKUGO', fukogo: 'FUKUGO', enbu: 'ENBU', mixedenbu: 'ENBU', manmanenbu: 'ENBU', womanwomanenbu: 'ENBU', menenbu: 'ENBU', womenenbu: 'ENBU' };
+const normH = x => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
+/** dd.mm.yyyy · d.m.yyyy · dd-mm-yyyy · yyyy-mm-dd · yyyy/mm/dd · m/d/yyyy → yyyy-mm-dd ('' if not a real date) */
+function importDate(s) {
+  s = String(s || '').trim(); let y, m, d, k;
+  if ((k = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/))) [y, m, d] = [k[1], k[2], k[3]];
+  else if ((k = s.match(/^(\d{1,2})[.-](\d{1,2})[.-](\d{4})$/))) [d, m, y] = [k[1], k[2], k[3]];          // European day.month.year
+  else if ((k = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) { [m, d, y] = [k[1], k[2], k[3]]; if (+m > 12) [m, d] = [d, m]; } // US m/d/yyyy (d/m if month > 12)
+  else return '';
+  const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, t = new Date(iso + 'T00:00:00Z');
+  return !isNaN(t) && t.toISOString().slice(0, 10) === iso ? iso : '';
+}
+/** "ANNA-MARIA" → "Anna-Maria" when a name is typed in capitals; mixed-case names are kept as typed */
+function nameCase(s) {
+  s = String(s || '').trim().replace(/\s+/g, ' ');
+  if (!s || s !== s.toUpperCase() || s === s.toLowerCase()) return s;
+  return s.toLowerCase().replace(/(^|[\s\-'’])(\S)/g, (_, a, c) => a + c.toUpperCase());
+}
+/** CSV file bytes → text: UTF-8 when valid, otherwise the Windows code page Excel used (Central-European for PL/CZ/SK/HU/HR/SI/RO, else Western) */
+function decodeCsvBytes(buf) {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (e) { /* not UTF-8 */ }
+  const west = new TextDecoder('windows-1252').decode(buf);
+  if (/POLAND|POLSKA|CZECH|SLOVAK|HUNGAR|CROATIA|SLOVENIA|ROMANIA|SERBIA|BOSNIA|ALBANIA/i.test(west)) { try { return new TextDecoder('windows-1250').decode(buf); } catch (e) { /* no cp1250 */ } }
+  return west;
+}
+function titleWord(s) { return nameCase(String(s || '').trim()); }
 function importRows(text) {
-  const rows = parseCSV(text); if (rows.length < 2) return { recs: [], errors: ['Need a heading row and at least one competitor.'] };
-  const h = rows[0].map(x => x.toLowerCase().replace(/[^a-z]/g, ''));
+  const rows = parseCSV(String(text || '').replace(/^﻿/, ''));
+  // heading row = first row that names both first and last name (not necessarily row 1)
+  const hi = rows.findIndex(r => { const h = r.map(normH); return h.some(x => ['firstname', 'first', 'givenname'].includes(x)) && h.some(x => ['lastname', 'last', 'surname', 'familyname'].includes(x)); });
+  if (hi < 0 || hi >= rows.length - 1) return { recs: [], errors: ['Need a heading row (with First Name and Last Name) and at least one competitor.'], info: {} };
+  // federation sheet: title rows above the table
+  const info = { sheet: false, country: '', federation: '', skipped: [] };
+  const after = (r, i) => { for (let j = i + 1; j < r.length; j++) if (String(r[j] || '').trim() && !/^(name|email|phone)/i.test(r[j].trim())) return r[j].trim(); return ''; };
+  rows.slice(0, hi).forEach(r => r.forEach((c, i) => {
+    const n = normH(c);
+    if (n === 'country' && !info.country) info.country = titleWord(after(r, i));
+    if ((n === 'nationalfederation' || n === 'federation') && !info.federation) info.federation = titleWord(after(r, i));
+    if (/athletesinformation|registrationandfee/.test(n)) info.sheet = true;
+  }));
+  const h = rows[hi].map(normH);
   const col = (...names) => h.findIndex(x => names.includes(x));
-  const ix = { first: col('firstname', 'first', 'givenname'), last: col('lastname', 'last', 'surname', 'familyname'), gender: col('gender', 'sex'), dob: col('dob', 'dateofbirth', 'birthdate', 'birthday'),
-    rank: col('rank', 'belt', 'grade'), dojo: col('dojo', 'club', 'school'), state: col('state', 'region', 'province'), country: col('country'), email: col('email'), phone: col('phone', 'mobile'),
-    en: col('emergencyname', 'emergencycontact', 'emergency'), ep: col('emergencyphone'), waiver: col('waiver', 'waiversigned'), paid: col('paid', 'feepaid'), events: col('events', 'event', 'divisions') };
+  const ix = { first: col('firstname', 'first', 'givenname'), last: col('lastname', 'last', 'surname', 'familyname'), gender: col('gender', 'sex'),
+    dob: col('dob', 'dateofbirth', 'birthdate', 'birthday'), age: col('age'),
+    rank: col('rank', 'belt', 'grade'), dojo: col('dojo', 'club', 'school', 'team'), state: col('state', 'region', 'province'), country: col('country', 'nation'), email: col('email'), phone: col('phone', 'mobile'),
+    en: col('emergencyname', 'emergencycontact', 'emergency'), ep: col('emergencyphone'), waiver: col('waiver', 'waiversigned'), paid: col('paid', 'feepaid'), events: col('events', 'event', 'divisions'),
+    fee: h.findIndex(x => /^(participationfee|fee|entryfee)/.test(x)) };
+  const evCols = h.map((x, i) => [i, EV_COLS[x]]).filter(([, e]) => e);           // one column per event, ticked with X
   const recs = [], errors = [];
   const g = (r, i) => (i >= 0 ? (r[i] || '').trim() : '');
-  const yes = s => /^(y|yes|true|1|x|✓)$/i.test(s);
-  rows.slice(1).forEach((r, n) => {
-    let dob = g(r, ix.dob);
-    const m = dob.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if (m) dob = `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  const yes = s => /^(y|yes|true|1|x|✓|✔)$/i.test(s);
+  const isTournament = curEvent().kind === 'tournament';
+  const seen = new Map(DC.comps.map(c => [[normH(c.firstName), normH(c.lastName), c.dob || ''].join('|'), c]));
+  for (let n = hi + 1; n < rows.length; n++) {
+    const r = rows[n], lead = String(r[0] || '').trim();
+    // next section of a federation sheet (JUDGES/COACHES, PHOTOGRAPHER, TOTAL FEES …) ends the athlete table
+    if (lead && !/^\d+$/.test(lead) && /[A-Za-z]{4,}/.test(lead) && !g(r, ix.first) && !g(r, ix.last)) { info.skipped.push(lead.replace(/\s+/g, ' ')); break; }
+    if (r.map(normH).some(x => x === 'firstname') && r.map(normH).some(x => x === 'lastname')) break;
+    if (!g(r, ix.first) && !g(r, ix.last)) continue;                                 // empty numbered slot
+    let dob = importDate(g(r, ix.dob)); if (!dob && ix.age >= 0) dob = importDate(g(r, ix.age));   // the federation sheet puts the birth date under "Age"
     const gs = g(r, ix.gender).toLowerCase();
-    const rec = { firstName: g(r, ix.first), lastName: g(r, ix.last), gender: /^(m|male|man|men)$/.test(gs) ? 'M' : /^(f|female|w|woman|women)$/.test(gs) ? 'F' : '',
-      dob: /^\d{4}-\d{2}-\d{2}$/.test(dob) ? dob : '', rank: parseRank(g(r, ix.rank)), dojo: g(r, ix.dojo), state: g(r, ix.state), country: g(r, ix.country), email: g(r, ix.email), phone: g(r, ix.phone),
-      emergencyName: g(r, ix.en), emergencyPhone: g(r, ix.ep), waiver: yes(g(r, ix.waiver)), feePaid: yes(g(r, ix.paid)),
-      events: [...new Set(g(r, ix.events).split(/[;|]/).map(s => EV_ALIASES[s.trim().toLowerCase()] || (KT.EVENT_TYPES[s.trim().toUpperCase()] ? s.trim().toUpperCase() : null)).filter(Boolean))] };
+    const evText = g(r, ix.events).split(/[;|]/).map(s => EV_ALIASES[s.trim().toLowerCase()] || (KT.EVENT_TYPES[s.trim().toUpperCase()] ? s.trim().toUpperCase() : null));
+    const fee = g(r, ix.fee).replace(/[^0-9.]/g, '');
+    const rec = { firstName: nameCase(g(r, ix.first)), lastName: nameCase(g(r, ix.last)), gender: /^(m|male|man|men|boy)$/.test(gs) ? 'M' : /^(f|female|w|woman|women|girl)$/.test(gs) ? 'F' : '',
+      dob, rank: parseRank(g(r, ix.rank)), dojo: g(r, ix.dojo) || info.federation, state: g(r, ix.state), country: titleWord(g(r, ix.country)) || info.country, email: g(r, ix.email), phone: g(r, ix.phone),
+      emergencyName: g(r, ix.en), emergencyPhone: g(r, ix.ep), waiver: yes(g(r, ix.waiver)), feePaid: yes(g(r, ix.paid)), feeAmount: fee && +fee ? String(+fee) : '',
+      events: [...new Set([...evText, ...evCols.filter(([i]) => yes(g(r, i))).map(([, e]) => e)].filter(Boolean))] };
     const miss = [];
-    if (!rec.firstName || !rec.lastName) miss.push('name'); if (!rec.rank) miss.push('rank');
-    if (curEvent().kind === 'tournament') { if (!rec.gender) miss.push('gender'); if (!rec.dob) miss.push('date of birth'); }
-    if (miss.length) errors.push(`Row ${n + 2}: missing ${miss.join(', ')}`); else recs.push(rec);
-  });
-  return { recs, errors };
+    if (!rec.firstName || !rec.lastName) miss.push('name'); if (!rec.rank) miss.push('rank' + (g(r, ix.rank) ? ` (“${g(r, ix.rank)}”)` : ''));
+    if (isTournament) { if (!rec.gender) miss.push('gender'); if (!rec.dob) miss.push('date of birth' + (g(r, ix.dob) || g(r, ix.age) ? ` (“${g(r, ix.dob) || g(r, ix.age)}”)` : '')); }
+    const who = `${rec.firstName} ${rec.lastName}`.trim();
+    if (miss.length) { errors.push(`Row ${n + 1}${who ? ' · ' + who : ''}: missing ${miss.join(', ')}`); continue; }
+    const key = [normH(rec.firstName), normH(rec.lastName), rec.dob].join('|');
+    const had = seen.get(key);
+    if (had) {
+      // same person; a name that lost its accents (“?”) is corrected from this file
+      if (/\?/.test(had.firstName + had.lastName) && !/\?/.test(rec.firstName + rec.lastName)) { recs.push({ ...rec, fixId: had.id, was: `${had.firstName} ${had.lastName}` }); seen.set(key, rec); continue; }
+      errors.push(`Row ${n + 1} · ${who}: already registered — skipped`); continue;
+    }
+    seen.set(key, rec);
+    if (/\?/.test(rec.firstName + rec.lastName)) rec.warn = true;
+    recs.push(rec);
+  }
+  return { recs, errors, info };
+}
+function importPreviewHTML() {
+  const { recs, errors, info } = importRows($('#imp-text').value);
+  const evs = e => (e || []).map(x => KT.EVENT_TYPES[x].short).join(', ') || '<span class="muted">none</span>';
+  const head = info && info.sheet ? `<div class="notice info" style="display:block"><b>WTKF National Federation sheet</b>${info.country ? ' · ' + esc(info.country) : ''}${info.federation ? ' · ' + esc(info.federation) : ''}<br><span class="tiny">Athletes are imported with country ${esc(info.country || '—')} and dojo/club “${esc(info.federation || '—')}”. ${info.skipped.length ? 'Sections after the athletes (' + esc(info.skipped.join(', ')) + ' …) are not competitors and are skipped.' : ''}</span></div>` : '';
+  const warn = recs.some(r => r.warn) ? `<div class="notice warn" style="display:block">Some names contain “?” — the file lost its accented letters (e.g. Ł, Ń, Ę) when it was saved. In Excel use <b>File → Save As → CSV UTF-8</b> and import that file, or fix the names after importing.</div>` : '';
+  const tbl = recs.length ? `<div class="tw" style="max-height:320px;overflow:auto"><table class="imp-tbl"><thead><tr><th>#</th><th>Name</th><th>G</th><th>Born</th><th>Rank</th><th>Country</th><th>Events</th></tr></thead><tbody>${recs.map((r, i) => `<tr${r.warn ? ' class="imp-warn"' : ''}><td class="n">${i + 1}</td><td>${esc(r.lastName)}, ${esc(r.firstName)}${r.fixId ? ' <span class="chip ok">name fix</span>' : ''}</td><td>${r.gender === 'F' ? 'W' : 'M'}</td><td class="mono">${esc(r.dob || '')}</td><td>${esc(KT.rankLabel(r.rank))}</td><td>${esc(r.country || '')}</td><td>${evs(r.events)}</td></tr>`).join('')}</tbody></table></div>` : '';
+  const fixes = recs.filter(r => r.fixId), adds = recs.length - fixes.length;
+  return `${head}${warn}<p><b>${plural(adds, 'competitor')} ready to import.</b>${fixes.length ? ` <b>${plural(fixes.length, 'name')} will be corrected</b> (${fixes.map(r => esc(r.was) + ' → ' + esc(r.firstName + ' ' + r.lastName)).join(', ')}).` : ''}${errors.length ? `<br><span class="small" style="color:var(--bad)">${errors.slice(0, 10).map(esc).join('<br>')}${errors.length > 10 ? '<br>…and ' + (errors.length - 10) + ' more' : ''}</span>` : ''}</p>${tbl}`;
 }
 async function runImport() {
   const { recs, errors } = importRows($('#imp-text').value);
@@ -138,14 +211,16 @@ async function runImport() {
   const btn = $('[data-act="imp-run"]'); btn.disabled = true;
   let done = 0;
   for (const r of recs) {
+    if (r.fixId) { if (!(await guard(() => S.store.update(P.doc(S.evId, 'competitors', r.fixId), { firstName: r.firstName, lastName: r.lastName })))) break; done++; continue; }
     const id = uid();
     const pub = { firstName: r.firstName, lastName: r.lastName, gender: r.gender, rank: r.rank, dojo: r.dojo, state: r.state, country: r.country, waiver: r.waiver, feePaid: r.feePaid,
       checkedIn: false, status: 'active', events: r.events, divOverride: {}, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : null, createdAt: new Date().toISOString() };
-    const ok = await guard(async () => { await S.store.set(P.doc(S.evId, 'competitors', id), pub); await S.store.set(P.pv(S.evId, id), { dob: r.dob, email: r.email, phone: r.phone, emergencyName: r.emergencyName, emergencyPhone: r.emergencyPhone, feeAmount: '', notes: '' }); return true; });
+    const ok = await guard(async () => { await S.store.set(P.doc(S.evId, 'competitors', id), pub); await S.store.set(P.pv(S.evId, id), { dob: r.dob, email: r.email, phone: r.phone, emergencyName: r.emergencyName, emergencyPhone: r.emergencyPhone, feeAmount: r.feeAmount || '', notes: '' }); return true; });
     if (!ok) break;
     done++; $('#imp-preview').textContent = `Imported ${done} of ${recs.length}…`;
   }
-  closeModal(); toast(`Imported ${plural(done, 'competitor')}${errors.length ? ` · ${errors.length} rows skipped` : ''}`);
+  const nFix = recs.filter(r => r.fixId).length;
+  closeModal(); toast(`Imported ${plural(done - nFix, 'competitor')}${nFix ? ` · ${plural(nFix, 'name')} corrected` : ''}${errors.length ? ` · ${errors.length} rows skipped` : ''}`);
 }
 
 function teamForm(id, et) {

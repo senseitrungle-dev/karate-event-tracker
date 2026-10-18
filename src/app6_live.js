@@ -79,7 +79,7 @@ function judgesHTML() {
 }
 function judgeForm(id) {
   const j = id ? S.d.judges[id] : { kataLevel: 1, kumiteLevel: 1, ringId: '' };
-  const lv = (n, v) => `<select name="${n}" id="j-${n}">${[1, 2, 3, 4, 5, 6, 7].map(x => opt(x, 'Level ' + x, v)).join('')}</select>`;
+  const lv = (n, v) => `<select name="${n}" id="j-${n}">${+v ? '' : opt(0, 'Not set — choose a level', 0)}${[1, 2, 3, 4, 5, 6, 7].map(x => opt(x, 'Level ' + x, v)).join('')}</select>`;
   openModal(sheet(id ? esc(j.name) : 'Add judge', `<form id="f-judge" data-form="judge" data-id="${esc(id || '')}" class="stack"><div class="fgrid">
     <label class="f req span"><span>Name</span><input name="name" id="j-name" required value="${esc(j.name || '')}"></label>
     <label class="f"><span>Country</span><input name="country" id="j-country" value="${esc(j.country || '')}" placeholder="International events"></label>
@@ -291,49 +291,85 @@ function parseLevel(s) {
   const m = s.match(/([1-7])/); return m ? +m[1] : 0;
 }
 /** Parse judge rows. Returns {rows:[{rec, status, note, matchId}], errors:[]} — nothing is written. */
+/** v1.27: WTKF National Federation sheet → its JUDGES/COACHES section as a plain table (heading row first), plus country / federation from the title rows */
+function fedJudgeSection(all) {
+  const at = all.findIndex(r => /^judges?(coaches?)?information$|^judgescoaches/.test(normH(r[0])) || r.some(c => /^judgescoachesinformation$|^judgesinformation$/.test(normH(c))));
+  if (at < 0) return null;
+  const info = { country: '', federation: '' };
+  const after = (r, i) => { for (let j = i + 1; j < r.length; j++) if (String(r[j] || '').trim() && !/^(name|email|phone)/i.test(r[j].trim())) return r[j].trim(); return ''; };
+  all.slice(0, at).forEach(r => r.forEach((c, i) => { const n = normH(c);
+    if (n === 'country' && !info.country) info.country = titleWord(after(r, i));
+    if ((n === 'nationalfederation' || n === 'federation') && !info.federation) info.federation = titleWord(after(r, i)); }));
+  const hi = all.findIndex((r, i) => i > at && r.map(normH).includes('lastname') && r.map(normH).includes('firstname'));
+  if (hi < 0) return null;
+  const rows = [all[hi]], lines = [all[hi].__line];
+  for (let i = hi + 1; i < all.length; i++) {
+    const r = all[i], lead = String(r[0] || '').trim();
+    if (lead && !/^\d+$/.test(lead) && /[A-Za-z]{4,}/.test(lead)) break;          // PHOTOGRAPHER INFORMATION, TOTAL FEES …
+    if (r.map(normH).includes('lastname')) break;
+    if (!String(r[1] || '').trim() && !String(r[2] || '').trim()) continue;          // empty numbered slot / totals row
+    rows.push(r); lines.push(r.__line);
+  }
+  return { info, rows, lines };
+}
 function judgeImportRows(text) {
-  const rows = parseCSV(String(text || '').replace(/\t/g, ','));
-  if (rows.length < 2) return { rows: [], errors: ['Need a heading row and at least one judge.'] };
+  let rows = parseCSV(String(text || '').replace(/^\uFEFF/, '').replace(/\t/g, ','));
+  rows.forEach((r, i) => { r.__line = i + 1; });
+  const fed = fedJudgeSection(rows); if (fed) rows = fed.rows;
+  if (rows.length < 2) return { rows: [], errors: [fed ? 'The JUDGES/COACHES section of this sheet is empty.' : 'Need a heading row and at least one judge.'], fed };
   const h = rows[0].map(x => x.toLowerCase().replace(/[^a-z]/g, ''));
   const col = (...names) => h.findIndex(x => names.includes(x));
   const ix = { name: col('name', 'judge', 'judgename', 'fullname'), first: col('firstname', 'first', 'givenname'), last: col('lastname', 'last', 'surname', 'familyname'),
     country: col('country', 'nation', 'nationality', 'federation'), region: col('region', 'state', 'province', 'area'), dojo: col('dojo', 'club', 'school'),
     kata: col('katalevel', 'kata', 'katacredential', 'katalicense', 'katalicence', 'katagrade'), kumite: col('kumitelevel', 'kumite', 'kumitecredential', 'kumitelicense', 'kumitelicence', 'kumitegrade'),
-    level: col('level', 'credential', 'license', 'licence', 'grade', 'judgelevel'), ring: col('ring', 'court', 'mat'), email: col('email', 'mail'), notes: col('notes', 'note', 'remarks') };
+    level: col('level', 'credential', 'license', 'licence', 'judgelevel'), ring: col('ring', 'court', 'mat'), email: col('email', 'mail'), notes: col('notes', 'note', 'remarks'),
+    rank: col('rank', 'dan', 'belt'), sem: h.map((x, i) => [i, x]).filter(([, x]) => /seminar/.test(x)) };
   const errors = [];
-  if (ix.name < 0 && (ix.first < 0 || ix.last < 0)) return { rows: [], errors: ['A “name” column (or first_name and last_name) is required.'] };
-  if (ix.kata < 0 && ix.kumite < 0 && ix.level < 0) return { rows: [], errors: ['Credential columns are required: kata_level and kumite_level (or a single “level”).'] };
+  if (ix.name < 0 && (ix.first < 0 || ix.last < 0)) return { rows: [], errors: ['A “name” column (or first_name and last_name) is required.'], fed };
+  if (!fed && ix.kata < 0 && ix.kumite < 0 && ix.level < 0) return { rows: [], errors: ['Credential columns are required: kata_level and kumite_level (or a single “level”).'] };
   const ev = curEvent(), need = KT.judgeNeed(ev.level), where = ev.level === 'International' ? 'country' : ev.level === 'National' ? 'region' : '';
   const g = (r, i) => (i >= 0 ? String(r[i] || '').trim() : '');
   const ringBy = {}; DC.rings.forEach(r => { ringBy[r.name.toLowerCase()] = r.id; ringBy[r.name.toLowerCase().replace(/^ring\s*/, '')] = r.id; });
   const key = j => [String(j.name || '').toLowerCase().replace(/\s+/g, ' '), String(j.country || j.region || j.dojo || '').toLowerCase()].join('|');
   const existing = {}; judgesList().forEach(j => { existing[key(j)] = j.id; existing[String(j.name || '').toLowerCase().replace(/\s+/g, ' ') + '|'] = existing[String(j.name || '').toLowerCase().replace(/\s+/g, ' ') + '|'] || j.id; });
   const seen = new Set(), out = [];
+  const loose = {}; judgesList().forEach(j => { loose[normH(j.name)] = loose[normH(j.name)] || j; });
   rows.slice(1).forEach((r, n) => {
-    const name = ix.name >= 0 ? g(r, ix.name) : `${g(r, ix.first)} ${g(r, ix.last)}`.trim();
+    const name = nameCase(ix.name >= 0 ? g(r, ix.name) : `${g(r, ix.first)} ${g(r, ix.last)}`.trim());
     const both = parseLevel(g(r, ix.level));
-    const rec = { name, country: g(r, ix.country), region: g(r, ix.region), dojo: g(r, ix.dojo),
-      kataLevel: parseLevel(g(r, ix.kata)) || both, kumiteLevel: parseLevel(g(r, ix.kumite)) || both, notes: g(r, ix.notes), email: g(r, ix.email).toLowerCase() };
+    const rk = g(r, ix.rank), sem = ix.sem.filter(([i]) => /^(x|y|yes|✓|✔|1)$/i.test(g(r, i))).map(([i]) => String(rows[0][i]).replace(/^judges'?\s*/i, '').trim());
+    const rec = { name, country: titleWord(g(r, ix.country)) || (fed ? fed.info.country : ''), region: g(r, ix.region), dojo: g(r, ix.dojo) || (fed ? fed.info.federation : ''),
+      kataLevel: parseLevel(g(r, ix.kata)) || both, kumiteLevel: parseLevel(g(r, ix.kumite)) || both,
+      notes: [g(r, ix.notes), rk ? 'Rank ' + rk : '', sem.length ? 'Judges’ seminar: ' + sem.join(', ') : '', fed ? 'From the federation’s judges/coaches list' : ''].filter(Boolean).join(' · '), email: g(r, ix.email).toLowerCase() };
     const ringTxt = g(r, ix.ring).toLowerCase(); const ringId = ringTxt ? (ringBy[ringTxt] || ringBy[ringTxt.replace(/^ring\s*/, '')] || '') : null;
     if (ringId !== null) rec.ringId = ringId;
-    const line = n + 2;
+    const line = r.__line || n + 2;
     if (!rec.name) { errors.push(`Row ${line}: missing name`); return; }
-    if (!rec.kataLevel && !rec.kumiteLevel) { errors.push(`Row ${line} (${rec.name}): credential levels must be 1–7`); return; }
+    if (!fed && !rec.kataLevel && !rec.kumiteLevel) { errors.push(`Row ${line} (${rec.name}): credential levels must be 1–7`); return; }
     const k = key(rec); if (seen.has(k)) { errors.push(`Row ${line} (${rec.name}): duplicate row`); return; } seen.add(k);
-    const matchId = existing[k] || existing[String(rec.name).toLowerCase().replace(/\s+/g, ' ') + '|'] || '';
+    let matchId = existing[k] || existing[String(rec.name).toLowerCase().replace(/\s+/g, ' ') + '|'] || '';
+    let fixFrom = '';
+    if (!matchId && loose[normH(rec.name)] && (!/\?/.test(rec.name) || /\?/.test(loose[normH(rec.name)].name))) { matchId = loose[normH(rec.name)].id; if (loose[normH(rec.name)].name !== rec.name) fixFrom = loose[normH(rec.name)].name; }
+    const old = matchId ? S.d.judges[matchId] || {} : {};
+    if (matchId && !rec.kataLevel && !rec.kumiteLevel) { rec.kataLevel = +old.kataLevel || 0; rec.kumiteLevel = +old.kumiteLevel || 0; }   // the sheet has no levels: keep the ones already set
+    if (matchId && old.notes && rec.notes && !String(old.notes).includes(rec.notes)) rec.notes = old.notes;
     const notes = [];
+    if (fixFrom) notes.push(`name corrected from “${fixFrom}”`);
+    if (/\?/.test(rec.name)) notes.push('“?” in name — accents lost');
+    if (!rec.kataLevel && !rec.kumiteLevel) notes.push('no judge level on the sheet — set kata & kumite levels');
+    else
     if (rec.kataLevel < need && rec.kumiteLevel < need) notes.push(`below level ${need} for ${ev.level}`);
     else if (rec.kataLevel < need || rec.kumiteLevel < need) notes.push(`${rec.kataLevel < need ? 'kata' : 'kumite'} below level ${need}`);
     if (where && !rec[where]) notes.push(`no ${where}`);
     if (ringTxt && !ringId) notes.push(`ring “${g(r, ix.ring)}” not found`);
     out.push({ rec, line, matchId, status: matchId ? 'update' : 'new', warn: notes.join(' · ') });
   });
-  return { rows: out, errors };
+  return { rows: out, errors, fed };
 }
 function judgeImportForm() {
   const ev = curEvent(), need = KT.judgeNeed(ev.level);
   const others = Object.values(S.events).filter(e => e.id !== S.evId && (isLocal() || isEventDirector(e)));
-  openModal(sheet('Import judges', `<p class="small">Paste the judges list (from a spreadsheet or the federation’s register) or choose a .csv file. The first row must be column headings.</p>
+  openModal(sheet('Import judges', `<p class="small">Paste the judges list (from a spreadsheet or the federation’s register) or choose a .csv file. It needs a row of column headings. A <b>WTKF National Federation registration sheet</b> can be chosen as it is — its judges/coaches section is read (country and federation from the top of the sheet).</p>
     <p class="tiny mono muted">${JUDGE_COLS}</p>
     <p class="tiny muted">Credentials are levels 1–7 (“5”, “L5”, “Level 5”); a single <span class="mono">level</span> column applies to both kata and kumite. ${ev.level === 'International' ? '<b>International event:</b> include each judge’s country; levels 3–7 required.' : ev.level === 'National' ? '<b>National event:</b> include each judge’s region; levels 3–7 required.' : 'Levels 1–2 may judge Regional and Local events.'} Judges already in the pool (same name) are updated, not duplicated. <span class="mono">ring</span> (e.g. “Ring 2”) assigns them.</p>
     <div class="row" style="flex-wrap:wrap;gap:8px"><input type="file" id="jimp-file" accept=".csv,text/csv,text/plain" data-change="jimp-file"><button class="sm" data-act="jimp-template">Insert example</button></div>
@@ -344,15 +380,22 @@ function judgeImportForm() {
 }
 function judgeImportPreview() {
   const box = $('#jimp-text'); if (!box) return;
-  const { rows, errors } = judgeImportRows(box.value);
+  const { rows, errors, fed } = judgeImportRows(box.value);
+  const keep = new Set([...document.querySelectorAll('.jimp-pick')].filter(x => !x.checked).map(x => x.dataset.line));   // keep the director's un-ticks while typing
   const nNew = rows.filter(r => r.status === 'new').length, nUp = rows.length - nNew, nWarn = rows.filter(r => r.warn).length;
-  const tbl = rows.length ? `<div class="tw" style="max-height:280px;overflow:auto"><table class="acc"><thead><tr><th>Row</th><th>Name</th><th>From</th><th class="n">Kata</th><th class="n">Kumite</th><th>Ring</th><th>Status</th></tr></thead><tbody>${rows.map(r => `<tr><td class="num">${r.line}</td><td>${esc(r.rec.name)}</td><td class="small">${esc([r.rec.country, r.rec.region, r.rec.dojo].filter(Boolean).join(' · '))}</td><td class="n">${r.rec.kataLevel || '—'}</td><td class="n">${r.rec.kumiteLevel || '—'}</td><td class="small">${r.rec.ringId ? esc(ringName(r.rec.ringId)) : ''}</td>
+  const tbl = rows.length ? `<div class="tw" style="max-height:280px;overflow:auto"><table class="acc"><thead><tr><th title="Import">✓</th><th>Row</th><th>Name</th><th>From</th><th class="n">Kata</th><th class="n">Kumite</th><th>Ring</th><th>Status</th></tr></thead><tbody>${rows.map(r => `<tr><td><input type="checkbox" class="jimp-pick" data-line="${r.line}" ${keep.has(String(r.line)) ? '' : 'checked'} aria-label="Import ${esc(r.rec.name)}" data-change="jimp-pick"></td><td class="num">${r.line}</td><td>${esc(r.rec.name)}</td><td class="small">${esc([r.rec.country, r.rec.region, r.rec.dojo].filter(Boolean).join(' · '))}</td><td class="n">${r.rec.kataLevel || '—'}</td><td class="n">${r.rec.kumiteLevel || '—'}</td><td class="small">${r.rec.ringId ? esc(ringName(r.rec.ringId)) : ''}</td>
     <td><span class="chip ${r.status === 'new' ? 'ok' : ''}">${r.status === 'new' ? 'New' : 'Update'}</span>${r.warn ? ` <span class="chip warn">${esc(r.warn)}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '';
-  $('#jimp-preview').innerHTML = `${rows.length ? `<p class="small"><b>${plural(nNew, 'new judge')}</b>, ${plural(nUp, 'update')}${nWarn ? ` · <span style="color:var(--warn)">${plural(nWarn, 'warning')}</span>` : ''}${errors.length ? ` · <span style="color:var(--bad)">${plural(errors.length, 'row')} skipped</span>` : ''}</p>` : ''}${tbl}${errors.length ? `<p class="tiny" style="color:var(--bad)">${errors.slice(0, 8).map(esc).join('<br>')}${errors.length > 8 ? '<br>…' : ''}</p>` : ''}`;
-  const b = $('#jimp-run'); if (b) { b.disabled = !rows.length; b.textContent = rows.length ? `Import ${rows.length}` : 'Import'; }
+  const fedNote = fed ? `<div class="notice info" style="display:block"><b>WTKF National Federation sheet</b> — judges/coaches section${fed.info.country ? ' · ' + esc(fed.info.country) : ''}${fed.info.federation ? ' · ' + esc(fed.info.federation) : ''}<br><span class="tiny">The sheet lists judges and coaches together and has no judge levels: untick anyone who is only a coach, then set each judge’s kata and kumite level on the Judges tab (they can’t be assigned to a ring until they meet the level for this event). Athletes and the photographer are not imported here.</span></div>` : '';
+  $('#jimp-preview').innerHTML = fedNote + `${rows.length ? `<p class="small"><b>${plural(nNew, 'new judge')}</b>, ${plural(nUp, 'update')}${nWarn ? ` · <span style="color:var(--warn)">${plural(nWarn, 'warning')}</span>` : ''}${errors.length ? ` · <span style="color:var(--bad)">${plural(errors.length, 'row')} skipped</span>` : ''}</p>` : ''}${tbl}${errors.length ? `<p class="tiny" style="color:var(--bad)">${errors.slice(0, 8).map(esc).join('<br>')}${errors.length > 8 ? '<br>…' : ''}</p>` : ''}`;
+  jimpCount();
+}
+function jimpCount() {
+  const n = [...document.querySelectorAll('.jimp-pick')].filter(x => x.checked).length;
+  const b = $('#jimp-run'); if (b) { b.disabled = !n; b.textContent = n ? `Import ${n}` : 'Import'; }
 }
 async function judgeImportRun() {
-  const { rows, errors } = judgeImportRows($('#jimp-text').value); if (!rows.length) return;
+  const picked = new Set([...document.querySelectorAll('.jimp-pick')].filter(x => x.checked).map(x => x.dataset.line));
+  const all = judgeImportRows($('#jimp-text').value), errors = all.errors, rows = all.rows.filter(r => picked.has(String(r.line))); if (!rows.length) return;
   const b = $('#jimp-run'); if (b) b.disabled = true;
   let n = 0;
   for (const r of rows) {

@@ -638,3 +638,11 @@ body { font-weight: 450; }
   .admin-card .jrow2.pr .pctl { justify-content: flex-start; }
 }
 .admin-card .acc-chip { flex-wrap: wrap; border-radius: 12px; row-gap: 0; }
+
+/* v1.26 — import preview table */
+table.imp-tbl { font-size: .8rem; } table.imp-tbl td, table.imp-tbl th { padding: 5px 8px; white-space: nowrap; }
+table.imp-tbl tr.imp-warn td { background: var(--warn-soft); }
+.sheet-b > * { min-width: 0; max-width: 100%; }
+#imp-preview { min-width: 0; overflow: hidden; } #imp-preview .tw { max-width: 100%; overflow: auto; }
+#imp-text { white-space: pre; overflow-x: auto; }
+#jimp-preview { min-width: 0; } #jimp-preview .chip { white-space: normal; max-width: 100%; } #jimp-preview td:nth-child(3) { min-width: 9em; }

@@ -25,7 +25,7 @@ const path = require('path');
   ok('preview counts new / updates / skipped', /3 new judges/.test(prev) && /1 update/.test(prev) && /2 rows skipped/.test(prev));
   ok('below-level warning for International', /below level 3 for International/.test(prev));
   ok('missing country and unknown ring flagged', /no country/.test(prev) && /ring “Ring 9” not found/.test(prev));
-  ok('“L5” / “Level 4” parsed', await p.$eval('#jimp-preview table', t => [...t.querySelectorAll('tr')].some(r => /Ama Owusu/.test(r.textContent) && /\b5\b/.test(r.cells[3].textContent) && /\b4\b/.test(r.cells[4].textContent))));
+  ok('“L5” / “Level 4” parsed', await p.$eval('#jimp-preview table', t => [...t.querySelectorAll('tr')].some(r => /Ama Owusu/.test(r.textContent) && /\b5\b/.test(r.cells[4].textContent) && /\b4\b/.test(r.cells[5].textContent))));
   await p.screenshot({ path: 'test/shots/judge-import.png' });
   await p.click('#jimp-run'); await p.waitForTimeout(600);
   const after = await p.$$eval('.jrow2', x => x.length);

@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.25.1 Requirements & Design
+# Karate Event Tracker · v1.27.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -416,3 +416,28 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Diagnose**: invitation rows used a 3-column grid (email | Send / copy | Cancel) with unbreakable emails; the two tables kept their desktop columns; long names/emails and chips didn't wrap.
 - **Fix** (CSS + invitation row markup): invitation rows use the bordered person box — email (wraps), role · code · time below, buttons on their own line. On phones (≤640px) the two tables become stacked bordered boxes; long names, emails and chips wrap anywhere; the Add-director menu is full width. Rules unchanged.
 - Verify: test/adminphone.js (390px and 320px: no sideways scroll, nothing inside the App admin card past its edge); regression.
+
+## 49. v1.26.0 — import the WTKF National Federation registration sheet (2026-10-18)
+- **Requirement**: national federations return the "Informational Spreadsheet For National Federations To Complete" (title rows, COUNTRY, National Federation, contact; ATHLETES INFORMATION table: #, Last Name, First Name, Age (= birth date dd.mm.yyyy), Gender (MAN/WOMAN), Rank ("1 dan"), an X under each event (Individual Kata, Team Kata, Mixed Enbu, Man/Man Enbu, Fukugo, Individual Kumite, Team Kumite), Judges' Seminar, Participation Fee; then JUDGES/COACHES, PHOTOGRAPHER and fee totals). The director imports it as-is via Competitors → Import CSV.
+- **Import rules**:
+  - Heading row found anywhere (first row naming First + Last Name); title rows above give **country** (→ every athlete's country, used by the International draw to separate countries) and **federation** (→ dojo/club when no dojo column).
+  - Empty numbered slots skipped; the table ends at the next section heading (JUDGES/COACHES …), which is reported as skipped.
+  - Birth date from DOB or, when it holds a date, the Age column: dd.mm.yyyy, d.m.yyyy, dd-mm-yyyy, yyyy-mm-dd, m/d/yyyy (d/m when the first number > 12); impossible dates rejected.
+  - One column per event marked X (Mixed / Man-Man / Woman-Woman Enbu → Enbu); the old "events" column with ";" still works.
+  - ALL-CAPS names → Name Case. Fee column → fee amount.
+  - Same first + last name + birth date already in the event → skipped ("already registered"), so a federation can resend its sheet.
+  - **Lost accents**: names with "?" (file saved without UTF-8) are flagged with advice (Excel → Save As → CSV UTF-8). Re-importing a corrected file **fixes those names** on the existing competitors instead of adding duplicates.
+  - File bytes: UTF-8 when valid, otherwise Windows-1250 for Central-European countries, else Windows-1252.
+- **Preview** (Check / choosing a file): sheet type, country, federation, warnings, counts, row problems with the original value, and a table of everyone to be imported.
+- Verify: test/fedimport.js (real Poland sheet: 29 athletes, country/federation, name case, dd.mm.yyyy and d.mm.yyyy dates, X events incl. both Enbu columns, fee, re-import skipped, Windows-1250 + UTF-8 Polish letters, name correction without duplicates, generic CSV unchanged); regression.
+
+## 50. v1.27.0 — judges import reads the same WTKF National Federation sheet (2026-10-18)
+- **Requirement**: Judges → Import judges accepts the federation registration sheet as-is and takes people from its **JUDGES/COACHES INFORMATION** section (Last Name, First Name, Age, Gender, Rank, Judges' Seminar Nov 18 / Nov 19, fee). Athletes and the photographer are not imported there.
+- **Rules**:
+  - Section found by its heading; ends at the next section (PHOTOGRAPHER INFORMATION, totals); empty numbered slots skipped. Row numbers in the preview are the sheet's own rows.
+  - Country and federation from the top of the sheet → judge's country and dojo; names to Name Case; notes = "Rank 6 dan · Judges' seminar: November 18 · From the federation's judges/coaches list".
+  - The sheet has **no judge levels**: rows import with kata/kumite level *not set* (shown "Kata L– / Kumite L–", not qualified, so they can't be put on a ring until the director sets levels). The judge form shows "Not set — choose a level" instead of silently defaulting to Level 1.
+  - Judges and coaches share one list → every row has a tick box (all ticked); the director unticks coaches. Import button shows the ticked count.
+  - Re-import: the same person (name, accents ignored) is updated, not duplicated; levels already set are kept; a corrected file (UTF-8 / Windows-1250) fixes names that had "?" ("name corrected from …").
+  - Ordinary judge CSVs unchanged (credential columns still required there).
+- Verify: test/fedjudges.js (2 of 2 people found, warnings, untick → Import 1, country/federation/rank, Not set levels, set levels, re-import corrects name + adds the other without duplicates + keeps levels); test/judgeimport.js updated for the tick column; fedimport.js; regression.

@@ -189,7 +189,7 @@ const ACT = {
   },
   checkin: (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { checkedIn: !c.checkedIn })); },
   'import-open': () => importForm(),
-  'imp-preview': () => { const { recs, errors } = importRows($('#imp-text').value); $('#imp-preview').innerHTML = `${plural(recs.length, 'competitor')} ready to import.${errors.length ? '<br>' + errors.slice(0, 8).map(esc).join('<br>') + (errors.length > 8 ? '<br>…' : '') : ''}`; },
+  'imp-preview': () => { $('#imp-preview').innerHTML = importPreviewHTML(); },
   'imp-run': () => runImport(),
   'export-comps': () => {
     const dir = isDirector();
@@ -415,8 +415,9 @@ const CHANGE = {
   'kp-hansoku': el => { const d = loadDraft(S.modal.dkey); d.hansoku = el.checked; saveDraft(S.modal.dkey); kpPaint(); },
   awarded: el => guard(() => S.store.update(P.live(S.evId, 'brackets', el.dataset.did), { awarded: el.checked })),
   att: el => writeAttendance(S.ui.session, { [el.dataset.id]: el.checked }),
-  'jimp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#jimp-text').value = String(rd.result || ''); judgeImportPreview(); }; rd.readAsText(f); },
-  'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = rd.result; ACT['imp-preview'](); }; rd.readAsText(f); },
+  'jimp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#jimp-text').value = decodeCsvBytes(rd.result); judgeImportPreview(); }; rd.readAsArrayBuffer(f); },
+  'jimp-pick': () => jimpCount(),
+  'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = decodeCsvBytes(rd.result); ACT['imp-preview'](); }; rd.readAsArrayBuffer(f); },
   kscore: el => { const d = loadDraft(S.modal.key), k = el.dataset.s === 'a' ? 'sa' : 'sb'; d[k] = d[k] || []; const v = el.value.replace(',', '.'); d[k][+el.dataset.i] = v === '' ? '' : v; draftChanged(); },
   'bout-member': el => { const d = loadDraft(S.modal.key); const i = el.dataset.i; let b; if (i === 'd') { d.daihyo = d.daihyo || { log: [] }; b = d.daihyo; } else { d.bouts = d.bouts || []; d.bouts[+i] = d.bouts[+i] || { log: [] }; b = d.bouts[+i]; } b[el.dataset.s === 'a' ? 'ma' : 'mb'] = el.value; draftChanged(); },
 };
