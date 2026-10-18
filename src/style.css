@@ -590,3 +590,15 @@ body { font-weight: 450; }
 /* v1.18 phones: bigger type needs room — the bottom-tab labels keep their size, connection status moves to the About pop-up (tap the logo) */
 @media (max-width: 760px) { .bn { font-size: 12px; padding-left: 0; padding-right: 0; } .bn span { letter-spacing: -.015em; } .bnav .bn { opacity: 1; } .bnav-in { gap: 2px; padding-left: 4px; padding-right: 4px; } }
 @media (max-width: 480px) { .bar .bar-in > .chip:not(.aka) { display: none; } .bar .brand small { font-size: .62rem; } }
+
+/* v1.19 — the clock button is the ring manager's main control */
+.clock-go { display: block; width: 100%; min-height: 64px; font: 800 1.45rem var(--f-display); letter-spacing: .06em; text-transform: uppercase; border-radius: 14px; border: 0; color: #fff; }
+.clock-go.start { background: var(--go); }
+.clock-go.stop { background: var(--aka-bg); }
+.clock-go.next { box-shadow: 0 0 0 5px color-mix(in srgb, var(--go) 40%, transparent); animation: nudge 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .clock-go.next { animation: none; } }
+.next-hint { text-align: center; margin: 0; font-size: .82rem; font-weight: 600; color: var(--ink-2); }
+.board.await-start .corner button { opacity: .45; }
+.board.await-hantei .corner button[data-t="hantei"] { background: var(--go); color: #fff; border-color: var(--go); font-weight: 800; box-shadow: 0 0 0 4px color-mix(in srgb, var(--go) 35%, transparent); }
+.board.await-hantei .corner button:not([data-t="hantei"]) { opacity: .45; }
+.jrow2.pr .pctl select { max-width: 260px; }

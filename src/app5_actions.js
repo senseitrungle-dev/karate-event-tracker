@@ -268,6 +268,7 @@ const ACT = {
   'dir-remove': async el => { if (!(await confirmBox(`Remove ${personName(el.dataset.id)} as director of this event? They keep any other role here and their other events.`, 'Remove as director', true))) return; setDirector(el.dataset.id, false); },
   'invite-mail': el => { const i = S.invites[el.dataset.id]; if (i) inviteSheet(Object.assign({ id: el.dataset.id }, i)); },
   'invite-copy': () => copyInvite(),
+  'app-add-event': el => { const id = el.dataset.id, ev = ($('#ae-ev-' + CSS.escape(id)) || {}).value, rl = ($('#ae-role-' + CSS.escape(id)) || {}).value; if (ev) addToEvent(id, ev, rl); },
   'invite-cancel': el => guard(() => S.store.del('invites/' + el.dataset.id), 'Invite cancelled'),
   'ring-unmanage': el => { const r = S.d.rings[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'rings', r.id), { managerIds: (r.managerIds || []).filter(x => x !== el.dataset.uid) })).then(scheduleSync); },
   'staff-add': el => { const ev = curEvent(); $$('.dd-list').forEach(x => { x.hidden = true; }); guard(() => S.store.update(P.event(ev.id), { staffIds: [...new Set((ev.staffIds || []).concat(el.dataset.uid))] }), 'Staff added'); },
@@ -579,6 +580,7 @@ function wire() {
     }
     else if (k === 'judge') saveJudge(f);
     else if (k === 'invite') saveInvite(f);
+    else if (k === 'app-invite') saveAppInvite(f);
     else if (k === 'code') redeemCode(fd(f).code);
     else if (k === 'session') {
       const v = fd(f); if (!v.title || !v.date) { toast('Title and date are required.', true); return; }

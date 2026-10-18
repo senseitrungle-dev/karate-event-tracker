@@ -16,9 +16,10 @@
   const evOf=p=>{const m=/^(?:events|live|pv)\/([^/]+)/.exec(p); return m?m[1]:null;};
   const canWrite=(p,d,v)=>{
     if(p.startsWith('users/'))return p==='users/'+uid();
-    if(p.startsWith('meta/')||p.startsWith('roles/'))return true;
+    if(p.startsWith('meta/'))return true;
+    if(p.startsWith('roles/')){ if(isDir(d))return true; if(p!=='roles/'+uid()||d[p])return false; if(v&&v.role==='director'&&!d['meta/bootstrap'])return true; const i=inv(d); return !!(v&&v.role==='organizer'&&i&&i.scope==='app'&&i.role==='organizer'); }
     if(p.startsWith('orgRequests/'))return p==='orgRequests/'+uid()||isDir(d);
-    if(p.startsWith('invites/'))return !!uid();
+    if(p.startsWith('invites/')){ if(v&&v.scope==='app')return isDir(d); return !!uid(); }
     if(p.startsWith('share/'))return !!uid();
     let m=/^events\/([^/]+)$/.exec(p);
     if(m){ if(!d[p]) return isOrg(d)&&v&&(v.directorIds||[]).includes(uid()); if(evDir(d,m[1]))return true; const i=inv(d); return !!(i&&i.eventId===m[1]); }

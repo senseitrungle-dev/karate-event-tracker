@@ -1,14 +1,33 @@
 /* ===== scoresheet (WTKF 2009) ===== */
 const CLOCK = { left: 0, running: false, t0: 0, base: 0, timer: null, key: '' };
 function stopClock() { if (CLOCK.timer) clearInterval(CLOCK.timer); CLOCK.timer = null; if (CLOCK.running) { CLOCK.left = Math.max(0, CLOCK.base - (Date.now() - CLOCK.t0) / 1000); CLOCK.running = false; } }
-function setClock(sec, key) { stopClock(); CLOCK.left = sec; CLOCK.base = sec; CLOCK.key = key || CLOCK.key; paintClock(); }
+function setClock(sec, key) { stopClock(); CLOCK.left = sec; CLOCK.base = sec; CLOCK.key = key || CLOCK.key; CLOCK.await = true; paintClock(); }   // await: waiting for the Shu-shin's Hajime
 function clockLeft() { return CLOCK.running ? Math.max(0, CLOCK.base - (Date.now() - CLOCK.t0) / 1000) : CLOCK.left; }
 function toggleClock() {
   if (CLOCK.running) { stopClock(); }
-  else { if (clockLeft() <= 0) return; CLOCK.base = CLOCK.left; CLOCK.t0 = Date.now(); CLOCK.running = true; CLOCK.timer = setInterval(() => { paintClock(); if (clockLeft() <= 0) { stopClock(); CLOCK.left = 0; clockChanged(); } }, 200); }
+  else { if (clockLeft() <= 0) return; CLOCK.await = false; CLOCK.base = CLOCK.left; CLOCK.t0 = Date.now(); CLOCK.running = true; CLOCK.timer = setInterval(() => { paintClock(); if (clockLeft() <= 0) { stopClock(); CLOCK.left = 0; if (!clockExpired()) clockChanged(); } }, 200); }
   clockChanged();
 }
 /** Scoring buttons are only live while the clock is stopped (Yame), so the sheet is redrawn on every start / stop. */
+/**
+ * Shobu Ippon: the clock reached zero (v1.19). Regular time: a lead wins on points, a tie goes to Kettei-sen — the
+ * clock is reset to the Kettei-sen time and waits for the Shu-shin to restart (scores stay on the board); no Kettei-sen
+ * time set → Hantei. Kettei-sen time out with no score → Hantei (Court Judges). Returns true when the sheet was redrawn.
+ */
+function clockExpired() {
+  const M = S.modal; if (!M || M.type !== 'score') return false;
+  const host = $('#score-root [data-time-path]'); if (!host) return false;
+  const path = host.dataset.timePath, d = loadDraft(M.key), dv = DC.divBy[M.did], sc = scoringOf(dv);
+  const log = logAt(d, path), o = { kettei: sc.ketteiTime > 0, allowDraw: path.startsWith('bouts'), ketteiOnly: path === 'daihyo' };
+  const ev = KT.kumiteEval(log, o); if (ev.done || ev.phase === 'hantei') return false;
+  log.push({ t: ev.phase === 'regular' ? 'timeup' : 'ketteiend', auto: 1 });
+  const after = KT.kumiteEval(log, o);
+  if (after.phase === 'kettei') { setClock(sc.ketteiTime); toast(`Time up · tied — Kettei-sen. Clock reset to ${fmtClock(sc.ketteiTime)}; press Start when the Shu-shin restarts.`); }
+  else if (after.phase === 'hantei') toast('Time up with no score — Hantei: record the Court Judges’ decision.');
+  else if (after.done) toast(`Time up · ${after.winner ? (after.winner === 'a' ? 'Aka' : 'Shiro') + ' wins · ' : ''}${after.method}`);
+  draftChanged();
+  return true;
+}
 function clockChanged() {
   if (S.modal && S.modal.type === 'score' && $('#score-root .board .corner button[data-act="k-ev"]')) renderScore(true); else paintClock();
 }
@@ -16,7 +35,7 @@ function paintClock() {
   const el = $('#clock'); if (!el) return;
   // write only on change: replacing a button's text while it is held down can cancel the click
   const l = clockLeft(), t = fmtClock(Math.ceil(l)); if (el.textContent !== t) el.textContent = t; el.classList.toggle('zero', l <= 0);
-  const b = $('#clock-btn'), bt = CLOCK.running ? 'Stop' : 'Start'; if (b && b.textContent !== bt) b.textContent = bt;
+  const b = $('#clock-btn'), bt = CLOCK.running ? 'Stop' : 'Start'; if (b && b.textContent !== bt) { b.textContent = bt; b.classList.toggle('stop', CLOCK.running); b.classList.toggle('start', !CLOCK.running); }
 }
 
 /** Big, unmistakable winner banner in the winner's corner colour (Aka red / Shiro white). */
@@ -39,6 +58,7 @@ function openScore(did, mid) {
   S.modal = { type: 'score', did, mid, key: draftKey(did, mid), sig: '', refresh: () => renderScore(false) };
   const dv = DC.divBy[did]; const sc = scoringOf(dv);
   setClock(sc.boutTime, S.modal.key + ':main');
+  try { const lg = (loadDraft(S.modal.key).log) || []; if (lg.length && kindOf(dv) === 'kumite' && kumiteStyle(dv) !== 'kogo' && KT.kumiteEval(lg, { kettei: sc.ketteiTime > 0 }).phase === 'kettei') setClock(sc.ketteiTime); } catch (e) { /* ignore */ }
   openModal('<div id="score-root"></div>', { wide: true, nofocus: true });
   renderScore(true);
 }
@@ -99,24 +119,32 @@ function logHTML(log) { return `<div class="log">${log.slice(-6).map(e => `<span
 function kumitePanel(log, path, sc, r, opts) {
   if (opts.kogo) return kogoPanel(log, path, r, opts);
   const ev = KT.kumiteEval(log, opts);
+  const reg = ev.score !== ev.cur ? ev.score : null;          // Kettei-sen: the regular-time scores stay on the board
+  const waitStart = !ev.done && ev.phase !== 'hantei' && !CLOCK.running && CLOCK.await && clockLeft() > 0;
   const corner = (s) => {
     const st = ev.st[s];
     const name = s === 'a' ? entName(r.a) : entName(r.b);
     const dis = ev.done || CLOCK.running ? 'disabled' : '';
     const b = (t, l, cls) => `<button class="${cls || ''}" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="${t}" ${dis}${t === 'tento' ? ' title="Fall: Ten-to penalty match (no points). After time has expired: 1 point to the opponent."' : ''}>${l}</button>`;
     return `<div class="corner ${s}${cornerState(ev.done, ev.winner, s)}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${ev.done && ev.winner === s ? WIN_CHIP : ''}</div>
-      <div class="who">${esc(opts.names ? opts.names[s] || name : name)}</div><div class="big">${ev.cur[s]}</div>
+      <div class="who">${esc(opts.names ? opts.names[s] || name : name)}</div><div class="big">${reg ? reg[s] + ev.cur[s] : ev.cur[s]}</div>
       <div class="tally">Waza-ari ${st.waza} · Jo-gai ${st.jogai} · K ${st.keikoku} · C ${st.chui}${st.tento || st.tentoX ? ' · Ten-to ' + (st.tento + st.tentoX) : ''}</div>
       ${ev.hansokuDue.includes(s) ? '<div class="tally" style="font-weight:700">Second Chui — Court Judges decide Han-soku</div>' : ''}
       <div class="btns">${b('waza', 'Waza-ari')}${b('ippon', 'Ippon')}${b('jogai', 'Jo-gai', 'pen')}${b('keikoku', 'Kei-koku', 'pen')}${b('chui', 'Chui', 'pen')}${b('tento', 'Ten-to', 'pen')}${b('hansoku', 'Han-soku', 'pen')}${ev.phase === 'hantei' ? `<button data-act="k-ev" data-p="${path}" data-s="${s}" data-t="hantei">Hantei</button>` : '<span></span>'}</div></div>`;
   };
-  const phaseTxt = ev.done ? `${ev.winner ? (ev.winner === 'a' ? 'Aka' : 'Shiro') + ' · ' : ''}${ev.method}` : ev.phase === 'kettei' ? `Kettei-sen · no carry-over · first Waza-ari wins${ev.score ? ` (regular ${ev.score.a}–${ev.score.b})` : ''}` : ev.phase === 'hantei' ? 'Hantei · Court Judges decide' : opts.ketteiOnly ? 'Representative Kettei-sen' : 'Shobu Ippon';
-  return `<div class="board">${corner('a')}<div class="mid"><div class="phase">${esc(phaseTxt)}</div>
-      <div class="clock" id="clock">${fmtClock(clockLeft())}</div><div class="row" style="justify-content:center"><button id="clock-btn" data-act="clock" data-press="1" ${ev.done ? 'disabled' : ''}>${CLOCK.running ? 'Stop' : 'Start'}</button><button data-act="clock-reset" data-p="${path}" aria-label="Reset clock">↺</button></div>
-      ${CLOCK.running && !ev.done ? '<p class="tiny" style="text-align:center;margin:0;color:var(--warn)">Clock running — stop it (Yame) to record a score or penalty.</p>' : ''}
-      ${ev.phase === 'regular' && !ev.done ? `<button data-act="k-ev" data-p="${path}" data-t="timeup" ${CLOCK.running ? 'disabled' : ''}>Time up</button>` : ''}
-      ${ev.phase === 'kettei' && !opts.ketteiOnly ? `<button data-act="k-ev" data-p="${path}" data-t="ketteiend">End Kettei-sen</button>` : ''}
-      ${ev.phase === 'kettei' && opts.ketteiOnly ? `<button data-act="k-ev" data-p="${path}" data-t="ketteiend">Time up · judges decide</button>` : ''}
+  const phaseTxt = ev.done ? `${ev.winner ? (ev.winner === 'a' ? 'Aka' : 'Shiro') + ' · ' : ''}${ev.method}` : ev.phase === 'kettei' ? 'Kettei-sen · first Waza-ari wins' : ev.phase === 'hantei' ? 'Hantei · Court Judges decide' : opts.ketteiOnly ? 'Representative Kettei-sen' : 'Shobu Ippon';
+  const hint = ev.done ? '' : ev.phase === 'hantei' ? 'Time is up with no score. Record the Court Judges’ decision with the Hantei button of the winner.'
+    : CLOCK.running ? 'Clock running — Stop (Yame) to record a score or penalty.'
+    : waitStart ? (ev.phase === 'kettei' ? 'Kettei-sen: press Start when the Shu-shin calls Hajime.' : 'Press Start when the Shu-shin calls Hajime.') : '';
+  const showClock = !ev.done && ev.phase !== 'hantei';
+  return `<div class="board${waitStart ? ' await-start' : ''}${ev.phase === 'hantei' && !ev.done ? ' await-hantei' : ''}">${corner('a')}<div class="mid"><div class="phase">${esc(phaseTxt)}</div>
+      <div class="clock${clockLeft() <= 0 ? ' zero' : ''}" id="clock" data-time-path="${path}">${fmtClock(clockLeft())}</div>
+      ${showClock ? `<button id="clock-btn" class="clock-go ${CLOCK.running ? 'stop' : 'start'}${waitStart ? ' next' : ''}" data-act="clock" data-press="1">${CLOCK.running ? 'Stop' : 'Start'}</button>` : ''}
+      ${hint ? `<p class="next-hint">${esc(hint)}</p>` : ''}
+      <div class="row" style="justify-content:center;gap:6px;flex-wrap:wrap">${showClock ? `<button class="sm" data-act="clock-reset" data-p="${path}" aria-label="Reset clock">↺ Reset clock</button>` : ''}
+      ${ev.phase === 'regular' && !ev.done ? `<button class="sm" data-act="k-ev" data-p="${path}" data-t="timeup" ${CLOCK.running ? 'disabled' : ''}>Time up</button>` : ''}
+      ${ev.phase === 'kettei' && !opts.ketteiOnly ? `<button class="sm" data-act="k-ev" data-p="${path}" data-t="ketteiend" ${CLOCK.running ? 'disabled' : ''}>End Kettei-sen</button>` : ''}
+      ${ev.phase === 'kettei' && opts.ketteiOnly ? `<button class="sm" data-act="k-ev" data-p="${path}" data-t="ketteiend" ${CLOCK.running ? 'disabled' : ''}>Time up · judges decide</button>` : ''}</div>
       <button data-act="k-undo" data-p="${path}" ${log.length ? '' : 'disabled'}>Undo last</button>${logHTML(log)}</div>${corner('b')}</div>`;
 }
 function kogoPanel(log, path, r, opts) {
@@ -405,7 +433,7 @@ function logRecHTML(log, kogo, names, o) {
       if (after.exchange !== ex) { ex = after.exchange; rows.push(`<tr class="rec-sep atk-${after.offense === 'a' ? 'a' : 'b'}"><td colspan="3">${phase === 'kettei' ? 'Kettei-sen · ' : ''}Exchange ${ex} · ${after.offense === 'a' ? esc(names.a) + ' (Aka)' : esc(names.b) + ' (Shiro)'} attacks</td></tr>`); }
       return;
     }
-    if (e.t === 'timeup' || e.t === 'ketteiend') { rows.push(`<tr class="rec-sep"><td colspan="3">${e.t === 'timeup' ? 'Time up' : 'Kettei-sen time up'}${after.phase === 'kettei' ? ' → Kettei-sen (scores reset)' : after.phase === 'hantei' ? ' → Court Judges (Hantei)' : ''}</td></tr>`); phase = after.phase; return; }
+    if (e.t === 'timeup' || e.t === 'ketteiend') { rows.push(`<tr class="rec-sep"><td colspan="3">${e.t === 'timeup' ? 'Time up' : 'Kettei-sen time up'}${after.phase === 'kettei' ? ' → Kettei-sen (first Waza-ari wins)' : after.phase === 'hantei' ? ' → Court Judges (Hantei)' : ''}</td></tr>`); phase = after.phase; return; }
     const who = e.s ? `<span class="belt ${e.s}" style="display:inline-block;height:12px;vertical-align:middle"></span> ${esc(e.s === 'a' ? names.a : names.b)}` : '';
     rows.push(`<tr><td class="num tiny">${i + 1}</td><td>${who} · ${esc((EV_LABEL[e.t] || e.t) + (e.t === 'tento' && e.exec ? ' · penalty match (no points)' : ''))}</td><td class="n">${after.cur ? after.cur.a + '–' + after.cur.b : ''}</td></tr>`);
     if (kogo && e.ae && !after.done) { // exchange ended by this score / penalty

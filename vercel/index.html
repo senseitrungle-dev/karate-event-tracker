@@ -599,16 +599,28 @@ body { font-weight: 450; }
 /* v1.18 phones: bigger type needs room — the bottom-tab labels keep their size, connection status moves to the About pop-up (tap the logo) */
 @media (max-width: 760px) { .bn { font-size: 12px; padding-left: 0; padding-right: 0; } .bn span { letter-spacing: -.015em; } .bnav .bn { opacity: 1; } .bnav-in { gap: 2px; padding-left: 4px; padding-right: 4px; } }
 @media (max-width: 480px) { .bar .bar-in > .chip:not(.aka) { display: none; } .bar .brand small { font-size: .62rem; } }
+
+/* v1.19 — the clock button is the ring manager's main control */
+.clock-go { display: block; width: 100%; min-height: 64px; font: 800 1.45rem var(--f-display); letter-spacing: .06em; text-transform: uppercase; border-radius: 14px; border: 0; color: #fff; }
+.clock-go.start { background: var(--go); }
+.clock-go.stop { background: var(--aka-bg); }
+.clock-go.next { box-shadow: 0 0 0 5px color-mix(in srgb, var(--go) 40%, transparent); animation: nudge 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .clock-go.next { animation: none; } }
+.next-hint { text-align: center; margin: 0; font-size: .82rem; font-weight: 600; color: var(--ink-2); }
+.board.await-start .corner button { opacity: .45; }
+.board.await-hantei .corner button[data-t="hantei"] { background: var(--go); color: #fff; border-color: var(--go); font-weight: 800; box-shadow: 0 0 0 4px color-mix(in srgb, var(--go) 35%, transparent); }
+.board.await-hantei .corner button:not([data-t="hantei"]) { opacity: .45; }
+.jrow2.pr .pctl select { max-width: 260px; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.18.0 */
+<script>/* Karate Event Tracker v1.20.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.18.0';
+  const VERSION = '1.20.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -3053,14 +3065,33 @@ function tiebreakForm(did, P) {
 /* ===== scoresheet (WTKF 2009) ===== */
 const CLOCK = { left: 0, running: false, t0: 0, base: 0, timer: null, key: '' };
 function stopClock() { if (CLOCK.timer) clearInterval(CLOCK.timer); CLOCK.timer = null; if (CLOCK.running) { CLOCK.left = Math.max(0, CLOCK.base - (Date.now() - CLOCK.t0) / 1000); CLOCK.running = false; } }
-function setClock(sec, key) { stopClock(); CLOCK.left = sec; CLOCK.base = sec; CLOCK.key = key || CLOCK.key; paintClock(); }
+function setClock(sec, key) { stopClock(); CLOCK.left = sec; CLOCK.base = sec; CLOCK.key = key || CLOCK.key; CLOCK.await = true; paintClock(); }   // await: waiting for the Shu-shin's Hajime
 function clockLeft() { return CLOCK.running ? Math.max(0, CLOCK.base - (Date.now() - CLOCK.t0) / 1000) : CLOCK.left; }
 function toggleClock() {
   if (CLOCK.running) { stopClock(); }
-  else { if (clockLeft() <= 0) return; CLOCK.base = CLOCK.left; CLOCK.t0 = Date.now(); CLOCK.running = true; CLOCK.timer = setInterval(() => { paintClock(); if (clockLeft() <= 0) { stopClock(); CLOCK.left = 0; clockChanged(); } }, 200); }
+  else { if (clockLeft() <= 0) return; CLOCK.await = false; CLOCK.base = CLOCK.left; CLOCK.t0 = Date.now(); CLOCK.running = true; CLOCK.timer = setInterval(() => { paintClock(); if (clockLeft() <= 0) { stopClock(); CLOCK.left = 0; if (!clockExpired()) clockChanged(); } }, 200); }
   clockChanged();
 }
 /** Scoring buttons are only live while the clock is stopped (Yame), so the sheet is redrawn on every start / stop. */
+/**
+ * Shobu Ippon: the clock reached zero (v1.19). Regular time: a lead wins on points, a tie goes to Kettei-sen — the
+ * clock is reset to the Kettei-sen time and waits for the Shu-shin to restart (scores stay on the board); no Kettei-sen
+ * time set → Hantei. Kettei-sen time out with no score → Hantei (Court Judges). Returns true when the sheet was redrawn.
+ */
+function clockExpired() {
+  const M = S.modal; if (!M || M.type !== 'score') return false;
+  const host = $('#score-root [data-time-path]'); if (!host) return false;
+  const path = host.dataset.timePath, d = loadDraft(M.key), dv = DC.divBy[M.did], sc = scoringOf(dv);
+  const log = logAt(d, path), o = { kettei: sc.ketteiTime > 0, allowDraw: path.startsWith('bouts'), ketteiOnly: path === 'daihyo' };
+  const ev = KT.kumiteEval(log, o); if (ev.done || ev.phase === 'hantei') return false;
+  log.push({ t: ev.phase === 'regular' ? 'timeup' : 'ketteiend', auto: 1 });
+  const after = KT.kumiteEval(log, o);
+  if (after.phase === 'kettei') { setClock(sc.ketteiTime); toast(`Time up · tied — Kettei-sen. Clock reset to ${fmtClock(sc.ketteiTime)}; press Start when the Shu-shin restarts.`); }
+  else if (after.phase === 'hantei') toast('Time up with no score — Hantei: record the Court Judges’ decision.');
+  else if (after.done) toast(`Time up · ${after.winner ? (after.winner === 'a' ? 'Aka' : 'Shiro') + ' wins · ' : ''}${after.method}`);
+  draftChanged();
+  return true;
+}
 function clockChanged() {
   if (S.modal && S.modal.type === 'score' && $('#score-root .board .corner button[data-act="k-ev"]')) renderScore(true); else paintClock();
 }
@@ -3068,7 +3099,7 @@ function paintClock() {
   const el = $('#clock'); if (!el) return;
   // write only on change: replacing a button's text while it is held down can cancel the click
   const l = clockLeft(), t = fmtClock(Math.ceil(l)); if (el.textContent !== t) el.textContent = t; el.classList.toggle('zero', l <= 0);
-  const b = $('#clock-btn'), bt = CLOCK.running ? 'Stop' : 'Start'; if (b && b.textContent !== bt) b.textContent = bt;
+  const b = $('#clock-btn'), bt = CLOCK.running ? 'Stop' : 'Start'; if (b && b.textContent !== bt) { b.textContent = bt; b.classList.toggle('stop', CLOCK.running); b.classList.toggle('start', !CLOCK.running); }
 }
 
 /** Big, unmistakable winner banner in the winner's corner colour (Aka red / Shiro white). */
@@ -3091,6 +3122,7 @@ function openScore(did, mid) {
   S.modal = { type: 'score', did, mid, key: draftKey(did, mid), sig: '', refresh: () => renderScore(false) };
   const dv = DC.divBy[did]; const sc = scoringOf(dv);
   setClock(sc.boutTime, S.modal.key + ':main');
+  try { const lg = (loadDraft(S.modal.key).log) || []; if (lg.length && kindOf(dv) === 'kumite' && kumiteStyle(dv) !== 'kogo' && KT.kumiteEval(lg, { kettei: sc.ketteiTime > 0 }).phase === 'kettei') setClock(sc.ketteiTime); } catch (e) { /* ignore */ }
   openModal('<div id="score-root"></div>', { wide: true, nofocus: true });
   renderScore(true);
 }
@@ -3151,24 +3183,32 @@ function logHTML(log) { return `<div class="log">${log.slice(-6).map(e => `<span
 function kumitePanel(log, path, sc, r, opts) {
   if (opts.kogo) return kogoPanel(log, path, r, opts);
   const ev = KT.kumiteEval(log, opts);
+  const reg = ev.score !== ev.cur ? ev.score : null;          // Kettei-sen: the regular-time scores stay on the board
+  const waitStart = !ev.done && ev.phase !== 'hantei' && !CLOCK.running && CLOCK.await && clockLeft() > 0;
   const corner = (s) => {
     const st = ev.st[s];
     const name = s === 'a' ? entName(r.a) : entName(r.b);
     const dis = ev.done || CLOCK.running ? 'disabled' : '';
     const b = (t, l, cls) => `<button class="${cls || ''}" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="${t}" ${dis}${t === 'tento' ? ' title="Fall: Ten-to penalty match (no points). After time has expired: 1 point to the opponent."' : ''}>${l}</button>`;
     return `<div class="corner ${s}${cornerState(ev.done, ev.winner, s)}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${ev.done && ev.winner === s ? WIN_CHIP : ''}</div>
-      <div class="who">${esc(opts.names ? opts.names[s] || name : name)}</div><div class="big">${ev.cur[s]}</div>
+      <div class="who">${esc(opts.names ? opts.names[s] || name : name)}</div><div class="big">${reg ? reg[s] + ev.cur[s] : ev.cur[s]}</div>
       <div class="tally">Waza-ari ${st.waza} · Jo-gai ${st.jogai} · K ${st.keikoku} · C ${st.chui}${st.tento || st.tentoX ? ' · Ten-to ' + (st.tento + st.tentoX) : ''}</div>
       ${ev.hansokuDue.includes(s) ? '<div class="tally" style="font-weight:700">Second Chui — Court Judges decide Han-soku</div>' : ''}
       <div class="btns">${b('waza', 'Waza-ari')}${b('ippon', 'Ippon')}${b('jogai', 'Jo-gai', 'pen')}${b('keikoku', 'Kei-koku', 'pen')}${b('chui', 'Chui', 'pen')}${b('tento', 'Ten-to', 'pen')}${b('hansoku', 'Han-soku', 'pen')}${ev.phase === 'hantei' ? `<button data-act="k-ev" data-p="${path}" data-s="${s}" data-t="hantei">Hantei</button>` : '<span></span>'}</div></div>`;
   };
-  const phaseTxt = ev.done ? `${ev.winner ? (ev.winner === 'a' ? 'Aka' : 'Shiro') + ' · ' : ''}${ev.method}` : ev.phase === 'kettei' ? `Kettei-sen · no carry-over · first Waza-ari wins${ev.score ? ` (regular ${ev.score.a}–${ev.score.b})` : ''}` : ev.phase === 'hantei' ? 'Hantei · Court Judges decide' : opts.ketteiOnly ? 'Representative Kettei-sen' : 'Shobu Ippon';
-  return `<div class="board">${corner('a')}<div class="mid"><div class="phase">${esc(phaseTxt)}</div>
-      <div class="clock" id="clock">${fmtClock(clockLeft())}</div><div class="row" style="justify-content:center"><button id="clock-btn" data-act="clock" data-press="1" ${ev.done ? 'disabled' : ''}>${CLOCK.running ? 'Stop' : 'Start'}</button><button data-act="clock-reset" data-p="${path}" aria-label="Reset clock">↺</button></div>
-      ${CLOCK.running && !ev.done ? '<p class="tiny" style="text-align:center;margin:0;color:var(--warn)">Clock running — stop it (Yame) to record a score or penalty.</p>' : ''}
-      ${ev.phase === 'regular' && !ev.done ? `<button data-act="k-ev" data-p="${path}" data-t="timeup" ${CLOCK.running ? 'disabled' : ''}>Time up</button>` : ''}
-      ${ev.phase === 'kettei' && !opts.ketteiOnly ? `<button data-act="k-ev" data-p="${path}" data-t="ketteiend">End Kettei-sen</button>` : ''}
-      ${ev.phase === 'kettei' && opts.ketteiOnly ? `<button data-act="k-ev" data-p="${path}" data-t="ketteiend">Time up · judges decide</button>` : ''}
+  const phaseTxt = ev.done ? `${ev.winner ? (ev.winner === 'a' ? 'Aka' : 'Shiro') + ' · ' : ''}${ev.method}` : ev.phase === 'kettei' ? 'Kettei-sen · first Waza-ari wins' : ev.phase === 'hantei' ? 'Hantei · Court Judges decide' : opts.ketteiOnly ? 'Representative Kettei-sen' : 'Shobu Ippon';
+  const hint = ev.done ? '' : ev.phase === 'hantei' ? 'Time is up with no score. Record the Court Judges’ decision with the Hantei button of the winner.'
+    : CLOCK.running ? 'Clock running — Stop (Yame) to record a score or penalty.'
+    : waitStart ? (ev.phase === 'kettei' ? 'Kettei-sen: press Start when the Shu-shin calls Hajime.' : 'Press Start when the Shu-shin calls Hajime.') : '';
+  const showClock = !ev.done && ev.phase !== 'hantei';
+  return `<div class="board${waitStart ? ' await-start' : ''}${ev.phase === 'hantei' && !ev.done ? ' await-hantei' : ''}">${corner('a')}<div class="mid"><div class="phase">${esc(phaseTxt)}</div>
+      <div class="clock${clockLeft() <= 0 ? ' zero' : ''}" id="clock" data-time-path="${path}">${fmtClock(clockLeft())}</div>
+      ${showClock ? `<button id="clock-btn" class="clock-go ${CLOCK.running ? 'stop' : 'start'}${waitStart ? ' next' : ''}" data-act="clock" data-press="1">${CLOCK.running ? 'Stop' : 'Start'}</button>` : ''}
+      ${hint ? `<p class="next-hint">${esc(hint)}</p>` : ''}
+      <div class="row" style="justify-content:center;gap:6px;flex-wrap:wrap">${showClock ? `<button class="sm" data-act="clock-reset" data-p="${path}" aria-label="Reset clock">↺ Reset clock</button>` : ''}
+      ${ev.phase === 'regular' && !ev.done ? `<button class="sm" data-act="k-ev" data-p="${path}" data-t="timeup" ${CLOCK.running ? 'disabled' : ''}>Time up</button>` : ''}
+      ${ev.phase === 'kettei' && !opts.ketteiOnly ? `<button class="sm" data-act="k-ev" data-p="${path}" data-t="ketteiend" ${CLOCK.running ? 'disabled' : ''}>End Kettei-sen</button>` : ''}
+      ${ev.phase === 'kettei' && opts.ketteiOnly ? `<button class="sm" data-act="k-ev" data-p="${path}" data-t="ketteiend" ${CLOCK.running ? 'disabled' : ''}>Time up · judges decide</button>` : ''}</div>
       <button data-act="k-undo" data-p="${path}" ${log.length ? '' : 'disabled'}>Undo last</button>${logHTML(log)}</div>${corner('b')}</div>`;
 }
 function kogoPanel(log, path, r, opts) {
@@ -3457,7 +3497,7 @@ function logRecHTML(log, kogo, names, o) {
       if (after.exchange !== ex) { ex = after.exchange; rows.push(`<tr class="rec-sep atk-${after.offense === 'a' ? 'a' : 'b'}"><td colspan="3">${phase === 'kettei' ? 'Kettei-sen · ' : ''}Exchange ${ex} · ${after.offense === 'a' ? esc(names.a) + ' (Aka)' : esc(names.b) + ' (Shiro)'} attacks</td></tr>`); }
       return;
     }
-    if (e.t === 'timeup' || e.t === 'ketteiend') { rows.push(`<tr class="rec-sep"><td colspan="3">${e.t === 'timeup' ? 'Time up' : 'Kettei-sen time up'}${after.phase === 'kettei' ? ' → Kettei-sen (scores reset)' : after.phase === 'hantei' ? ' → Court Judges (Hantei)' : ''}</td></tr>`); phase = after.phase; return; }
+    if (e.t === 'timeup' || e.t === 'ketteiend') { rows.push(`<tr class="rec-sep"><td colspan="3">${e.t === 'timeup' ? 'Time up' : 'Kettei-sen time up'}${after.phase === 'kettei' ? ' → Kettei-sen (first Waza-ari wins)' : after.phase === 'hantei' ? ' → Court Judges (Hantei)' : ''}</td></tr>`); phase = after.phase; return; }
     const who = e.s ? `<span class="belt ${e.s}" style="display:inline-block;height:12px;vertical-align:middle"></span> ${esc(e.s === 'a' ? names.a : names.b)}` : '';
     rows.push(`<tr><td class="num tiny">${i + 1}</td><td>${who} · ${esc((EV_LABEL[e.t] || e.t) + (e.t === 'tento' && e.exec ? ' · penalty match (no points)' : ''))}</td><td class="n">${after.cur ? after.cur.a + '–' + after.cur.b : ''}</td></tr>`);
     if (kogo && e.ae && !after.done) { // exchange ended by this score / penalty
@@ -4219,7 +4259,7 @@ function peopleHTML() {
       <p class="tiny muted">${FB.on ? 'They sign in with Google using this email; the role is applied automatically when they first sign in.' : 'After creating the invite you can open it in Gmail, Outlook or your mail app, or copy it. claude.ai only lets people in whom you share the page with, so also add this email in the page’s <b>Share</b> menu as an <b>Editor</b> (ring managers need edit access to record scores). When they open the tracker they enter the invitation code from the email and get their role; you can also assign them yourself under “Not assigned” once they have opened it.'}</p>
       ${inv.length ? `<div class="label" style="margin-top:6px">Waiting for them to open it</div><div class="jlist">${inv.map(i => `<div class="jrow2"><span style="min-width:0"><b>${esc(i.email)}</b><span class="dojo">${esc(ROLE_NAME[i.role] || i.role)}${i.role === 'manager' ? ' · ' + esc(ringName(i.ringId)) : ''}${i.code ? ' · code <b>' + esc(i.code) + '</b>' : ''}</span></span><button class="sm" data-act="invite-mail" data-id="${esc(i.id)}">Send / copy</button><button class="sm danger" data-act="invite-cancel" data-id="${esc(i.id)}">Cancel</button></div>`).join('')}</div>` : ''}</div>
     <div class="grid2" style="margin-top:14px"><div class="card stack"><div class="row between"><h3>Directors of this event</h3><span class="chip">${dirs.length}</span></div><div class="jlist">${dirs.map(dirRow).join('') || '<span class="small muted">Only app admins.</span>'}</div><p class="tiny muted">Directors have full control of this event only. App admins can also open every event. <b>Remove from event</b> takes away a person’s roles in this event only — they keep their access to every other event.</p></div>
-      <div class="card stack"><div class="row between"><h3>Not assigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${un.map(id => row(id, ringSel(id, 'Assign…'))).join('') || `<span class="small muted">Everyone who has ${where} has a role.</span>`}</div>
+      <div class="card stack"><div class="row between"><h3>Not assigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${un.slice().sort((a, b) => ((ev.staffIds || []).includes(b) ? 1 : 0) - ((ev.staffIds || []).includes(a) ? 1 : 0)).map(id => row(id, `${(ev.staffIds || []).includes(id) ? '<span class="chip warn" title="Added to this event by the app admin">Added · pick a ring</span>' : ''}${ringSel(id, 'Assign…')}`)).join('') || `<span class="small muted">Everyone who has ${where} has a role.</span>`}</div>
         <p class="tiny muted">People appear here after they have ${where}${FB.on ? '' : ' (share the page with them as Editor first)'}.</p></div>
       ${ringCards}</div>`;
 }
@@ -4260,6 +4300,7 @@ async function removeFromEvent(id) {
 /* ---------- invites ---------- */
 function inviteMailto(i) { const m = inviteParts(i); return `mailto:${encodeURIComponent(m.to)}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`; }
 function inviteParts(i) {
+  if (i.scope === 'app') return appInviteParts(i);
   const ev = S.events[i.eventId] || curEvent() || {};
   const url = FB.on ? location.origin + location.pathname : (i.appUrl || (S.access && S.access.appUrl) || '');
   const what = i.role === 'director' ? `a director of ${ev.name || 'our tournament'}` : `ring manager of ${ringName(i.ringId)} at ${ev.name || 'our tournament'}`;
@@ -4271,6 +4312,21 @@ function inviteParts(i) {
        `4. In the tracker, enter your invitation code ${i.code || ''} on the Dashboard (“Have an invitation code?”) and you’ll be set up as ${what}.`];
   const subject = `Invitation: ${i.role === 'director' ? 'Director' : 'Ring manager'} — ${ev.name || 'Karate Event Tracker'}`;
   const body = [`Hello,`, ``, `You’re invited to help run ${ev.name || 'our karate tournament'} as ${what}.`, ``, ...steps, ``, `Thank you!`].join('\n');
+  return { to: i.email, subject, body };
+}
+/** v1.20: an invitation to the app itself (no event yet) — as a tournament director or as a ring manager. */
+function appInviteParts(i) {
+  const url = FB.on ? location.origin + location.pathname : (i.appUrl || (S.access && S.access.appUrl) || '');
+  const org = i.role === 'organizer';
+  const what = org ? 'a tournament director — you can create your own events, and be added to others' : 'a ring manager — a tournament director will add you to their event and ring';
+  const steps = FB.on
+    ? [`1. Open ${url || 'the tracker site'}`, `2. Sign in with Google using this email address (${i.email}).`, `3. Your invitation is accepted automatically.`, org ? '4. Use “New event” to create your tournament; events you are added to also appear on your list.' : '4. Events you are added to appear on your list when you sign in.']
+    : [`1. If you don’t have a Claude account yet, create a free one at https://claude.ai using this email address (${i.email}).`,
+       `2. Open the tracker: ${url || '(link to follow)'}`,
+       `3. If it says you don’t have access, click “Request access” — I’ll approve it.`,
+       `4. Enter your invitation code ${i.code || ''} under “Have an invitation code?” to accept.`];
+  const subject = `Invitation: ${org ? 'Tournament director' : 'Ring manager'} — Karate Event Tracker`;
+  const body = [`Hello,`, ``, `You’re invited to the Karate Event Tracker as ${what}.`, ``, ...steps, ``, `Thank you!`].join('\n');
   return { to: i.email, subject, body };
 }
 /* The claude.ai page runs in a sandboxed frame that may not be allowed to open the mail app by itself, so the
@@ -4300,6 +4356,16 @@ async function saveInvite(form) {
   const i = { email, role: v.role, eventId: S.evId, ringId: v.role === 'manager' ? v.ringId : '', at: new Date().toISOString(), by: S.myId || '' };
   if (!FB.on) i.code = inviteCode(); // claude.ai never tells the page a guest's email, so the invitee enters this code
   if (!FB.on && v.appUrl) { i.appUrl = v.appUrl; if (!S.access || S.access.appUrl !== v.appUrl) await guard(() => S.store.set('meta/access', Object.assign({}, S.access || {}, { appUrl: v.appUrl }))); }
+  const id = FB.on ? email : uid();
+  if (!(await guard(() => S.store.set('invites/' + id, i), `Invite created for ${email}`))) return;
+  form.reset();
+  inviteSheet(Object.assign({ id }, i));
+}
+async function saveAppInvite(form) {
+  const v = fd(form), email = String(v.email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('Enter a valid email address.', true); return; }
+  const i = { email, scope: 'app', role: v.role === 'organizer' ? 'organizer' : 'member', at: new Date().toISOString(), by: S.myId || '' };
+  if (!FB.on) i.code = inviteCode();
   const id = FB.on ? email : uid();
   if (!(await guard(() => S.store.set('invites/' + id, i), `Invite created for ${email}`))) return;
   form.reset();
@@ -4335,6 +4401,7 @@ function codeCardHTML() {
 async function applyInvites(list) {
   for (const i of list) {
     try {
+      if (i.scope === 'app') { await acceptAppInvite(i); continue; }
       if (i.role === 'director' && i.eventId) {
         const ev = await S.store.get(P.event(i.eventId));
         if (ev) await S.store.update(P.event(i.eventId), { directorIds: [...new Set((ev.directorIds || []).concat(S.myId))] });
@@ -4350,6 +4417,21 @@ async function applyInvites(list) {
       if (i.role === 'director' && FB.on) setTimeout(() => location.reload(), 900);
     } catch (e) { console.warn('invite', e); }
   }
+}
+/** Accept an app-level invitation: tournament directors may create events; everyone becomes pickable for events. */
+async function acceptAppInvite(i) {
+  const org = i.role === 'organizer', now = new Date().toISOString(), as = org ? 'director' : 'manager';
+  if (FB.on) {
+    if (org && !S.isAdmin && !S.isOrganizer) await FB.fs.doc('roles/' + S.myId).set({ role: 'organizer', at: now, via: 'invite' });
+    await FB.fs.doc('users/' + S.myId).set({ invitedAs: as, acceptedAt: now, email: S.myEmail || '' }, { merge: true });
+  } else {
+    if (org) { const cur = (S.access && S.access.directors) || []; if (!cur.includes(S.myId)) await S.store.set('meta/access', Object.assign({}, S.access || {}, { directors: cur.concat(S.myId) })); }
+    const p = (S.people || {})[S.myId] || {};
+    await S.store.set('people/' + S.myId, Object.assign({}, p, { seenAt: now, label: S.myName || p.label || '', invitedAs: as, acceptedAt: now, email: S.myEmail || '' }));
+  }
+  await S.store.del('invites/' + i.id);
+  toast(org ? 'Welcome — you’re a tournament director: create events with “New event”.' : 'Welcome — a tournament director can now add you to their event.');
+  if (org && FB.on) setTimeout(() => location.reload(), 900);
 }
 /** Record that this person opened the tracker with edit access (claude.ai), so directors can pick them. */
 async function notePresence() {
@@ -4446,7 +4528,31 @@ function adminCardHTML() {
         ${known.length ? `<select id="org-add" data-change="org-add" aria-label="Approve someone as tournament director">${opt('', 'Approve someone who has opened the app…', '')}${known.map(id => opt(id, nm(id), '')).join('')}</select>` : ''}</div>
       <div class="stack"><div class="label">App admins (every event)</div>${admins.map(id => `<div class="jrow2"><span>${esc(nm(id))}</span><span></span>${id === S.ownerId || id === S.myId ? `<span class="chip plain">${id === S.ownerId ? 'Owner' : 'You'}</span>` : `<button class="sm danger" data-act="admin-remove" data-id="${esc(id)}">Remove</button>`}</div>`).join('')}
         <p class="tiny muted">App admins can open and manage every event. Tournament directors open only the events they created or were added to.</p></div></div>
-    ${accessByEventHTML()}${accessByDirectorHTML()}</details>`;
+    ${appInviteHTML()}${accessByEventHTML()}${accessByDirectorHTML()}</details>`;
+}
+/* ---------- v1.20: invite people to the app by email, then add them to events ---------- */
+function appInviteHTML() {
+  const pend = Object.entries(S.invites || {}).filter(([, i]) => i && i.scope === 'app').sort((a, b) => String(a[1].email).localeCompare(String(b[1].email)));
+  const acc = Object.entries(S.people || {}).filter(([, p]) => p && p.invitedAs).map(([id, p]) => ({ id, p })).sort((a, b) => personName(a.id).localeCompare(personName(b.id)));
+  const evs = allEventsSorted().filter(e => !e.locked);
+  const roleName = r => r === 'organizer' || r === 'director' ? 'Tournament director' : 'Ring manager';
+  const where = id => evs.filter(e => evDirectors(e).includes(id) || (e.managerIds || []).includes(id) || (e.staffIds || []).includes(id))
+    .map(e => `<span class="chip ${evDirectors(e).includes(id) ? '' : 'plain'}">${esc(e.name)} · ${evDirectors(e).includes(id) ? 'Director' : 'Ring manager'}</span>`).join(' ');
+  return `<div class="label" style="margin-top:14px">Invite people to the app</div>
+    <form id="f-app-invite" data-form="app-invite" class="fgrid" style="margin-top:6px">
+      <label class="f span"><span>Email</span><input name="email" id="ai-email" type="email" required placeholder="name@example.com" autocomplete="off"></label>
+      <label class="f"><span>Invite as</span><select name="role" id="ai-role">${opt('organizer', 'Tournament director (can create events)', 'organizer')}${opt('member', 'Ring manager (added to events by a director)', 'organizer')}</select></label>
+      <div class="row" style="align-items:flex-end"><button class="primary" type="submit">Create invite</button></div></form>
+    <p class="tiny muted">${FB.on ? 'They sign in with Google using this email; the invitation is accepted on their first sign-in.' : 'They enter the invitation code from the email to accept. Also add their email in the page’s Share menu as an Editor.'} Once accepted, add them to an event below — or a director adds them on the event’s People tab.</p>
+    ${pend.length ? `<div class="label" style="margin-top:8px">Waiting to be accepted</div><div class="jlist">${pend.map(([k, i]) => `<div class="jrow2"><span style="min-width:0"><b>${esc(i.email)}</b><span class="dojo">${roleName(i.role)}${i.code ? ' · code <b>' + esc(i.code) + '</b>' : ''} · ${esc(timeAgo(i.at))}</span></span><button class="sm" data-act="invite-mail" data-id="${esc(k)}">Send / copy</button><button class="sm danger" data-act="invite-cancel" data-id="${esc(k)}">Cancel</button></div>`).join('')}</div>` : ''}
+    ${acc.length ? `<div class="label" style="margin-top:8px">Accepted — add to an event</div><div class="jlist">${acc.map(({ id, p }) => `<div class="jrow2 pr"><span class="jname" style="display:flex;flex-direction:column;min-width:0"><b>${esc(personName(id))}</b><span class="dojo">${esc(p.email || personEmail(id) || '')} · ${roleName(p.invitedAs)}${organizerIds().includes(id) ? ' · can create events' : ''}</span><span class="pill-list" style="margin-top:4px">${where(id) || '<span class="tiny muted">Not in an event yet</span>'}</span></span>
+        ${evs.length ? `<div class="pctl"><select id="ae-ev-${esc(id)}" aria-label="Event for ${esc(personName(id))}">${evs.map(e => opt(e.id, e.name, '')).join('')}</select><select id="ae-role-${esc(id)}" aria-label="Role">${opt('manager', 'as Ring manager', p.invitedAs === 'director' ? 'director' : 'manager')}${opt('director', 'as Director', p.invitedAs === 'director' ? 'director' : 'manager')}</select><button class="sm go" data-act="app-add-event" data-id="${esc(id)}">Add to event</button></div>` : ''}</div>`).join('')}</div>` : ''}`;
+}
+/** Admin adds an accepted person to an event: director → directorIds; ring manager → event staff (the event's director picks the ring). */
+async function addToEvent(id, eid, role) {
+  const e = S.events[eid]; if (!e || !id) return;
+  if (role === 'director') { await setEventDirector(eid, id, true); return; }
+  await guard(() => S.store.update(P.event(eid), { staffIds: [...new Set((e.staffIds || []).concat(id))] }), `${personName(id)} added to ${e.name} — the director assigns the ring on the People tab`);
 }
 /* ---------- app admin: who directs which event (add / remove) ---------- */
 function allEventsSorted() { return Object.values(S.events).sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || ''))); }
@@ -4765,6 +4871,7 @@ const ACT = {
   'dir-remove': async el => { if (!(await confirmBox(`Remove ${personName(el.dataset.id)} as director of this event? They keep any other role here and their other events.`, 'Remove as director', true))) return; setDirector(el.dataset.id, false); },
   'invite-mail': el => { const i = S.invites[el.dataset.id]; if (i) inviteSheet(Object.assign({ id: el.dataset.id }, i)); },
   'invite-copy': () => copyInvite(),
+  'app-add-event': el => { const id = el.dataset.id, ev = ($('#ae-ev-' + CSS.escape(id)) || {}).value, rl = ($('#ae-role-' + CSS.escape(id)) || {}).value; if (ev) addToEvent(id, ev, rl); },
   'invite-cancel': el => guard(() => S.store.del('invites/' + el.dataset.id), 'Invite cancelled'),
   'ring-unmanage': el => { const r = S.d.rings[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'rings', r.id), { managerIds: (r.managerIds || []).filter(x => x !== el.dataset.uid) })).then(scheduleSync); },
   'staff-add': el => { const ev = curEvent(); $$('.dd-list').forEach(x => { x.hidden = true; }); guard(() => S.store.update(P.event(ev.id), { staffIds: [...new Set((ev.staffIds || []).concat(el.dataset.uid))] }), 'Staff added'); },
@@ -5076,6 +5183,7 @@ function wire() {
     }
     else if (k === 'judge') saveJudge(f);
     else if (k === 'invite') saveInvite(f);
+    else if (k === 'app-invite') saveAppInvite(f);
     else if (k === 'code') redeemCode(fd(f).code);
     else if (k === 'session') {
       const v = fd(f); if (!v.title || !v.date) { toast('Title and date are required.', true); return; }

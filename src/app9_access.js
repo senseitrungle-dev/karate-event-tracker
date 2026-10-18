@@ -78,7 +78,31 @@ function adminCardHTML() {
         ${known.length ? `<select id="org-add" data-change="org-add" aria-label="Approve someone as tournament director">${opt('', 'Approve someone who has opened the app…', '')}${known.map(id => opt(id, nm(id), '')).join('')}</select>` : ''}</div>
       <div class="stack"><div class="label">App admins (every event)</div>${admins.map(id => `<div class="jrow2"><span>${esc(nm(id))}</span><span></span>${id === S.ownerId || id === S.myId ? `<span class="chip plain">${id === S.ownerId ? 'Owner' : 'You'}</span>` : `<button class="sm danger" data-act="admin-remove" data-id="${esc(id)}">Remove</button>`}</div>`).join('')}
         <p class="tiny muted">App admins can open and manage every event. Tournament directors open only the events they created or were added to.</p></div></div>
-    ${accessByEventHTML()}${accessByDirectorHTML()}</details>`;
+    ${appInviteHTML()}${accessByEventHTML()}${accessByDirectorHTML()}</details>`;
+}
+/* ---------- v1.20: invite people to the app by email, then add them to events ---------- */
+function appInviteHTML() {
+  const pend = Object.entries(S.invites || {}).filter(([, i]) => i && i.scope === 'app').sort((a, b) => String(a[1].email).localeCompare(String(b[1].email)));
+  const acc = Object.entries(S.people || {}).filter(([, p]) => p && p.invitedAs).map(([id, p]) => ({ id, p })).sort((a, b) => personName(a.id).localeCompare(personName(b.id)));
+  const evs = allEventsSorted().filter(e => !e.locked);
+  const roleName = r => r === 'organizer' || r === 'director' ? 'Tournament director' : 'Ring manager';
+  const where = id => evs.filter(e => evDirectors(e).includes(id) || (e.managerIds || []).includes(id) || (e.staffIds || []).includes(id))
+    .map(e => `<span class="chip ${evDirectors(e).includes(id) ? '' : 'plain'}">${esc(e.name)} · ${evDirectors(e).includes(id) ? 'Director' : 'Ring manager'}</span>`).join(' ');
+  return `<div class="label" style="margin-top:14px">Invite people to the app</div>
+    <form id="f-app-invite" data-form="app-invite" class="fgrid" style="margin-top:6px">
+      <label class="f span"><span>Email</span><input name="email" id="ai-email" type="email" required placeholder="name@example.com" autocomplete="off"></label>
+      <label class="f"><span>Invite as</span><select name="role" id="ai-role">${opt('organizer', 'Tournament director (can create events)', 'organizer')}${opt('member', 'Ring manager (added to events by a director)', 'organizer')}</select></label>
+      <div class="row" style="align-items:flex-end"><button class="primary" type="submit">Create invite</button></div></form>
+    <p class="tiny muted">${FB.on ? 'They sign in with Google using this email; the invitation is accepted on their first sign-in.' : 'They enter the invitation code from the email to accept. Also add their email in the page’s Share menu as an Editor.'} Once accepted, add them to an event below — or a director adds them on the event’s People tab.</p>
+    ${pend.length ? `<div class="label" style="margin-top:8px">Waiting to be accepted</div><div class="jlist">${pend.map(([k, i]) => `<div class="jrow2"><span style="min-width:0"><b>${esc(i.email)}</b><span class="dojo">${roleName(i.role)}${i.code ? ' · code <b>' + esc(i.code) + '</b>' : ''} · ${esc(timeAgo(i.at))}</span></span><button class="sm" data-act="invite-mail" data-id="${esc(k)}">Send / copy</button><button class="sm danger" data-act="invite-cancel" data-id="${esc(k)}">Cancel</button></div>`).join('')}</div>` : ''}
+    ${acc.length ? `<div class="label" style="margin-top:8px">Accepted — add to an event</div><div class="jlist">${acc.map(({ id, p }) => `<div class="jrow2 pr"><span class="jname" style="display:flex;flex-direction:column;min-width:0"><b>${esc(personName(id))}</b><span class="dojo">${esc(p.email || personEmail(id) || '')} · ${roleName(p.invitedAs)}${organizerIds().includes(id) ? ' · can create events' : ''}</span><span class="pill-list" style="margin-top:4px">${where(id) || '<span class="tiny muted">Not in an event yet</span>'}</span></span>
+        ${evs.length ? `<div class="pctl"><select id="ae-ev-${esc(id)}" aria-label="Event for ${esc(personName(id))}">${evs.map(e => opt(e.id, e.name, '')).join('')}</select><select id="ae-role-${esc(id)}" aria-label="Role">${opt('manager', 'as Ring manager', p.invitedAs === 'director' ? 'director' : 'manager')}${opt('director', 'as Director', p.invitedAs === 'director' ? 'director' : 'manager')}</select><button class="sm go" data-act="app-add-event" data-id="${esc(id)}">Add to event</button></div>` : ''}</div>`).join('')}</div>` : ''}`;
+}
+/** Admin adds an accepted person to an event: director → directorIds; ring manager → event staff (the event's director picks the ring). */
+async function addToEvent(id, eid, role) {
+  const e = S.events[eid]; if (!e || !id) return;
+  if (role === 'director') { await setEventDirector(eid, id, true); return; }
+  await guard(() => S.store.update(P.event(eid), { staffIds: [...new Set((e.staffIds || []).concat(id))] }), `${personName(id)} added to ${e.name} — the director assigns the ring on the People tab`);
 }
 /* ---------- app admin: who directs which event (add / remove) ---------- */
 function allEventsSorted() { return Object.values(S.events).sort((a, b) => String(b.startDate || '').localeCompare(String(a.startDate || ''))); }

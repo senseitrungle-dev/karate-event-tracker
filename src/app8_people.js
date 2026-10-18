@@ -44,7 +44,7 @@ function peopleHTML() {
       <p class="tiny muted">${FB.on ? 'They sign in with Google using this email; the role is applied automatically when they first sign in.' : 'After creating the invite you can open it in Gmail, Outlook or your mail app, or copy it. claude.ai only lets people in whom you share the page with, so also add this email in the page’s <b>Share</b> menu as an <b>Editor</b> (ring managers need edit access to record scores). When they open the tracker they enter the invitation code from the email and get their role; you can also assign them yourself under “Not assigned” once they have opened it.'}</p>
       ${inv.length ? `<div class="label" style="margin-top:6px">Waiting for them to open it</div><div class="jlist">${inv.map(i => `<div class="jrow2"><span style="min-width:0"><b>${esc(i.email)}</b><span class="dojo">${esc(ROLE_NAME[i.role] || i.role)}${i.role === 'manager' ? ' · ' + esc(ringName(i.ringId)) : ''}${i.code ? ' · code <b>' + esc(i.code) + '</b>' : ''}</span></span><button class="sm" data-act="invite-mail" data-id="${esc(i.id)}">Send / copy</button><button class="sm danger" data-act="invite-cancel" data-id="${esc(i.id)}">Cancel</button></div>`).join('')}</div>` : ''}</div>
     <div class="grid2" style="margin-top:14px"><div class="card stack"><div class="row between"><h3>Directors of this event</h3><span class="chip">${dirs.length}</span></div><div class="jlist">${dirs.map(dirRow).join('') || '<span class="small muted">Only app admins.</span>'}</div><p class="tiny muted">Directors have full control of this event only. App admins can also open every event. <b>Remove from event</b> takes away a person’s roles in this event only — they keep their access to every other event.</p></div>
-      <div class="card stack"><div class="row between"><h3>Not assigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${un.map(id => row(id, ringSel(id, 'Assign…'))).join('') || `<span class="small muted">Everyone who has ${where} has a role.</span>`}</div>
+      <div class="card stack"><div class="row between"><h3>Not assigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${un.slice().sort((a, b) => ((ev.staffIds || []).includes(b) ? 1 : 0) - ((ev.staffIds || []).includes(a) ? 1 : 0)).map(id => row(id, `${(ev.staffIds || []).includes(id) ? '<span class="chip warn" title="Added to this event by the app admin">Added · pick a ring</span>' : ''}${ringSel(id, 'Assign…')}`)).join('') || `<span class="small muted">Everyone who has ${where} has a role.</span>`}</div>
         <p class="tiny muted">People appear here after they have ${where}${FB.on ? '' : ' (share the page with them as Editor first)'}.</p></div>
       ${ringCards}</div>`;
 }
@@ -85,6 +85,7 @@ async function removeFromEvent(id) {
 /* ---------- invites ---------- */
 function inviteMailto(i) { const m = inviteParts(i); return `mailto:${encodeURIComponent(m.to)}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`; }
 function inviteParts(i) {
+  if (i.scope === 'app') return appInviteParts(i);
   const ev = S.events[i.eventId] || curEvent() || {};
   const url = FB.on ? location.origin + location.pathname : (i.appUrl || (S.access && S.access.appUrl) || '');
   const what = i.role === 'director' ? `a director of ${ev.name || 'our tournament'}` : `ring manager of ${ringName(i.ringId)} at ${ev.name || 'our tournament'}`;
@@ -96,6 +97,21 @@ function inviteParts(i) {
        `4. In the tracker, enter your invitation code ${i.code || ''} on the Dashboard (“Have an invitation code?”) and you’ll be set up as ${what}.`];
   const subject = `Invitation: ${i.role === 'director' ? 'Director' : 'Ring manager'} — ${ev.name || 'Karate Event Tracker'}`;
   const body = [`Hello,`, ``, `You’re invited to help run ${ev.name || 'our karate tournament'} as ${what}.`, ``, ...steps, ``, `Thank you!`].join('\n');
+  return { to: i.email, subject, body };
+}
+/** v1.20: an invitation to the app itself (no event yet) — as a tournament director or as a ring manager. */
+function appInviteParts(i) {
+  const url = FB.on ? location.origin + location.pathname : (i.appUrl || (S.access && S.access.appUrl) || '');
+  const org = i.role === 'organizer';
+  const what = org ? 'a tournament director — you can create your own events, and be added to others' : 'a ring manager — a tournament director will add you to their event and ring';
+  const steps = FB.on
+    ? [`1. Open ${url || 'the tracker site'}`, `2. Sign in with Google using this email address (${i.email}).`, `3. Your invitation is accepted automatically.`, org ? '4. Use “New event” to create your tournament; events you are added to also appear on your list.' : '4. Events you are added to appear on your list when you sign in.']
+    : [`1. If you don’t have a Claude account yet, create a free one at https://claude.ai using this email address (${i.email}).`,
+       `2. Open the tracker: ${url || '(link to follow)'}`,
+       `3. If it says you don’t have access, click “Request access” — I’ll approve it.`,
+       `4. Enter your invitation code ${i.code || ''} under “Have an invitation code?” to accept.`];
+  const subject = `Invitation: ${org ? 'Tournament director' : 'Ring manager'} — Karate Event Tracker`;
+  const body = [`Hello,`, ``, `You’re invited to the Karate Event Tracker as ${what}.`, ``, ...steps, ``, `Thank you!`].join('\n');
   return { to: i.email, subject, body };
 }
 /* The claude.ai page runs in a sandboxed frame that may not be allowed to open the mail app by itself, so the
@@ -125,6 +141,16 @@ async function saveInvite(form) {
   const i = { email, role: v.role, eventId: S.evId, ringId: v.role === 'manager' ? v.ringId : '', at: new Date().toISOString(), by: S.myId || '' };
   if (!FB.on) i.code = inviteCode(); // claude.ai never tells the page a guest's email, so the invitee enters this code
   if (!FB.on && v.appUrl) { i.appUrl = v.appUrl; if (!S.access || S.access.appUrl !== v.appUrl) await guard(() => S.store.set('meta/access', Object.assign({}, S.access || {}, { appUrl: v.appUrl }))); }
+  const id = FB.on ? email : uid();
+  if (!(await guard(() => S.store.set('invites/' + id, i), `Invite created for ${email}`))) return;
+  form.reset();
+  inviteSheet(Object.assign({ id }, i));
+}
+async function saveAppInvite(form) {
+  const v = fd(form), email = String(v.email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('Enter a valid email address.', true); return; }
+  const i = { email, scope: 'app', role: v.role === 'organizer' ? 'organizer' : 'member', at: new Date().toISOString(), by: S.myId || '' };
+  if (!FB.on) i.code = inviteCode();
   const id = FB.on ? email : uid();
   if (!(await guard(() => S.store.set('invites/' + id, i), `Invite created for ${email}`))) return;
   form.reset();
@@ -160,6 +186,7 @@ function codeCardHTML() {
 async function applyInvites(list) {
   for (const i of list) {
     try {
+      if (i.scope === 'app') { await acceptAppInvite(i); continue; }
       if (i.role === 'director' && i.eventId) {
         const ev = await S.store.get(P.event(i.eventId));
         if (ev) await S.store.update(P.event(i.eventId), { directorIds: [...new Set((ev.directorIds || []).concat(S.myId))] });
@@ -175,6 +202,21 @@ async function applyInvites(list) {
       if (i.role === 'director' && FB.on) setTimeout(() => location.reload(), 900);
     } catch (e) { console.warn('invite', e); }
   }
+}
+/** Accept an app-level invitation: tournament directors may create events; everyone becomes pickable for events. */
+async function acceptAppInvite(i) {
+  const org = i.role === 'organizer', now = new Date().toISOString(), as = org ? 'director' : 'manager';
+  if (FB.on) {
+    if (org && !S.isAdmin && !S.isOrganizer) await FB.fs.doc('roles/' + S.myId).set({ role: 'organizer', at: now, via: 'invite' });
+    await FB.fs.doc('users/' + S.myId).set({ invitedAs: as, acceptedAt: now, email: S.myEmail || '' }, { merge: true });
+  } else {
+    if (org) { const cur = (S.access && S.access.directors) || []; if (!cur.includes(S.myId)) await S.store.set('meta/access', Object.assign({}, S.access || {}, { directors: cur.concat(S.myId) })); }
+    const p = (S.people || {})[S.myId] || {};
+    await S.store.set('people/' + S.myId, Object.assign({}, p, { seenAt: now, label: S.myName || p.label || '', invitedAs: as, acceptedAt: now, email: S.myEmail || '' }));
+  }
+  await S.store.del('invites/' + i.id);
+  toast(org ? 'Welcome — you’re a tournament director: create events with “New event”.' : 'Welcome — a tournament director can now add you to their event.');
+  if (org && FB.on) setTimeout(() => location.reload(), 900);
 }
 /** Record that this person opened the tracker with edit access (claude.ai), so directors can pick them. */
 async function notePresence() {

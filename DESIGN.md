@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.18.0 Requirements & Design
+# Karate Event Tracker · v1.20.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -339,3 +339,21 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Regular-weight text darker / easier to read**: secondary text colours darkened — `--ink-2` #4d525c → #33373f, `--ink-3` #7b808a → #50555e (dark mode brightened: #b4b9c4 → #d3d7de, #868c98 → #aeb3bd); body text uses a slightly heavier weight (medium where the font has it); faded helper text in the title bar and score boards made more opaque.
 - **Phones, to make room**: bottom-tab labels keep a fixed 12 px with tighter spacing ("Dashboard" fits); on screens narrower than 480 px the connection chip (Online / Local mode) leaves the title bar — the status is in the About pop-up (tap the logo); ● LIVE stays.
 - Verify: screenshots desktop + iPhone (no sideways scrolling, tab labels fit); full regression.
+
+## 40. v1.19.0 — Shobu Ippon time-up flow; big Start/Stop (2026-10-17)
+- **Locate / diagnose**: when the match clock reached 0:00 nothing happened — the ring manager had to notice and press "Time up", reset the clock for Kettei-sen and end it by hand.
+- **Fix — automatic on 0:00** (Shobu Ippon individual bouts, team rounds, Representative and Fukugo kumite):
+  - Regular time, one side ahead → that side wins on points.
+  - Regular time, scores tied → **Kettei-sen**: the clock resets to the Kettei-sen time (1:30 by default, set per division), stays stopped and waits for the Shu-shin's Hajime; the regular-time scores **stay on the board** (the next Waza-ari decides). No Kettei-sen time set → Hantei.
+  - Kettei-sen time runs out with no score → **Hantei**: the clock and Start are hidden, the two Hantei buttons are highlighted for the Court Judges' decision.
+  - Team rounds still end in Hiki-wake on a tie (team total decides). The manual "Time up" / "End Kettei-sen" buttons remain as small fallbacks.
+- **Start/Stop**: a full-width 64 px button under the clock — green **Start**, red **Stop**. While the clock waits for Hajime (match start, after Kettei-sen reset) it pulses as the one expected next action, a one-line hint says what to do, and the scoring buttons are dimmed. Re-opening a sheet that is in Kettei-sen sets the Kettei-sen clock.
+- Verify: test/timeup.js (fake clock: Start highlighted; tie at 0:00 → Kettei-sen, 1:30, stopped, 4–4 kept; Kettei-sen 0:00 → Hantei with highlighted buttons → winner; lead at 0:00 → winner on points); full regression.
+
+## 41. v1.20.0 — invite people to the app by email (2026-10-17)
+- **Home → App admin card → Invite people to the app**: email + "Invite as" **Tournament director** (may create events) or **Ring manager** (added to events by a director). The invitation sheet (Gmail / Outlook / mail app / copy) explains the next steps; pending invitations are listed with Send / copy and Cancel.
+- **Accepting**: on the Vercel site the invitee signs in with Google using that email — the invitation is accepted automatically (tournament director → `roles/{uid}` organizer, so "New event" appears; everyone → `users/{uid}.invitedAs`); on claude.ai they enter the invitation code (also add them as an Editor in Share).
+- **Adding to events**: the admin card lists accepted people with the events they are in, and an **Add to event** control (event + as Director / as Ring manager). A ring manager added this way joins the event's staff (they can open it) and shows on the event's People tab as "Added · pick a ring" for the event director to choose the ring. Directors can still add people themselves on their event's People tab.
+- **Sign-in**: invitees see exactly the events they were added to (plus any they create, for tournament directors). Directors create events as before.
+- **Rules** (`firestore.rules` v1.20.0 — **redeploy**): only app admins can create app-level invitations; an invitee may create their own `roles/{uid}` = organizer only while an app invitation for their email with role organizer exists.
+- Verify: test/appinvite.js (Firebase mock with rules: invite director + ring manager, both accept on sign-in, rights checked, non-admin cannot create app invitations, admin adds them to an event, they open it with the right role, People tab marker); full regression.
