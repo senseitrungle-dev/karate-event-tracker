@@ -138,6 +138,7 @@ function positionsFor(dv, m, br) {
   const k = kindOf(dv), sc = scoringOf(dv);
   if (k === 'kata') return KT.officialPositions('kata', sc.judges);
   if (k === 'fukugo' && KT.fukugoPart(m, br) === 'kitei') return KT.officialPositions('kitei', 5);
+  if (k === 'kumite' && ncrLevel(dv)) return KT.officialPositions('kata', sc.judges);   // NCR kyu kumite: Shu-shin + 2 (or 4) Fuku-shin, no Kan-sa
   return KT.officialPositions('kumite');
 }
 /** Short judge name under a judge column (position index → officials key). */

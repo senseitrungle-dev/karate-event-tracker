@@ -553,5 +553,83 @@ t('legacy dojo field still separates', () => {
   const e = ents(8, i => i < 2 ? 'Same' : 'D' + i);
   for (let s = 1; s <= 20; s++) { const sl = KT.placeSlots(e, 8, rng(s)); assert.notEqual(half(sl.indexOf('c1'), 8), half(sl.indexOf('c2'), 8)); }
 });
+
+t('NCR kyu: divisions by level, kata lists, kumite styles, open/mixed options', () => {
+  const d = KT.ncrDivisions();
+  const f = (lv, et, g, ag) => d.find(x => x.level === lv && x.eventType === et && (g === 'open' ? x.open : x.gender === g && !x.open) && x.group.includes(ag));
+  assert.equal(d.length, 4 * 2 * (2 + 2 + 1 + 1));   // 4 levels × youth/adult × (kata M/F, kumite M/F, team kata, enbu)
+  const l1 = f(1, 'IKATA', 'F', 'Youth');
+  assert.deepEqual([l1.minRank, l1.maxRank, l1.maxAge, l1.format, l1.rrPoolSize, l1.scoring.method, l1.scoring.judges], ['k10', 'k8', 17, 'RR', 6, 'flags', 3]);
+  assert.deepEqual(l1.kataList, ['Heian Shodan', 'Heian Nidan']);
+  assert.deepEqual(f(4, 'IKATA', 'M', 'Adult').kataList, ['Bassai Dai', 'Jion', 'Empi', 'Kanku Dai']);
+  assert.equal(f(4, 'IKATA', 'M', 'Adult').minAge, 18);
+  assert.deepEqual(['kyux', 'kyux', 'kyux', 'kogo'], [1, 2, 3, 4].map(n => f(n, 'IKUMITE', 'M', 'Adult').scoring.style));
+  assert.deepEqual([1, 2, 3].map(n => f(n, 'IKUMITE', 'M', 'Adult').scoring.exchanges.length), [2, 3, 3]);
+  assert.deepEqual([1, 2, 3].map(n => f(n, 'IKUMITE', 'F', 'Youth').scoring.decide), ['flags', 'flags', 'points']);
+  assert.ok(f(1, 'IKUMITE', 'M', 'Adult').scoring.styleExplicit);
+  const tk = f(2, 'TKATA', 'open', 'Youth'); assert.ok(tk && tk.format === 'KP' && tk.scoring.method === 'scores' && tk.kataList.includes('Heian Yondan'));
+  assert.equal(f(3, 'IKATA', 'M', 'Adult').name, 'Kyu Level 3 Adult Men Individual Kata');
+  const mixed = KT.ncrDivisions({ byGender: false, byAge: false, events: ['IKATA'] });
+  assert.equal(mixed.length, 4); assert.ok(mixed.every(x => x.open && x.minAge == null && x.maxAge == null));
+  // open divisions take any gender, same-gender divisions win when both fit
+  const comp = { gender: 'F', rank: 'k9', age: 12 };
+  assert.equal(KT.candidateDivisions(comp, 'IKATA', mixed.map((x, i) => Object.assign({ id: 'm' + i }, x)), '2026-01-01')[0].level, 1);
+  const both = d.filter(x => x.eventType === 'IKATA').concat(mixed).map((x, i) => Object.assign({ id: 'x' + i }, x));
+  const c = KT.candidateDivisions(comp, 'IKATA', both, '2026-01-01'); assert.ok(!c[0].open && c[0].gender === 'F');
+  // white belt = 10th kyu fits Level 1; 3rd kyu → Level 4
+  assert.equal(KT.candidateDivisions({ gender: 'M', rank: 'k3', age: 30 }, 'IKUMITE', d.map((x, i) => Object.assign({ id: 'y' + i }, x)), '2026-01-01')[0].scoring.style, 'kogo');
+});
+t('NCR kumite L1/L2: guided exchanges then flags; contact → Han-soku', () => {
+  let r = KT.ncrEval([], 1); assert.deepEqual([r.exchange, r.total, r.offense, r.call], [1, 4, 'a', 'Aka jodan tsuki — hajime']);
+  r = KT.ncrEval([{ t: 'next' }, { t: 'next' }], 1); assert.deepEqual([r.offense, r.call], ['b', 'Shiro jodan tsuki — hajime']);
+  r = KT.ncrEval(Array(4).fill({ t: 'next' }), 1); assert.equal(r.phase, 'hantei');
+  r = KT.ncrEval(Array(4).fill({ t: 'next' }).concat({ t: 'hantei', s: 'b' }), 1); assert.ok(r.done && r.winner === 'b' && /Hantei/.test(r.method));
+  r = KT.ncrEval([{ t: 'hantei', s: 'a' }], 1); assert.ok(!r.done);                       // no hantei before the exchanges are done
+  r = KT.ncrEval([{ t: 'hansoku', s: 'a' }], 1); assert.ok(r.done && r.winner === 'b');
+  r = KT.ncrEval([{ t: 'next' }, { t: 'next' }], 2); assert.equal(r.call, 'Aka chudan mae-geri — hajime');
+  r = KT.ncrEval(Array(6).fill({ t: 'next' }), 2); assert.equal(r.phase, 'hantei');
+  r = KT.ncrEval([{ t: 'keikoku', s: 'a' }], 2); assert.ok(!r.done && r.warn.a === 1);
+});
+t('NCR kumite L3: waza-ari, Saki 2 / Chui 4 to the opponent, tie → hantei', () => {
+  let r = KT.ncrEval([{ t: 'waza', s: 'a' }].concat(Array(6).fill({ t: 'next' })), 3); assert.ok(r.done && r.winner === 'a' && r.method === 'Points');
+  r = KT.ncrEval([{ t: 'chui', s: 'a' }].concat(Array(6).fill({ t: 'next' })), 3); assert.ok(r.done && r.winner === 'b' && r.cur.b === 4);
+  r = KT.ncrEval([{ t: 'waza', s: 'a' }, { t: 'chui', s: 'a' }].concat(Array(6).fill({ t: 'next' })), 3); assert.equal(r.phase, 'hantei');   // 4–4
+  r = KT.ncrEval([{ t: 'saki', s: 'b' }].concat(Array(6).fill({ t: 'next' })), 3); assert.equal(r.cur.a, 2); assert.equal(r.winner, 'a');
+  r = KT.ncrEval(Array(6).fill({ t: 'next' }), 3); assert.equal(r.phase, 'hantei');
+  r = KT.ncrEval([{ t: 'ippon', s: 'a' }].concat(Array(6).fill({ t: 'next' })), 3); assert.equal(r.phase, 'hantei');  // no ippon at Level 3
+  r = KT.ncrEval([{ t: 'next' }, { t: 'next' }], 3); assert.equal(r.call, 'Aka ippon waza — hajime');
+});
+t('Round robin pool size (NCR: pools of up to 6)', () => {
+  const dv = { id: 'r', eventType: 'IKATA', format: 'RR', rrPoolSize: 6, scoring: { method: 'flags', judges: 3 } };
+  let br = KT.generateBracket(dv, ents(6), rng(3)); assert.equal(Object.keys(br.pools).length, 1); assert.equal(Object.values(br.matches).filter(m => m.stage === 'P').length, 15);
+  br = KT.generateBracket(dv, ents(7), rng(3)); assert.deepEqual(Object.values(br.pools).map(p => p.length).sort(), [3, 4]);
+  br = KT.generateBracket(Object.assign({}, dv, { rrPoolSize: null }), ents(6), rng(3)); assert.equal(Object.keys(br.pools).length, 2);   // default stays 4
+});
+t('Kyu levels: custom rank groups & exchanges (v1.32)', () => {
+  const groups = [
+    { label: 'Beginner', minRank: 'k10', maxRank: 'k7', decide: 'flags', kata: ['Taikyoku Shodan'], exchanges: ['Jodan oi-tsuki', 'Chudan oi-tsuki', 'Mae-geri'] },
+    { label: 'Intermediate', minRank: 'k6', maxRank: 'k4', decide: 'flags', exchanges: ['Gyaku-tsuki', 'Mawashi-geri'] },
+    { label: 'Advanced', minRank: 'k3', maxRank: 'k1', decide: 'flags', exchanges: ['Free attack'] }];
+  assert.deepEqual(KT.kyuGroupsCheck(groups), { errors: [], gaps: [] });
+  const d = KT.ncrDivisions({ groups, events: ['IKATA', 'IKUMITE'] });
+  assert.equal(d.length, 3 * 2 * 4);
+  const b = d.find(x => x.group === 'Beginner Youth' && x.eventType === 'IKUMITE' && x.gender === 'F');
+  assert.deepEqual([b.minRank, b.maxRank, b.scoring.style, b.scoring.decide, b.scoring.exchanges.length], ['k10', 'k7', 'kyux', 'flags', 3]);
+  assert.deepEqual(d.find(x => x.group === 'Beginner Adult' && x.eventType === 'IKATA').kataList, ['Taikyoku Shodan']);
+  // the exchanges run through the list for Aka, then Shiro; flags decide
+  const cfg = { exchanges: b.scoring.exchanges, decide: 'flags' };
+  let r = KT.kyuEval([], cfg); assert.deepEqual([r.total, r.call], [6, 'Aka jodan oi-tsuki — hajime']);
+  r = KT.kyuEval(Array(3).fill({ t: 'next' }), cfg); assert.equal(r.call, 'Shiro jodan oi-tsuki — hajime');
+  r = KT.kyuEval(Array(6).fill({ t: 'next' }).concat({ t: 'waza', s: 'a' }), cfg); assert.equal(r.phase, 'hantei');
+  r = KT.kyuEval([{ t: 'waza', s: 'a' }].concat(Array(6).fill({ t: 'next' })), cfg); assert.equal(r.phase, 'hantei');   // flags: no points at all
+  r = KT.kyuEval(Array(2).fill({ t: 'next' }).concat({ t: 'hantei', s: 'b' }), { exchanges: ['Free attack'], decide: 'flags' }); assert.ok(r.done && r.winner === 'b');
+  // validation: overlap, reversed ranks, no exchanges, gaps
+  const bad = KT.kyuGroupsCheck([{ label: 'A', minRank: 'k10', maxRank: 'k5', exchanges: ['x'] }, { label: 'B', minRank: 'k6', maxRank: 'k8', exchanges: [] }]);
+  assert.ok(bad.errors.some(e => /lowest rank is above/.test(e)) && bad.errors.some(e => /at least one exchange/.test(e)));
+  const ov = KT.kyuGroupsCheck([{ label: 'A', minRank: 'k10', maxRank: 'k5', exchanges: ['x'] }, { label: 'B', minRank: 'k6', maxRank: 'k1', exchanges: ['y'] }]);
+  assert.ok(ov.errors.some(e => /both include/.test(e)));
+  assert.deepEqual(KT.kyuGroupsCheck([{ label: 'A', minRank: 'k10', maxRank: 'k4', exchanges: ['x'] }]).gaps, ['k3', 'k2', 'k1']);
+  assert.equal(KT.defaultKyuGroups().length, 4);
+});
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

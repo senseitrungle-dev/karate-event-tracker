@@ -240,8 +240,9 @@ function scoringOf(dv) {
 function scoringLabel(dv) {
   const s = scoringOf(dv), k = kindOf(dv);
   if (dv.format === 'KP') return `Score pools · ${s.judges} judges`;
-  if (k === 'kata') return s.method === 'scores' ? `Scores · ${s.judges} judges` : `Flags · ${s.judges} judges`;
-  if (k === 'kumite') return s.style === 'kogo' ? 'Ko-go Kumite · 6 exchanges' : `Shobu Ippon · ${fmtClock(s.boutTime)}`;
+  if (k === 'kata') return (s.method === 'scores' ? `Scores · ${s.judges} judges` : `Flags · ${s.judges} judges`) + (dv.format === 'RR' && +dv.rrPoolSize ? ` · pools of ${dv.rrPoolSize}` : '');
+  if (k === 'kumite' && s.style === 'kyux') return `Kyu exchanges · ${(s.exchanges || []).length * 2} · ${s.decide === 'points' ? 'points, tie → flags' : 'flags decide'}`;
+  if (k === 'kumite') return KT.NCR_STYLES[s.style] ? `NCR Level ${KT.NCR_STYLES[s.style]} kumite · ${KT.NCR_EX[KT.NCR_STYLES[s.style]].length * 2} exchanges` : s.style === 'kogo' ? 'Ko-go Kumite · 6 exchanges' : `Shobu Ippon · ${fmtClock(s.boutTime)}`;
   if (k === 'teamkumite') return `${s.bouts} rounds · team total · ${fmtClock(s.boutTime)}`;
   if (k === 'fukugo') return `Kumite / Ki-tei alternating${s.style === 'kogo' ? ' (Ko-go)' : ''}`;
   return '';
@@ -253,6 +254,7 @@ function parseRank(s) {
   if (/^[kd]\d{1,2}$/.test(s)) return s;
   const words = { shodan: 'd1', nidan: 'd2', sandan: 'd3', yondan: 'd4', godan: 'd5', rokudan: 'd6', nanadan: 'd7', hachidan: 'd8', kudan: 'd9', judan: 'd10' };
   if (words[s]) return words[s];
+  if (/^white( belt)?$|^10th kyu$|^mukyu$/.test(s)) return 'k10';     // NCR Level 1 includes white belts
   const m = s.match(/(\d{1,2})\s*(st|nd|rd|th)?\s*(kyu|dan)/);
   if (m) return (m[3] === 'kyu' ? 'k' : 'd') + (+m[1]);
   return '';

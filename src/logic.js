@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.30.1';
+  const VERSION = '1.32.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -17,7 +17,7 @@ const KT = (function () {
   };
   const EVENT_ORDER = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'];
   const GENDERS = { M: 'Men', F: 'Women', X: 'Mixed' };
-  const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools of 4)', DE: 'Double elimination', DES: 'Double elimination (simplified)', KP: 'Kata score pools (8 per pool)' };
+  const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools)', DE: 'Double elimination', DES: 'Double elimination (simplified)', KP: 'Kata score pools (8 per pool)' };
   const ELIM_POOL = 8;
   const KP_POOL = 8, KP_ADV = 4;
   /** WTKF Competition Rules 2009, Kata Rules Art. 1-3 (pp. 62–63): permitted kata (Dai/Sho and series listed separately). */
@@ -58,7 +58,7 @@ const KT = (function () {
     const et = EVENT_TYPES[dv.eventType];
     const who = dv.belt === 'black' ? 'Black Belt' : 'Kyu';
     const grp = dv.group ? ' ' + dv.group : '';
-    return `${who}${grp} ${GENDERS[dv.gender] || ''} ${et ? et.label : ''}`.replace(/\s+/g, ' ').trim();
+    return `${who}${grp} ${dv.open ? 'Open' : GENDERS[dv.gender] || ''} ${et ? et.label : ''}`.replace(/\s+/g, ' ').trim();
   }
   /** WTKF defaults: kumite 1:30 with 1:30 Kettei-sen; women's individual kumite (and fukugo kumite) = Ko-go. */
   function defaultScoring(eventType) {
@@ -114,7 +114,100 @@ const KT = (function () {
       ['YS', 'TKATA', ['M', 'F'], [3, 3]], ['YS', 'ENBU', ['M', 'X'], [2, 2]], ['YS', 'TKUMITE', ['M', 'F'], [3, 4]],
     ],
   };
+  /* ---------- v1.31: Traditional Karate North Central Region (AAKF) — Tournament Rules for Kyu Rank Competitors v3.3 (Oct 2022) ----------
+     Levels: 1 = white belt, 9th & 8th kyu · 2 = 7th & 6th · 3 = 5th & 4th · 4 = 3rd–1st. Events: Individual Kata, Individual Kumite, Team (synchronized) Kata, Enbu.
+     Pools of up to 6, round robin or double elimination; kata first, then kumite. Kata head-to-head, flags, 3–5 judges, allowed kata per level.
+     Team kata: score, highest total wins. Kumite: level-specific exchange formats (L1–L3), L4 = WTKF Ko-go. Youth ≤ 17 / Adult 18+ (as for black belts). */
+  const NCR_LEVELS = [
+    { n: 1, label: 'Level 1', ranks: ['k10', 'k8'], kata: ['Heian Shodan', 'Heian Nidan'], style: 'ncr1' },
+    { n: 2, label: 'Level 2', ranks: ['k7', 'k6'], kata: ['Heian Sandan', 'Heian Yondan'], style: 'ncr2' },
+    { n: 3, label: 'Level 3', ranks: ['k5', 'k4'], kata: ['Heian Godan', 'Tekki Shodan'], style: 'ncr3' },
+    { n: 4, label: 'Level 4', ranks: ['k3', 'k1'], kata: ['Bassai Dai', 'Jion', 'Empi', 'Kanku Dai'], style: 'kogo' },
+  ];
+  const NCR_KYU = { id: 'ncr-kyu', label: 'NCR kyu rules (v3.3)', source: 'Traditional Karate North Central Region (AAKF) — Tournament Rules for Kyu Rank Competitors, v3.3, Oct 2022',
+    levels: NCR_LEVELS, events: ['IKATA', 'IKUMITE', 'TKATA', 'ENBU'], ages: { youth: ['Youth', null, 17], adult: ['Adult', 18, null] }, poolSize: 6 };
+  /** NCR kyu divisions. o: { byAge: true, byGender: true, format: 'RR'|'DE', judges: 3|5, events: [...] } */
+  function ncrDivisions(o) {
+    o = Object.assign({ byAge: true, byGender: true, format: 'RR', judges: 3, events: NCR_KYU.events }, o || {});
+    const ages = o.byAge ? [NCR_KYU.ages.youth, NCR_KYU.ages.adult] : [['', null, null]], out = [];
+    // levels: the event's own list (v1.32) or NCR v3.3
+    const LV = (o.groups && o.groups.length ? o.groups : defaultKyuGroups()).map((g, i) => ({ n: i + 1, label: g.label, ranks: [g.minRank, g.maxRank], kata: g.kata || [], decide: g.decide || 'flags', exchanges: (g.exchanges || []).filter(Boolean), custom: !!(o.groups && o.groups.length) }));
+    LV.forEach(L => ages.forEach(([ag, min, max], ai) => o.events.forEach((et, ei) => {
+      const T = EVENT_TYPES[et], team = T.team;
+      const genders = team || !o.byGender ? [null] : ['F', 'M'];
+      genders.forEach((g, gi) => {
+        const dv = { eventType: et, gender: g || 'X', open: !g, belt: 'kyu', group: [L.label, ag].filter(Boolean).join(' '), level: L.n, minAge: min, maxAge: max,
+          minRank: L.ranks[0], maxRank: L.ranks[1], bronze: 'two', reset: false, preset: NCR_KYU.id, order: L.n * 1000 + ai * 100 + ei * 10 + gi };
+        if (team) { dv.format = 'KP'; dv.scoring = Object.assign(defaultScoring(et), { method: 'scores', judges: o.judges }); dv.poolSize = 8; }
+        else { dv.format = o.format; dv.rrPoolSize = NCR_KYU.poolSize; if (o.format === 'DE') dv.poolCount = 0; dv.scoring = Object.assign(defaultScoring(et), { method: 'flags', judges: o.judges }); }
+        if (et === 'IKUMITE') {   // the level decides, not age/rank defaults
+          if (L.decide === 'kogo') dv.scoring.style = 'kogo';
+          else Object.assign(dv.scoring, { style: 'kyux', exchanges: L.exchanges.slice(), decide: L.decide === 'points' ? 'points' : 'flags' });
+          dv.scoring.styleExplicit = true;
+        }
+        if (et === 'IKATA' || et === 'TKATA') dv.kataList = L.kata.slice();
+        dv.name = divisionName(dv); out.push(dv);
+      });
+    })));
+    return out;
+  }
+  /** NCR kumite Levels 1–3 (Level 4 = Ko-go). Exchanges per side, attacker first Aka then Shiro.
+   *  L1/L2: no points — after the exchanges the Court Judges decide (hantei, flags); contact → Han-soku (L2: after a verbal warning).
+   *  L3: Waza-ari only, Saki 2 / Chui 4 points to the opponent, points decide, tie → hantei. */
+  const NCR_EX = {
+    1: [['jodan', 'Jodan oi-tsuki', 'jodan tsuki'], ['chudan', 'Chudan oi-tsuki', 'chudan tsuki']],
+    2: [['jodan', 'Jodan oi-tsuki', 'jodan tsuki'], ['chudan', 'Chudan oi-tsuki', 'chudan tsuki'], ['geri', 'Chudan mae-geri (back leg)', 'chudan mae-geri']],
+    3: [['tsuki', 'Tsuki waza — one punch, jodan or chudan', 'tsuki waza'], ['geri', 'Geri waza — mae-geri or mawashi-geri, chudan', 'geri waza'], ['ippon', 'Ippon waza — any one punch or kick', 'ippon waza']],
+  };
+  /** Kyu kumite with a list of exchanges (each side attacks through the whole list: Aka first, then Shiro).
+   *  cfg: { exchanges: ['Jodan oi-tsuki', …] or [[id, name, call], …], decide: 'flags' | 'points' }.
+   *  flags: no points — after the exchanges the Court Judges decide (hantei); contact → warning / Han-soku.
+   *  points: Waza-ari, Saki 2 / Chui 4 to the opponent; points decide, a tie → hantei. */
+  function kyuEval(log, cfg) {
+    const ex = (cfg.exchanges || []).map(e => Array.isArray(e) ? e : [String(e), String(e), String(e).toLowerCase()]).filter(e => e[1]);
+    const L = Math.max(1, ex.length), N = L * 2, points = cfg.decide === 'points';
+    let i = 1, done = false, winner = null, method = null, phase = 'regular';
+    const sc = { a: 0, b: 0 }, warn = { a: 0, b: 0 };
+    const end = (w, how) => { done = true; winner = w; method = how; };
+    const pen = points ? { saki: 2, chui: 4 } : {};
+    const finish = () => { if (points && sc.a !== sc.b) end(sc.a > sc.b ? 'a' : 'b', 'Points'); else phase = 'hantei'; };
+    for (const e of log || []) {
+      if (done) break;
+      const s = e.s;
+      if (e.t === 'next') { if (phase !== 'regular') continue; if (i < N) i++; else finish(); }
+      else if (e.t === 'waza' && points && phase === 'regular') sc[s] += PTS.waza;
+      else if (pen[e.t]) sc[OTHER[s]] += pen[e.t];
+      else if (e.t === 'keikoku') warn[s]++;
+      else if (e.t === 'hansoku') end(OTHER[s], cfg.level === 1 ? 'Han-soku (contact)' : 'Han-soku');
+      else if (e.t === 'kiken') end(OTHER[s], 'Ki-ken');
+      else if (e.t === 'hantei' && phase === 'hantei') end(s, 'Hantei (Court Judges’ flags)');
+    }
+    const k = (i - 1) % L, offense = i <= L ? 'a' : 'b', cur = ex[k] || ['', '—', '—'];
+    return { done, winner, method, phase: done ? 'done' : phase, exchange: i, total: N, offense, tech: cur[1], call: `${offense === 'a' ? 'Aka' : 'Shiro'} ${cur[2]} — hajime`, cur: sc, score: sc, warn, level: cfg.level || 0, decide: points ? 'points' : 'flags' };
+  }
+  function ncrEval(log, level) { return kyuEval(log, { exchanges: NCR_EX[level] || NCR_EX[1], decide: level === 3 ? 'points' : 'flags', level }); }
+  /** Default editable kyu levels for an event = NCR v3.3 (exchange lists as plain technique names). */
+  function defaultKyuGroups() {
+    return NCR_LEVELS.map(L => ({ id: 'L' + L.n, label: L.label, minRank: L.ranks[0], maxRank: L.ranks[1], kata: L.kata.slice(),
+      decide: L.style === 'kogo' ? 'kogo' : L.n === 3 ? 'points' : 'flags', exchanges: L.style === 'kogo' ? [] : NCR_EX[L.n].map(e => e[1]) }));
+  }
+  /** Check an event's kyu level list: [] if fine, else messages. Also returns gaps (ranks not covered) separately. */
+  function kyuGroupsCheck(groups) {
+    const err = [], seen = {};
+    (groups || []).forEach((g, i) => {
+      const n = g.label || `Level ${i + 1}`, lo = rankValue(g.minRank), hi = rankValue(g.maxRank);
+      if (!g.label) err.push(`Level ${i + 1} needs a name.`);
+      if (lo == null || hi == null || lo > 0 || hi > 0) err.push(`${n}: choose kyu ranks.`);
+      else if (lo > hi) err.push(`${n}: lowest rank is above highest rank.`);
+      else for (let v = lo; v <= hi; v++) { if (seen[v]) err.push(`${n} and ${seen[v]} both include ${rankLabel('k' + -v)}.`); seen[v] = n; }
+      if (g.decide !== 'kogo' && !(g.exchanges || []).filter(Boolean).length) err.push(`${n}: list at least one exchange (or choose WTKF Ko-go).`);
+    });
+    const gaps = []; for (let k = 10; k >= 1; k--) if (!seen[-k]) gaps.push('k' + k);
+    return { errors: [...new Set(err)], gaps };
+  }
+  const NCR_STYLES = { ncr1: 1, ncr2: 2, ncr3: 3 };
   const PRESETS = { [WTKF_WORLDS_2026.id]: WTKF_WORLDS_2026 };
+  PRESETS[NCR_KYU.id] = NCR_KYU;
   function presetDivisions(pr) {
     const out = [];
     pr.cats.forEach(([gk, et, genders, size], ci) => genders.forEach((g, gi) => {
@@ -170,8 +263,8 @@ const KT = (function () {
   function ageOf(c, asOf) { return c.dob ? ageOn(c.dob, asOf) : (c.age == null || c.age === '' ? null : +c.age); }
   function candidateDivisions(comp, eventType, divisions, asOf) {
     const age = ageOf(comp, asOf);
-    return divisions.filter(dv => dv.eventType === eventType && dv.gender === comp.gender && fitsDivision(dv, [age], [comp.rank]))
-      .sort((x, y) => spanOf(x) - spanOf(y) || (x.order || 0) - (y.order || 0) || String(x.id).localeCompare(String(y.id)));
+    return divisions.filter(dv => dv.eventType === eventType && (dv.gender === comp.gender || dv.open) && fitsDivision(dv, [age], [comp.rank]))
+      .sort((x, y) => (x.open ? 1 : 0) - (y.open ? 1 : 0) || spanOf(x) - spanOf(y) || (x.order || 0) - (y.order || 0) || String(x.id).localeCompare(String(y.id)));
   }
   function teamGender(members) {
     const g = new Set(members.map(m => m.gender));
@@ -180,8 +273,8 @@ const KT = (function () {
   function teamCandidates(team, members, divisions, asOf) {
     const g = teamGender(members);
     const ages = members.map(m => ageOf(m, asOf)), ranks = members.map(m => m.rank);
-    return divisions.filter(dv => dv.eventType === team.eventType && dv.gender === g && fitsDivision(dv, ages, ranks))
-      .sort((x, y) => spanOf(x) - spanOf(y) || (x.order || 0) - (y.order || 0));
+    return divisions.filter(dv => dv.eventType === team.eventType && (dv.gender === g || dv.open) && fitsDivision(dv, ages, ranks))
+      .sort((x, y) => (x.open ? 1 : 0) - (y.open ? 1 : 0) || spanOf(x) - spanOf(y) || (x.order || 0) - (y.order || 0));
   }
   /** Resolve the division each entrant lands in. Returns {divId: [entrantIds]} plus unplaced list. */
   function assignEntrants(competitors, teams, divisions, asOf) {
@@ -413,7 +506,7 @@ const KT = (function () {
     return rounds;
   }
   function genRR(ordered, opts) {
-    const pools = makePools(ordered, 4, 0, opts && opts.rnd), matches = {}, poolMap = {};
+    const pools = makePools(ordered, (opts && opts.size) || 4, 0, opts && opts.rnd), matches = {}, poolMap = {};
     pools.forEach((pl, p) => {
       const P = POOL_NAMES[p];
       poolMap[P] = pl.map(e => e.id);
@@ -453,7 +546,7 @@ const KT = (function () {
     }
     if (ordered.length < 2) return br;
     if (format === 'RR') {
-      const g = genRR(ordered, { advance: division.advance, bronze: br.bronze, rnd });
+      const g = genRR(ordered, { advance: division.advance, bronze: br.bronze, rnd, size: Math.min(8, Math.max(3, +division.rrPoolSize || 4)) });
       br.pools = g.pools; br.matches = g.matches; br.advance = g.advance;
     } else if (format === 'DE' || format === 'DES') {
       br.reset = false;
@@ -1082,7 +1175,7 @@ const KT = (function () {
 
   return {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
-    ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, presetDivisions, quotaIssues, teamSizeFor,
+    ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
     seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS,

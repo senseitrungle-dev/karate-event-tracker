@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.30.1 Requirements & Design
+# Karate Event Tracker · v1.32.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -480,3 +480,32 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Diagnose**: those checks (and "Every division is on a ring") only looked at *rings in use* (rings holding a division with competitors). With no competitors there are no rings in use, so "no ring is missing anything" was true for an empty list — nothing to check was counted as done.
 - **Fix**: each ring check now also requires at least one ring in use (and "Every division is on a ring" requires a division with competitors). When there is nothing yet, the item stays ✗/! and says why: "No divisions set up yet" / "No division has competitors yet" / "No rings set up yet" / "No ring has a division with competitors yet"; competitors and judges items say "No competitors registered yet" / "No judges added yet" / "No judges assigned to a ring yet".
 - Verify: test/emptychecks.js (new empty tournament: no item ticked, reasons shown, Go live disabled); golive.js, public.js, worlds2026.js; regression.
+
+## 55. v1.31.0 — NCR kyu rules for local & regional tournaments (2026-10-18)
+- **Source**: "Traditional Karate North Central Region (AAKF) — Tournament Rules for Kyu Rank Competitors (youths & adults)", v3.3, Oct 2022.
+- **Divisions → "NCR kyu rules"** (`KT.ncrDivisions`, `KT.NCR_KYU`) creates kyu divisions by level:
+  | Level | Ranks | Allowed kata | Kumite |
+  |---|---|---|---|
+  | 1 | White belt (10th), 9th, 8th kyu | Heian Shodan, Heian Nidan | 4 exchanges (oi-tsuki jodan, chudan per side), no points, Court Judges' flags; contact → Han-soku |
+  | 2 | 7th, 6th kyu | Heian Sandan, Heian Yondan | 6 exchanges (+ mae-geri chudan), flags; warning then Han-soku for contact |
+  | 3 | 5th, 4th kyu | Heian Godan, Tekki Shodan | 6 exchanges (tsuki / geri / ippon waza), Waza-ari only, Saki 2 / Chui 4 to opponent, points decide, tie → Hantei |
+  | 4 | 3rd–1st kyu | Bassai Dai, Jion, Empi, Kanku Dai | WTKF Ko-go Kumite |
+  - Events: Individual Kata, Individual Kumite, Team (synchronized) Kata, Enbu (options per event).
+  - Youth (≤17) / Adult (18+) and Women / Men separated by default; the rules allow mixing when a pool is too small and coaches agree → options create **Open** divisions (new `dv.open`: any gender; same-gender divisions are preferred when both fit) and/or no age split.
+  - Individual events: round robin **pools of up to 6** (new division setting "Round robin: pool size", `dv.rrPoolSize`; 7 → pools of 4 + 3) or double elimination; Individual Kata head-to-head with **flags, 3 judges** (option 5). Team kata / Enbu: scored (score pools), highest total wins.
+  - Running order: kata divisions before kumite within each level and age group (ring order).
+  - Existing kyu divisions not drawn are replaced (option); black-belt divisions never touched; event offers the chosen events.
+- **Scoring**: new kumite styles `ncr1` / `ncr2` / `ncr3` (`KT.ncrEval`) with a guided sheet: exchange "n of 4/6", the Shu-shin's call ("Aka jodan tsuki — hajime"), attacking/defending side, "Exchange done · next", then Hantei buttons (L1/L2, L3 on a tie); L3 Waza-ari does not end the exchange (each side has 2 chances to score); Saki disabled for the attacker. Officials for NCR kumite: Shu-shin + 2 (or 4) Fuku-shin, no Kan-sa. Styles can also be chosen on any kyu kumite division.
+- **Allowed kata** (`dv.kataList`, editable in division settings): shown on the head-to-head kata sheet with a picker per side limited to the list; the chosen kata are stored with the result and shown on the record.
+- Rank import understands "White belt" / "White" / "Mukyu" (= 10th kyu).
+- Fix found on the way: editing a division in Division settings dropped preset fields (quota, team size, preset) — now kept.
+- Verify: logic.test.js (NCR divisions, open/mixed preference, L1/L2/L3 exchange logic and points, RR pool size 6 / default 4); test/ncr.js (pop-up, 48 divisions, black belts untouched, kata before kumite, white belt import, 7 → pools 4 + 3, allowed-kata picker, 3 flags, L1 sheet → Hantei → confirm, 3 officials, L3 points); regression.
+
+## 56. v1.32.0 — each event's own kyu rank groups and kumite exchanges (2026-10-18)
+- **Requirement**: other regions group kyu ranks differently and use different kumite exchanges; for kyu ranks (1st kyu and below) the winner is decided by the Court Judges' flags.
+- **Divisions → Kyu rules (NCR) → "Edit rank groups & exchanges…"**: one card per level — name, lowest and highest kyu rank (White belt / 10th … 1st), allowed kata, **winner decided by** (Court Judges' flags — default for new levels; Waza-ari points with a tie → flags; WTKF Ko-go), and the **exchange list** (one technique per line; Aka attacks through the list, then Shiro). Add level / Remove level / Reset to NCR v3.3. Saved on the event (`ev.kyuGroups`; empty = NCR v3.3).
+  - Checks (`KT.kyuGroupsCheck`): a name, kyu ranks, lowest ≤ highest, no rank in two levels, at least one exchange unless Ko-go → refused with the message; ranks in no level → warning ("competitors with these ranks get no division").
+- **Create kyu divisions** uses the event's levels (`KT.ncrDivisions({ groups })`): kumite divisions get style `kyux` with their own `exchanges` and `decide`; kata divisions their allowed kata.
+- **Scoring** (`KT.kyuEval`, generalizes the NCR engine): exchange n of 2 × list, the call "Aka <technique> — hajime", attacker/defender, then Hantei by flags (flags levels have no point buttons — Warning and Han-soku for contact). Levels left exactly as NCR keep the NCR instructions and buttons.
+- **Division settings**: kyu kumite divisions can switch to "Kyu exchanges (list below)" and edit that division's list and decision.
+- Verify: logic.test.js (custom groups → divisions, exchange order Aka then Shiro, flags-only ignores points, validation: reversed / overlap / no exchanges / gaps); test/kyugroups.js (editor: rename, re-range, remove keeps edits, Ko-go → flags shows list, overlap refused, saved on event, rules window shows the event's levels, 36 divisions, all flags, sheet calls the custom exchanges and ends in Hantei, division-level edit, reset to NCR clears the list); ncr.js; regression.

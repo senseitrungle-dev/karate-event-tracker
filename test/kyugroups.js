@@ -1,0 +1,81 @@
+// v1.32.0: an event's own kyu rank groups and kumite exchanges (for regions other than NCR); flags decide
+const { chromium } = require(require('child_process').execSync('npm root -g').toString().trim() + '/playwright');
+const path = require('path');
+(async () => {
+  const b = await chromium.launch(); const errors = [];
+  const ok = (name, v) => { console.log((v ? 'PASS ' : 'FAIL ') + name); if (!v) errors.push('assert: ' + name); };
+  const p = await b.newPage({ viewport: { width: 1280, height: 900 } }); p.on('pageerror', e => errors.push(e.message));
+  await p.route(/fonts\./, r => r.abort());
+  await p.goto('file://' + path.resolve('dist/karate-event-tracker.html'));
+  await p.click('button:has-text("Create demo tournament") >> nth=0'); await p.click('button[data-kind="local"]'); await p.waitForSelector('text=Director checklist', { timeout: 60000 });
+  const db = () => p.evaluate(() => JSON.parse(localStorage.getItem('kt-local-v1') || '{}'));
+  const evId = Object.keys(await db()).find(k => /^events\/[^/]+$/.test(k)).split('/')[1];
+  const divs = async () => Object.entries(await db()).filter(([k]) => k.startsWith(`events/${evId}/divisions/`)).map(([k, v]) => Object.assign({ id: k.split('/').pop() }, v));
+  await p.click('.tab:has-text("Divisions")'); await p.click('button[data-act="div-ncr"]'); await p.waitForTimeout(200);
+  await p.click('button[data-act="kyu-groups"]'); await p.waitForTimeout(200);
+  ok('editor opens with the 4 NCR levels', (await p.$$('fieldset.kyu-g')).length === 4);
+  const fs = i => `fieldset.kyu-g[data-i="${i}"]`;
+  // Level 1 → "Beginner", white–7th kyu, 3 exchanges; Level 2 → "Intermediate" 6th–4th; remove Level 3; Level 4 → flags with a free exchange
+  await p.fill(`${fs(0)} [name="label"]`, 'Beginner'); await p.selectOption(`${fs(0)} [name="maxRank"]`, 'k7');
+  await p.fill(`${fs(0)} [name="exchanges"]`, 'Jodan oi-tsuki\nChudan oi-tsuki\nMae-geri');
+  await p.fill(`${fs(1)} [name="label"]`, 'Intermediate'); await p.selectOption(`${fs(1)} [name="minRank"]`, 'k6'); await p.selectOption(`${fs(1)} [name="maxRank"]`, 'k4');
+  await p.fill(`${fs(1)} [name="exchanges"]`, 'Gyaku-tsuki\nMawashi-geri');
+  await p.click(`${fs(2)} button[data-act="kyu-del"]`); await p.waitForTimeout(200);
+  ok('removing a level keeps the other edits', (await p.inputValue(`${fs(0)} [name="label"]`)) === 'Beginner' && (await p.$$('fieldset.kyu-g')).length === 3);
+  await p.selectOption(`${fs(2)} [name="decide"]`, 'flags'); await p.waitForTimeout(200);
+  ok('switching Ko-go → flags shows an exchange list', !!(await p.$(`${fs(2)} [name="exchanges"]`)));
+  await p.fill(`${fs(2)} [name="label"]`, 'Advanced'); await p.fill(`${fs(2)} [name="exchanges"]`, 'Free attack — any one technique');
+  // overlap → refused with a message
+  await p.selectOption(`${fs(1)} [name="minRank"]`, 'k7');
+  await p.click('#modal button[type="submit"]'); await p.waitForTimeout(300);
+  ok('overlapping ranks refused', /both include 7th Kyu/.test(await p.textContent('#modal')) && !!(await p.$('#f-kyug')));
+  await p.selectOption(`${fs(1)} [name="minRank"]`, 'k6');
+  await p.click('#modal button[type="submit"]'); await p.waitForTimeout(400);
+  const ev = (await db())[`events/${evId}`];
+  ok('levels saved with the event', ev.kyuGroups && ev.kyuGroups.map(g => g.label).join() === 'Beginner,Intermediate,Advanced' && ev.kyuGroups[0].exchanges.length === 3);
+  const t = await p.textContent('#modal');
+  ok('kyu rules window now shows the event’s own levels', /This event’s own kyu levels/.test(t) && /Beginner/.test(t) && /6 exchanges · Court Judges’ flags/.test(t) && /Mae-geri/.test(t));
+  await p.screenshot({ path: 'test/shots/kyugroups-rules.png' });
+  await p.click('#modal button[type="submit"]'); await p.waitForTimeout(2500);
+  const kyu = (await divs()).filter(d => d.belt === 'kyu');
+  ok('divisions made from the custom levels (3 levels × 2 ages × 6)', kyu.length === 36 && kyu.every(d => /^(Beginner|Intermediate|Advanced)/.test(d.group)));
+  const bk = kyu.find(d => d.name === 'Kyu Beginner Youth Women Individual Kumite');
+  ok('Beginner kumite: white–7th kyu, 3 exchanges, flags', bk && bk.minRank === 'k10' && bk.maxRank === 'k7' && bk.scoring.style === 'kyux' && bk.scoring.exchanges.length === 3 && bk.scoring.decide === 'flags');
+  ok('all levels decided by flags', kyu.filter(d => d.eventType === 'IKUMITE').every(d => d.scoring.decide === 'flags'));
+  // score: 6 exchanges with the custom calls, then flags
+  await p.click('.tab:has-text("Competitors")'); await p.click('button:has-text("Import CSV")');
+  await p.fill('#imp-text', 'first_name,last_name,gender,dob,rank,dojo,events\nA,One,F,2014-01-01,7th kyu,D1,Individual Kumite\nB,Two,F,2014-02-02,White belt,D2,Individual Kumite');
+  await p.click('button[data-act="imp-run"]'); await p.waitForTimeout(1200);
+  await p.click('.tab:has-text("Divisions")'); await p.waitForTimeout(200);
+  await p.click(`tr:has(span.name:text-is("${bk.name}")) button[data-act="draw"]`); await p.waitForTimeout(600);
+  await p.click('.tab:has-text("Brackets")'); await p.waitForTimeout(200); await p.selectOption('#br-div', bk.id); await p.waitForTimeout(300);
+  await p.click('.bm.click >> nth=0'); await p.waitForTimeout(250); if (await p.$('#match-root button[data-act="score"]')) await p.click('#match-root button[data-act="score"]'); await p.waitForTimeout(250);
+  const ph = () => p.textContent('#score-root .phase');
+  ok('custom sheet: Beginner · exchange 1 of 6, “Aka jodan oi-tsuki — hajime”', /Beginner Youth · exchange 1 of 6/.test(await ph()) && /Aka jodan oi-tsuki — hajime/.test(await p.textContent('#attack-side')));
+  ok('flags only: no Waza-ari button; warning + Han-soku for contact', !(await p.$('#score-root button[data-t="waza"]')) && !!(await p.$('#score-root .corner.a button[data-t="keikoku"]')));
+  for (let i = 0; i < 2; i++) await p.click('#score-root button[data-t="next"]');
+  ok('third exchange: Mae-geri', /Aka mae-geri — hajime/.test(await p.textContent('#attack-side')));
+  await p.click('#score-root button[data-t="next"]'); await p.waitForTimeout(100);
+  ok('then Shiro attacks through the same list', /Shiro jodan oi-tsuki — hajime/.test(await p.textContent('#attack-side')));
+  for (let i = 0; i < 3; i++) await p.click('#score-root button[data-t="next"]');
+  ok('after 6 exchanges → Hantei by flags', /Hantei/.test(await ph()));
+  await p.click('#score-root .corner.a button[data-t="hantei"]'); await p.waitForTimeout(200);
+  ok('winner by flags', /Aka · Hantei/.test(await ph()));
+  await p.screenshot({ path: 'test/shots/kyugroups-sheet.png' });
+  await p.click('button[data-act="modal-close"]').catch(() => {}); await p.waitForTimeout(200);
+  // division settings: exchanges editable per division
+  await p.click('.tab:has-text("Divisions")'); await p.waitForTimeout(200);
+  const adv = kyu.find(d => d.name === 'Kyu Advanced Adult Men Individual Kumite');
+  await p.evaluate(id => { const b = document.querySelector(`[data-act="div-panel"][data-id="${id}"]`); b && b.click(); }, adv.id); await p.waitForTimeout(250);
+  await p.click('button[data-act="div-edit"]'); await p.waitForTimeout(250);
+  ok('division settings show the exchange list', (await p.inputValue('#d-ex')) === 'Free attack — any one technique' && (await p.inputValue('#d-style')) === 'kyux');
+  await p.fill('#d-ex', 'Free attack — any one technique\nFree attack — combination'); await p.click('#modal button[type="submit"]'); await p.waitForTimeout(400);
+  ok('edited exchanges saved on that division', ((await divs()).find(d => d.id === adv.id).scoring.exchanges || []).length === 2);
+  // reset to NCR
+  await p.click('button[data-act="div-ncr"]'); await p.click('button[data-act="kyu-groups"]'); await p.click('button[data-act="kyu-reset"]'); await p.waitForTimeout(150);
+  ok('Reset to NCR v3.3 restores 4 levels', (await p.$$('fieldset.kyu-g')).length === 4);
+  await p.click('#modal button[type="submit"]'); await p.waitForTimeout(400);
+  ok('saving the NCR levels clears the event’s own list', !((await db())[`events/${evId}`].kyuGroups || []).length && /From/.test(await p.textContent('#modal')));
+  console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
+  await b.close(); process.exit(errors.length ? 1 : 0);
+})();

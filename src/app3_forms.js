@@ -304,7 +304,7 @@ function divForm(id) {
   openModal(sheet(id ? esc(d.name) : 'New division', `<form id="f-div" data-form="div" data-id="${esc(id || '')}" class="stack">
     <div class="fgrid">
       <label class="f"><span>Event</span><select name="eventType" id="d-et" data-change="div-et">${(ev.eventTypes || KT.EVENT_ORDER).map(t => opt(t, KT.EVENT_TYPES[t].label, d.eventType)).join('')}</select></label>
-      <label class="f"><span>Gender</span><select name="gender" id="d-g">${KT.EVENT_TYPES[d.eventType].genders.map(g => opt(g, KT.GENDERS[g], d.gender)).join('')}</select></label>
+      <label class="f"><span>Gender</span><select name="gender" id="d-g">${KT.EVENT_TYPES[d.eventType].genders.map(g => opt(g, KT.GENDERS[g], d.open ? '' : d.gender)).join('')}${opt('open', 'Open (any gender)', d.open ? 'open' : '')}</select></label>
       <label class="f"><span>Belt class</span><select name="belt" id="d-belt">${opt('black', 'Black belt (Dan)', d.belt)}${opt('kyu', 'Kyu belt', d.belt)}</select></label>
       <label class="f"><span>Group label</span><input name="group" id="d-group" value="${esc(d.group || '')}" placeholder="Senior, Youth, Novice…"></label>
       <label class="f"><span>Minimum age</span><input type="number" name="minAge" id="d-min" min="0" max="99" value="${esc(d.minAge ?? '')}"></label>
@@ -317,13 +317,17 @@ function divForm(id) {
       <label class="f"><span>Format</span><select name="format" id="d-fmt" ${bs.results ? 'disabled' : ''}>${Object.entries(KT.FORMATS).filter(([x]) => x !== 'KP' || k === 'kata').map(([x, l]) => opt(x, l, d.format)).join('')}</select></label>
       <label class="f"><span>Third place (single elim. / playoff)</span><select name="bronze" id="d-bronze">${opt('two', 'Two bronzes', d.bronze)}${opt('match', 'Bronze match', d.bronze)}</select></label>
       <label class="f"><span>Double elim.: number of pools</span><input type="number" name="poolCount" id="d-pools" min="0" max="16" value="${esc(d.poolCount || '')}" placeholder="Auto (8 per pool)"><span class="tiny muted">Top 2 of each pool go to a single-elimination playoff</span></label>
+      <label class="f"><span>Round robin: pool size</span><select name="rrPoolSize" id="d-rrsize">${opt('', '4 (default)', String(d.rrPoolSize || ''))}${[3, 5, 6, 7, 8].map(x => opt(String(x), 'Up to ' + x, String(d.rrPoolSize || ''))).join('')}</select></label>
+      ${k === 'kata' ? `<label class="f span"><span>Allowed kata (comma separated, optional)</span><input name="kataList" id="d-kata" value="${esc((d.kataList || []).join(', '))}" placeholder="e.g. Heian Shodan, Heian Nidan"></label>` : ''}
       <label class="f"><span>Round robin: advance per pool</span><select name="advance" id="d-adv">${opt('', 'Auto (2 if two pools, else 1)', d.advance || '')}${opt('1', '1', d.advance)}${opt('2', '2', d.advance)}</select></label>
       <label class="f"><span>Ring</span><select name="ringId" id="d-ring">${opt('', 'No ring yet', d.ringId)}${DC.rings.map(r => opt(r.id, r.name, d.ringId)).join('')}</select></label>
     </div>${bs.results ? '<p class="tiny muted">Format is locked because results exist.</p>' : ''}</fieldset>
     <fieldset><legend>Scoring (WTKF 2009)</legend><div class="fgrid">
       ${k === 'kata' ? `<label class="f"><span>Decision</span><select name="method" id="d-method">${opt('flags', 'Flags (judges’ majority)', sc.method)}${opt('scores', 'Scores 0–10 (drop high & low with 5)', sc.method)}</select></label>` : ''}
       ${k === 'kata' ? `<label class="f"><span>Kata pools: max per pool</span><input type="number" name="poolSize" id="d-pool" min="4" max="12" value="${esc(d.poolSize || 8)}"><span class="tiny muted">Kata score pools only · WTKF allows up to 12</span></label>` : ''}
-      ${k === 'kumite' || k === 'teamkumite' || k === 'fukugo' ? `<label class="f"><span>Kumite style</span><select name="style" id="d-style">${opt('shobu', 'Shobu Ippon (1:30)', sc.style)}${opt('kogo', 'Ko-go Kumite (6 exchanges)', sc.style)}</select></label>` : ''}
+      ${k === 'kumite' || k === 'teamkumite' || k === 'fukugo' ? `<label class="f"><span>Kumite style</span><select name="style" id="d-style">${opt('shobu', 'Shobu Ippon (1:30)', sc.style)}${opt('kogo', 'Ko-go Kumite (6 exchanges)', sc.style)}${k === 'kumite' ? opt('kyux', 'Kyu exchanges (list below)', sc.style) + opt('ncr1', 'NCR kyu Level 1 (4 exchanges, flags)', sc.style) + opt('ncr2', 'NCR kyu Level 2 (6 exchanges, flags)', sc.style) + opt('ncr3', 'NCR kyu Level 3 (6 exchanges, Waza-ari)', sc.style) : ''}</select></label>
+      ${k === 'kumite' && d.belt === 'kyu' ? `<label class="f span"><span>Kyu exchanges — one technique per line (each side attacks through the list: Aka first, then Shiro)</span><textarea name="exchanges" id="d-ex" rows="3" placeholder="Jodan oi-tsuki&#10;Chudan oi-tsuki">${esc((sc.exchanges || []).map(e => Array.isArray(e) ? e[1] : e).join('\n'))}</textarea></label>
+        <label class="f"><span>Winner decided by</span><select name="decide" id="d-decide">${opt('flags', 'Court Judges’ flags (no points)', sc.decide || 'flags')}${opt('points', 'Waza-ari points, tie → flags', sc.decide || 'flags')}</select></label>` : ''}` : ''}
       ${k === 'kata' ? `<label class="f"><span>Judges</span><select name="judges" id="d-judges">${opt('3', '3', sc.judges)}${opt('5', '5', sc.judges)}${opt('6', '6 (Shu-shin + 5, scores only)', sc.judges)}${opt('7', '7', sc.judges)}</select></label>` : ''}
       ${k !== 'kata' ? `<label class="f"><span>Bout time (seconds)</span><input type="number" name="boutTime" id="d-bt" min="30" max="600" step="10" value="${esc(sc.boutTime)}"></label>
       <label class="f"><span>Kettei-sen (seconds, 0 = none)</span><input type="number" name="ketteiTime" id="d-kt" min="0" max="180" step="10" value="${esc(sc.ketteiTime)}"></label>` : ''}
@@ -351,18 +355,22 @@ async function saveDiv(form, thenDraw) {
   const v = fd(form), id = form.dataset.id || uid();
   const old = DC.divBy[form.dataset.id] || {};
   const T = KT.EVENT_TYPES[v.eventType];
-  if (!T.genders.includes(v.gender)) v.gender = T.genders[0];
+  const isOpen = v.gender === 'open'; if (isOpen) v.gender = 'X';
+  if (!isOpen && !T.genders.includes(v.gender)) v.gender = T.genders[0];
   const seeds = {}; for (const k of Object.keys(v)) if (k.startsWith('seed_')) { if (+v[k] > 0) seeds[k.slice(5)] = +v[k]; delete v[k]; }
   const clash = KT.seedClashes(seeds);
   if (Object.keys(clash).length) { seedMarks(form); toast(seedClashText(clash), true); return false; }
   const kind = T.kind, base = Object.assign(KT.defaultScoring(v.eventType), old.scoring || {});
   if (v.format === 'KP' && kind !== 'kata') { toast('Kata score pools are for kata, team kata and enbu divisions.', true); return false; }
   const scoring = { method: v.format === 'KP' ? 'scores' : (v.method || base.method), judges: +(v.judges || base.judges), boutTime: +(v.boutTime || base.boutTime), ketteiTime: v.ketteiTime === '' || v.ketteiTime == null ? base.ketteiTime : +v.ketteiTime, bouts: +(v.bouts || base.bouts), style: v.style || base.style };
-  scoring.styleExplicit = !!v.style && v.style !== KT.defaultStyle({ eventType: v.eventType, belt: v.belt, group: v.group, maxAge: v.maxAge === '' ? null : +v.maxAge, minRank: v.minRank, maxRank: v.maxRank });
+  if (v.exchanges != null) { scoring.exchanges = String(v.exchanges).split('\n').map(x => x.trim()).filter(Boolean); scoring.decide = v.decide === 'points' ? 'points' : 'flags'; }
+  if (scoring.style === 'kyux' && !(scoring.exchanges || []).length) { toast('List at least one exchange for “Kyu exchanges”.', true); return false; }
+  scoring.styleExplicit = !!v.style && (v.style === 'kyux' || KT.NCR_STYLES[v.style] || old.preset === 'ncr-kyu') || !!v.style && v.style !== KT.defaultStyle({ eventType: v.eventType, belt: v.belt, group: v.group, maxAge: v.maxAge === '' ? null : +v.maxAge, minRank: v.minRank, maxRank: v.maxRank });
   if (scoring.method === 'flags' && scoring.judges % 2 === 0) scoring.judges = 5;
   const dv = { eventType: v.eventType, gender: v.gender, belt: v.belt, group: v.group, minAge: v.minAge === '' ? null : +v.minAge, maxAge: v.maxAge === '' ? null : +v.maxAge,
     minRank: v.minRank || (v.belt === 'black' ? 'd1' : 'k10'), maxRank: v.maxRank || (v.belt === 'black' ? 'd10' : 'k1'), format: v.format || old.format || 'SE', bronze: v.bronze, reset: false, poolCount: v.poolCount ? Math.max(0, +v.poolCount) : 0, advance: v.advance ? +v.advance : null,
-    ringId: v.ringId || '', ringOrder: old.ringOrder ?? Date.now(), scoring, seeds, order: old.order || 0, poolSize: v.poolSize ? Math.min(12, Math.max(4, +v.poolSize)) : (old.poolSize || 8) };
+    ringId: v.ringId || '', ringOrder: old.ringOrder ?? Date.now(), scoring, seeds, order: old.order || 0, poolSize: v.poolSize ? Math.min(12, Math.max(4, +v.poolSize)) : (old.poolSize || 8),
+    rrPoolSize: v.rrPoolSize ? +v.rrPoolSize : null, kataList: String(v.kataList || '').split(',').map(x => x.trim()).filter(Boolean), open: isOpen, level: old.level || null, preset: old.preset || null, quota: old.quota || null, teamSize: old.teamSize || null };
   dv.name = v.name && v.name !== (old.eventType ? KT.divisionName(old) : '') ? v.name : KT.divisionName(dv);
   if (dv.minRank && dv.maxRank && KT.rankValue(dv.minRank) > KT.rankValue(dv.maxRank)) { toast('Lowest rank must be below highest rank.', true); return false; }
   const ok = await guard(() => S.store.set(P.doc(S.evId, 'divisions', id), dv), thenDraw ? null : 'Division saved');
@@ -446,6 +454,98 @@ async function applyPreset(form) {
   }
   if (v.settings && ev.ageAsOf !== pr.ageAsOf) for (const c of DC.comps) if (c.dob) await guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { age: KT.ageOn(c.dob, pr.ageAsOf) }));
   closeModal(); toast(`${pr.label}: ${plural(added, 'division')} added${updated ? `, ${updated} updated` : ''}${removed ? `, ${removed} removed` : ''}`);
+}
+/* ---------- v1.31: NCR kyu rules (local & regional tournaments) ---------- */
+function kyuGroupsOf(ev) { return ev && Array.isArray(ev.kyuGroups) && ev.kyuGroups.length ? ev.kyuGroups : KT.defaultKyuGroups(); }
+const kyuRankName = r => r === 'k10' ? 'White belt / 10th Kyu' : KT.rankLabel(r);
+function kyuDecideText(g) { return g.decide === 'kogo' ? 'WTKF Ko-go Kumite' : `${(g.exchanges || []).length * 2} exchanges · ${g.decide === 'points' ? 'Waza-ari points, tie → flags' : 'Court Judges’ flags'}`; }
+function ncrForm(justSaved) {
+  const ev0 = curEvent(), ev = Array.isArray(justSaved) ? Object.assign({}, ev0, { kyuGroups: justSaved }) : ev0;   // just saved: don't wait for the store
+  const pr = KT.NCR_KYU, groups = kyuGroupsOf(ev), custom = Array.isArray(ev.kyuGroups) && ev.kyuGroups.length;
+  const kyuNow = DC.divs.filter(d => d.belt === 'kyu' && d.preset !== pr.id), drawnKyu = kyuNow.filter(d => S.d.brackets[d.id]);
+  const lvlRows = groups.map(g => `<tr><td><b>${esc(g.label)}</b></td><td>${esc(kyuRankName(g.minRank))} – ${esc(KT.rankLabel(g.maxRank))}</td><td class="small">${(g.kata || []).map(esc).join(', ') || '—'}</td><td class="small">${esc(kyuDecideText(g))}${g.decide !== 'kogo' ? `<div class="tiny muted">${(g.exchanges || []).map(esc).join(' · ')}</div>` : ''}</td></tr>`).join('');
+  openModal(sheet(custom ? 'Kyu rules · this event’s levels' : 'Kyu rules · NCR v3.3', `<form id="f-ncr" data-form="ncr" class="stack">
+    <p class="small">${custom ? '<b>This event’s own kyu levels and exchanges</b> (edited from the NCR rules)' : `From <b>${esc(pr.source)}</b>`} — for kyu competitors at local and regional tournaments.${ev.level === 'National' || ev.level === 'International' ? ` <span style="color:var(--warn)">This event is ${esc(ev.level)}; the NCR rules are written for local and regional events.</span>` : ''}</p>
+    <div class="tw"><table class="acc"><thead><tr><th>Level</th><th>Ranks</th><th>Allowed kata</th><th>Kumite</th></tr></thead><tbody>${lvlRows}</tbody></table></div>
+    <div><button type="button" class="sm" data-act="kyu-groups">Edit rank groups &amp; exchanges…</button> <span class="tiny muted">For regions with other rank groups or exchanges. Saved with this event.</span></div>
+    <ul class="small" style="margin:0;padding-left:20px;display:grid;gap:4px">
+      <li><b>Individual Kata</b>: two competitors perform at the same time, Court Judges’ flags decide (3–5 judges); kata from the level’s list, may change each round.</li>
+      <li><b>Individual Kumite</b>: ${custom ? 'each level’s exchanges as listed above — Aka attacks through the list first, then Shiro; the score sheet calls each exchange' : 'Level 1–3 guided exchanges (Aka attacks first, then Shiro), Level 4 WTKF Ko-go'}.</li>
+      <li><b>Team (synchronized) Kata</b> and <b>Enbu</b>: scored, highest total wins.</li>
+      <li><b>Pools of up to 6</b>; each pool does kata first, then kumite (kata divisions are put ahead of kumite in each ring’s order).</li></ul>
+    <fieldset><legend>Divisions</legend><div class="stack" style="gap:8px">
+      <div class="pill-list">${pr.events.map(et => `<label class="check chip plain"><input type="checkbox" data-multi="1" name="ets" value="${et}" checked> ${esc(KT.EVENT_TYPES[et].label)}</label>`).join('')}</div>
+      <label class="check"><input type="checkbox" name="byGender" checked> Separate women and men (individual events)</label>
+      <label class="check"><input type="checkbox" name="byAge" checked> Separate youth (17 and under) and adults (18+)</label>
+      <p class="tiny muted">The rules allow mixing gender or age when there are not enough competitors for a pool and the coaches and competitors agree — untick to create combined (open) divisions.</p>
+      <div class="fgrid"><label class="f"><span>Pool format</span><select name="format">${opt('RR', 'Round robin (pools of up to 6)', 'RR')}${opt('DE', 'Double elimination', 'RR')}</select></label>
+        <label class="f"><span>Judges per match</span><select name="judges">${opt('3', '3 (Shu-shin + 2 Fuku-shin)', '3')}${opt('5', '5 (Shu-shin + 4 Fuku-shin)', '3')}</select></label></div>
+      ${kyuNow.length ? `<label class="check"><input type="checkbox" name="removeOld" checked> Replace the ${plural(kyuNow.length - drawnKyu.length, 'existing kyu division')} not drawn yet (black-belt divisions are not touched)</label>` : ''}
+      ${drawnKyu.length ? `<p class="notice warn small" style="display:block">${plural(drawnKyu.length, 'kyu division')} already drawn ${drawnKyu.length === 1 ? 'is' : 'are'} kept: ${drawnKyu.map(d => esc(d.name)).join(', ')}.</p>` : ''}
+    </div></fieldset></form>`,
+    `<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-ncr">Create kyu divisions</button>`), { wide: true });
+}
+async function applyNcr(form) {
+  const v = fd(form), ets = v.ets || [];
+  if (!ets.length) { toast('Pick at least one event.', true); return; }
+  const ev = curEvent(), custom = Array.isArray(ev.kyuGroups) && ev.kyuGroups.length;
+  const list = KT.ncrDivisions({ byGender: !!v.byGender, byAge: !!v.byAge, format: v.format || 'RR', judges: +v.judges || 3, events: ets, groups: custom ? ev.kyuGroups : null });
+  const key = d => [d.eventType, d.open ? 'open' : d.gender, d.group, d.minRank, d.maxRank].join('|');
+  const mine = {}; DC.divs.forEach(d => { mine[key(d)] = d; });
+  let added = 0, updated = 0, removed = 0;
+  if (v.removeOld == null && custom) v.removeOld = true;
+  if (v.removeOld) { const keep = new Set(list.map(key)); for (const d of DC.divs) if (d.belt === 'kyu' && !keep.has(key(d)) && !S.d.brackets[d.id]) { await guard(() => S.store.del(P.doc(S.evId, 'divisions', d.id))); removed++; } }
+  const base = Date.now();
+  for (const d of list) {
+    const cur = mine[key(d)];
+    if (cur && S.d.brackets[cur.id]) continue;
+    d.ringOrder = base + d.order;            // kata before kumite within each level and age group
+    if (cur) { const { ringId, ...rules } = d; await guard(() => S.store.update(P.doc(S.evId, 'divisions', cur.id), rules)); updated++; }
+    else { d.ringId = ''; await guard(() => S.store.set(P.doc(S.evId, 'divisions', uid()), d)); added++; }
+  }
+  const et = new Set(curEvent().eventTypes || KT.EVENT_ORDER); ets.forEach(x => et.add(x));
+  await guard(() => S.store.update(P.event(S.evId), { eventTypes: KT.EVENT_ORDER.filter(x => et.has(x)) }));
+  closeModal(); toast(`Kyu rules: ${plural(added, 'division')} added${updated ? `, ${updated} updated` : ''}${removed ? `, ${removed} replaced` : ''}`);
+}
+/* ---------- v1.32: the event's own kyu rank groups & kumite exchanges ---------- */
+function kyuGroupsForm(draft) {
+  const ev = curEvent(), groups = draft || JSON.parse(JSON.stringify(kyuGroupsOf(ev)));
+  S.ui.kyuDraft = groups;
+  const kyuOpts = sel => Array.from({ length: 10 }, (_, i) => 'k' + (10 - i)).map(r => opt(r, kyuRankName(r), sel)).join('');
+  const chk = KT.kyuGroupsCheck(groups);
+  const card = (g, i) => `<fieldset class="kyu-g" data-i="${i}"><legend>${esc(g.label || 'Level ' + (i + 1))}</legend><div class="fgrid">
+      <label class="f"><span>Name</span><input name="label" value="${esc(g.label || '')}" placeholder="Level ${i + 1}"></label>
+      <label class="f"><span>Lowest rank</span><select name="minRank">${kyuOpts(g.minRank)}</select></label>
+      <label class="f"><span>Highest rank</span><select name="maxRank">${kyuOpts(g.maxRank)}</select></label>
+      <label class="f"><span>Winner decided by</span><select name="decide" data-change="kyu-decide">${opt('flags', 'Court Judges’ flags (no points)', g.decide)}${opt('points', 'Waza-ari points, tie → flags', g.decide)}${opt('kogo', 'WTKF Ko-go Kumite', g.decide)}</select></label>
+      <label class="f span"><span>Allowed kata (comma separated, optional)</span><input name="kata" value="${esc((g.kata || []).join(', '))}" placeholder="e.g. Heian Shodan, Heian Nidan"></label>
+      ${g.decide === 'kogo' ? '<p class="tiny muted span">Ko-go uses the WTKF exchanges (3 per side) — no list needed.</p>' : `<label class="f span"><span>Kumite exchanges — one technique per line; each side attacks through the list (Aka first, then Shiro)</span><textarea name="exchanges" rows="${Math.max(3, (g.exchanges || []).length + 1)}" placeholder="Jodan oi-tsuki&#10;Chudan oi-tsuki&#10;Chudan mae-geri">${esc((g.exchanges || []).join('\n'))}</textarea></label>`}
+    </div><div class="row" style="justify-content:flex-end"><button type="button" class="sm danger" data-act="kyu-del" data-i="${i}" ${groups.length <= 1 ? 'disabled' : ''}>Remove ${esc(g.label || 'level')}</button></div></fieldset>`;
+  openModal(sheet('Kyu rank groups & exchanges', `<form id="f-kyug" data-form="kyugroups" class="stack">
+    <p class="small">Group the kyu ranks into levels and list each level’s kumite exchanges. Divisions are made per level (and by gender and youth/adult if you choose) when you press <b>Create</b> in the kyu rules window. Saved with this event only.</p>
+    ${groups.map(card).join('')}
+    <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="sm" data-act="kyu-add">+ Add level</button><button type="button" class="sm ghost" data-act="kyu-reset">Reset to NCR v3.3</button></div>
+    ${chk.errors.length ? `<p class="notice bad small" style="display:block">${chk.errors.map(esc).join('<br>')}</p>` : ''}
+    ${chk.gaps.length ? `<p class="notice warn small" style="display:block">Not in any level: ${chk.gaps.map(kyuRankName).map(esc).join(', ')} — competitors with these ranks get no division.</p>` : ''}
+  </form>`, `<button data-act="kyu-back">Cancel</button><button class="primary" type="submit" form="f-kyug">Save levels</button>`), { wide: true });
+}
+/** read the editor back into the draft (before add / remove / re-render) */
+function kyuReadForm() {
+  return $$('#f-kyug fieldset.kyu-g').map(f => {
+    const v = n => { const el = f.querySelector(`[name="${n}"]`); return el ? el.value : null; };
+    const ex = v('exchanges'), prev = (S.ui.kyuDraft || [])[+f.dataset.i] || {};
+    return { id: prev.id || uid(), label: (v('label') || '').trim(), minRank: v('minRank'), maxRank: v('maxRank'), decide: v('decide') || 'flags',
+      kata: String(v('kata') || '').split(',').map(x => x.trim()).filter(Boolean), exchanges: ex == null ? (prev.exchanges || []) : ex.split('\n').map(x => x.trim()).filter(Boolean) };
+  });
+}
+async function saveKyuGroups() {
+  const groups = kyuReadForm(), chk = KT.kyuGroupsCheck(groups);
+  if (chk.errors.length) { kyuGroupsForm(groups); toast(chk.errors[0], true); return; }
+  groups.sort((a, b) => KT.rankValue(a.minRank) - KT.rankValue(b.minRank));
+  const canon = gs => JSON.stringify(gs.map(g => [g.label, g.minRank, g.maxRank, g.decide, (g.kata || []).join('|'), g.decide === 'kogo' ? '' : (g.exchanges || []).join('|')]));
+  const same = canon(groups) === canon(KT.defaultKyuGroups());
+  if (!(await guard(() => S.store.update(P.event(S.evId), { kyuGroups: same ? [] : groups }), same ? 'Kyu levels: NCR v3.3' : `Saved ${plural(groups.length, 'kyu level')}`))) return;
+  ncrForm(same ? [] : groups);
 }
 function ringForm(id) {
   const r = id ? S.d.rings[id] : {};

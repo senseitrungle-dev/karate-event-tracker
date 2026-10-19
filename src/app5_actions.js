@@ -217,6 +217,12 @@ const ACT = {
   'team-delete': async () => { const id = $('#f-team').dataset.id; if (!(await confirmBox('Delete this team?', 'Delete', true))) return; closeModal(); guard(() => S.store.del(P.doc(S.evId, 'teams', id)), 'Team deleted'); },
   'div-std': () => stdDivForm(false),
   'div-preset': el => presetForm(el.dataset.id),
+  'div-ncr': () => ncrForm(),
+  'kyu-groups': () => kyuGroupsForm(),
+  'kyu-add': () => { const g = kyuReadForm(); g.push({ id: uid(), label: 'Level ' + (g.length + 1), minRank: 'k3', maxRank: 'k1', decide: 'flags', kata: [], exchanges: [] }); kyuGroupsForm(g); },
+  'kyu-del': el => { const g = kyuReadForm(); g.splice(+el.dataset.i, 1); kyuGroupsForm(g); },
+  'kyu-reset': () => kyuGroupsForm(KT.defaultKyuGroups()),
+  'kyu-back': () => ncrForm(),
   'quota-pick': el => quotaPickForm(el.dataset.id, el.dataset.group),
   'div-kyu': () => stdDivForm(true),
   'div-new': () => divForm(null),
@@ -303,9 +309,10 @@ const ACT = {
     if (CLOCK.running && el.dataset.t !== 'hansoku' && el.dataset.t !== 'kiken') { toast('Stop the clock (Yame) first.', true); return; }
     const ev = { t: el.dataset.t }; if (el.dataset.s) ev.s = el.dataset.s;
     // Shobu Ippon Ten-to: penalty match while time remains; 1 point only when time has expired
-    if (ev.t === 'tento' && !(kumiteStyle(dv) === 'kogo' && el.dataset.p !== 'daihyo') && clockLeft() > 0) { ev.exec = true; toast(`Ten-to · ${ev.s === 'a' ? 'Aka' : 'Shiro'} Sagaru — penalty match (Tsuzukete, hajime)`); }
+    if (ev.t === 'tento' && !(kumiteStyle(dv) !== 'shobu' && el.dataset.p !== 'daihyo') && clockLeft() > 0) { ev.exec = true; toast(`Ten-to · ${ev.s === 'a' ? 'Aka' : 'Shiro'} Sagaru — penalty match (Tsuzukete, hajime)`); }
     const o = { kettei: sc.ketteiTime > 0, allowDraw: el.dataset.p.startsWith('bouts'), ketteiOnly: el.dataset.p === 'daihyo' };
-    const E = kumiteStyle(dv) === 'kogo' && el.dataset.p !== 'daihyo' ? KT.kogoEval : KT.kumiteEval;
+    const kc = kindOf(dv) === 'kumite' ? kyuCfg(dv) : null;
+    const E = kc ? (l => KT.kyuEval(l, kc)) : kumiteStyle(dv) === 'kogo' && el.dataset.p !== 'daihyo' ? KT.kogoEval : KT.kumiteEval;
     // Ko-go: every exchange is a stand-alone match — a score or penalty ends it (the next exchange starts automatically)
     if (E === KT.kogoEval && ev.s && !['hansoku', 'kiken', 'hantei'].includes(ev.t)) ev.ae = 1;
     const before = E(log, o).phase;
@@ -424,6 +431,8 @@ const CHANGE = {
   'jimp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#jimp-text').value = decodeCsvBytes(rd.result); judgeImportPreview(); }; rd.readAsArrayBuffer(f); },
   'jimp-pick': () => jimpCount(),
   'quota-count': () => quotaCount(),
+  'kyu-decide': () => kyuGroupsForm(kyuReadForm()),
+  'kata-pick': el => { const d = loadDraft(S.modal.key); d.kata = Object.assign({}, d.kata || {}, { [el.dataset.s]: el.value }); draftChanged(); },
   'imp-dates': () => { if ($('#imp-text').value.trim()) ACT['imp-preview'](); },
   'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = decodeCsvBytes(rd.result); ACT['imp-preview'](); }; rd.readAsArrayBuffer(f); },
   kscore: el => { const d = loadDraft(S.modal.key), k = el.dataset.s === 'a' ? 'sa' : 'sb'; d[k] = d[k] || []; const v = el.value.replace(',', '.'); d[k][+el.dataset.i] = v === '' ? '' : v; draftChanged(); },
@@ -592,6 +601,8 @@ function wire() {
     else if (k === 'std') saveStd(f, false);
     else if (k === 'preset') applyPreset(f);
     else if (k === 'quota') saveQuotaPick(f);
+    else if (k === 'ncr') applyNcr(f);
+    else if (k === 'kyugroups') saveKyuGroups();
     else if (k === 'kyu') saveStd(f, true);
     else if (k === 'ring') {
       const v = fd(f); if (!v.name) return;

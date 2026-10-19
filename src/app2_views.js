@@ -254,7 +254,7 @@ function divisionsHTML() {
   const ev = curEvent();
   const f = S.ui.divFilter;
   const list = DC.divs.filter(d => !f || d.eventType === f);
-  const acts = `<button data-act="div-preset" data-id="wtkf-worlds-2026" title="Divisions and rules from the WTKF 2026 Information Package">WTKF Worlds 2026 rules</button><button data-act="div-std">Add black-belt divisions</button><button data-act="div-kyu">Add kyu divisions</button><button data-act="div-new">New division</button>
+  const acts = `<button data-act="div-preset" data-id="wtkf-worlds-2026" title="Divisions and rules from the WTKF 2026 Information Package">WTKF Worlds 2026 rules</button><button data-act="div-ncr" title="Kyu divisions by the North Central Region tournament rules v3.3">Kyu rules (NCR)</button><button data-act="div-std">Add black-belt divisions</button><button data-act="div-kyu">Add kyu divisions</button><button data-act="div-new">New division</button>
     <button class="primary" data-act="draw-all">Draw all ready</button>`;
   if (!DC.divs.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No divisions yet</h2>
     <p class="muted" style="max-width:56ch">Start with the standard black-belt age groups — Senior 21+, Youth 19–20, Junior 16–18, Cadet 14–15 — for every event you offer, then define kyu divisions by rank and age.</p><div class="row">${acts}</div></div>`;

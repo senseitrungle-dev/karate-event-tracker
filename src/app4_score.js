@@ -63,13 +63,27 @@ function openScore(did, mid) {
   renderScore(true);
 }
 /** Evaluate the draft into an outcome {done, winner:'a'|'b', method, pts, detail} — WTKF 2009 rules */
-function kumiteStyle(dv) { return scoringOf(dv).style === 'kogo' ? 'kogo' : 'shobu'; }
+function kumiteStyle(dv) { const st = scoringOf(dv).style; return st === 'kogo' || st === 'kyux' || KT.NCR_STYLES[st] ? st : 'shobu'; }
+/** Kyu exchange kumite config of a division (NCR built-in levels or the event's own list), or null. */
+function kyuCfg(dv) {
+  const sc = scoringOf(dv), n = KT.NCR_STYLES[sc.style];
+  if (n) return { exchanges: KT.NCR_EX[n], decide: n === 3 ? 'points' : 'flags', level: n, ncr: n };
+  if (sc.style === 'kyux') {
+    const ex = (sc.exchanges || []).map(e => Array.isArray(e) ? e[1] : e), decide = sc.decide === 'points' ? 'points' : 'flags';
+    // unchanged NCR level → keep the NCR wording (calls, timing, Level 1 contact-only buttons)
+    const m = [1, 2, 3].find(k => (k === 3 ? 'points' : 'flags') === decide && KT.NCR_EX[k].map(e => e[1]).join('|') === ex.join('|'));
+    return m ? { exchanges: KT.NCR_EX[m], decide, level: m, ncr: m } : { exchanges: ex, decide, level: dv.level || 0 };
+  }
+  return null;
+}
+const ncrLevel = dv => !!kyuCfg(dv);   // kept for older call sites
 function partOf(dv, m, br) { return kindOf(dv) === 'fukugo' ? KT.fukugoPart(m, br) : null; }
 function evaluate(dv, d, m, br) {
   const k = kindOf(dv), sc = scoringOf(dv), kogo = kumiteStyle(dv) === 'kogo';
   if (d.kiken) return { done: true, winner: d.kiken === 'a' ? 'b' : 'a', method: 'Ki-ken', pts: { a: 0, b: 0 } };
+  const kc = k === 'kumite' ? kyuCfg(dv) : null;
   const bout = (log, o) => {
-    const r = kogo ? KT.kogoEval(log || [], o) : KT.kumiteEval(log || [], Object.assign({ kettei: sc.ketteiTime > 0 }, o));
+    const r = kc ? KT.kyuEval(log || [], kc) : kogo ? KT.kogoEval(log || [], o) : KT.kumiteEval(log || [], Object.assign({ kettei: sc.ketteiTime > 0 }, o));
     return { done: r.done, winner: r.winner, method: r.method, pts: r.score, phase: r.phase, detail: { log: log || [] } };
   };
   if (k === 'kata') {
@@ -80,7 +94,7 @@ function evaluate(dv, d, m, br) {
     const fl = d.flags || [];
     if (fl.filter(Boolean).length < sc.judges) return { done: false };
     const r = KT.flagsEval(fl.filter(x => x === 'a').length, sc.judges);
-    return { done: r.done, winner: r.winner, method: r.method, pts: r.score, detail: { flags: fl } };
+    return { done: r.done, winner: r.winner, method: r.method, pts: r.score, detail: { flags: fl, kata: d.kata && (d.kata.a || d.kata.b) ? d.kata : undefined } };
   }
   if (k === 'kumite') return bout(d.log);
   if (k === 'teamkumite') {
@@ -167,6 +181,46 @@ function kogoPanel(log, path, r, opts) {
       <p class="tiny muted">Points from all six exchanges are added together. Equal scores (or no score) → Kettei-sen: first Waza-ari or Ippon wins. Each exchange is a stand-alone match: it ends at the first score or penalty (the next exchange starts automatically); use “No score” when it ends without one. Offense must attack within 10 s (Jikan) · max 4 techniques. Penalties give 2 points to the opponent (Chui 4, Ten-to 1).</p>
       <button data-act="k-undo" data-p="${path}" ${log.length ? '' : 'disabled'}>Undo last</button>${logHTML(log)}</div>${corner('b')}</div>`;
 }
+/* v1.31: NCR kyu kumite Levels 1–3 — guided exchanges, then Court Judges (L1/L2) or points (L3) */
+const NCR_HELP = {
+  1: 'Level 1 (white–8th kyu): 4 exchanges, Aka attacks first. Attacks: oi-tsuki jodan, oi-tsuki chudan; the attacker holds position, the defender blocks or evades and counters with a reverse punch (go-no-sen). Attack within 5 s, no contact (within 6 inches). No points and no penalties — after the exchanges the Court Judges decide by flags. Contact (not accidental) → Han-soku.',
+  2: 'Level 2 (7th–6th kyu): 6 exchanges, Aka attacks first. Attacks: oi-tsuki jodan, oi-tsuki chudan, mae-geri chudan (back leg); no switching the lead leg. Defender: block/evade then one reverse punch to the body (go-no-sen). Techniques no closer than 3 inches, no contact. After the exchanges the Court Judges decide by flags (form, timing, distance). Excessive contact after a verbal warning → the opponent wins (Han-soku).',
+  3: 'Level 3 (5th–4th kyu): 6 exchanges, Aka attacks first — 1 punch only, 2 kick only (mae-geri / mawashi-geri, back leg, chudan), 3 any one punch or kick. Attack within 10 s (no exchange after 10 s → voided, no points). Defender must counter after blocking/evading; the attacker may block and counter once more — each side has 2 chances to score. Waza-ari only. Saki: 2 points to the attacker · Chui (contact): 4 points to the opponent, or Han-soku. Points decide; a tie → Hantei.',
+};
+function kyuHelp(cfg) {
+  if (cfg.ncr) return NCR_HELP[cfg.ncr];
+  const ex = (cfg.exchanges || []).map(e => Array.isArray(e) ? e[1] : e);
+  return `${ex.length * 2} exchanges, Aka attacks first through the list, then Shiro: ${ex.join(' · ')}. ` + (cfg.decide === 'points'
+    ? 'Waza-ari only; Saki gives 2 points to the attacker, Chui (contact) 4 points to the opponent, or Han-soku. Points decide; a tie → Hantei (Court Judges’ flags).'
+    : 'No points — after the exchanges the Court Judges decide by flags. Contact: a warning, then Han-soku.');
+}
+function ncrPanel(log, path, r, cfg) {
+  if (typeof cfg === 'number') cfg = { exchanges: KT.NCR_EX[cfg], decide: cfg === 3 ? 'points' : 'flags', level: cfg, ncr: cfg };
+  const level = cfg.decide === 'points' ? 3 : cfg.ncr === 1 ? 1 : 2;   // which buttons: 1 = Han-soku only, 2 = warning + Han-soku, 3 = points
+  const ev = KT.kyuEval(log, cfg), live = !ev.done && ev.phase === 'regular';
+  const corner = s => {
+    const name = s === 'a' ? entName(r.a) : entName(r.b), off = live && ev.offense === s;
+    const b = (t, l, cls, extra) => `<button class="${cls || ''}" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="${t}" ${ev.done ? 'disabled' : ''} ${extra || ''}>${l}</button>`;
+    const btns = level === 3
+      ? `${b('waza', 'Waza-ari', '', live ? '' : 'disabled')}${b('saki', 'Saki', 'pen', live && off ? 'disabled title="Saki is a defender’s penalty"' : '')}${b('chui', 'Chui (contact)', 'pen')}${b('hansoku', 'Han-soku', 'pen')}`
+      : `${level === 2 ? b('keikoku', 'Warning (contact)', 'pen') : ''}${b('hansoku', level === 1 ? 'Han-soku (contact)' : 'Han-soku', 'pen')}`;
+    return `<div class="corner ${s}${off ? ' off' : ''}${cornerState(ev.done, ev.winner, s)}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${ev.done && ev.winner === s ? WIN_CHIP : live ? `<span class="role-tag ${off ? 'atk' : 'def'}">${off ? '⚔ Attacking' : 'Defending'}</span>` : ''}</div>
+      <div class="who">${esc(name)}</div>${level === 3 ? `<div class="big">${ev.cur[s]}</div>` : ev.warn[s] ? `<div class="tally">Warned ${ev.warn[s]}×</div>` : ''}
+      <div class="btns">${btns}${ev.phase === 'hantei' ? `<button class="primary" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="hantei">Hantei · ${s === 'a' ? 'Aka' : 'Shiro'} wins</button>` : '<span></span>'}</div></div>`;
+  };
+  const phaseTxt = ev.done ? `${ev.winner ? (ev.winner === 'a' ? 'Aka' : 'Shiro') + ' · ' : ''}${ev.method}` : ev.phase === 'hantei' ? (level === 3 ? 'Tie · Hantei — Court Judges decide' : 'Hantei — Court Judges’ flags') : `${cfg.ncr ? 'NCR Level ' + cfg.ncr : esc(cfg.label || 'Kyu kumite')} · exchange ${ev.exchange} of ${ev.total}`;
+  return `<div class="board">${corner('a')}<div class="mid"><div class="phase">${esc(phaseTxt)}</div>
+      ${live ? `<div class="attack ${ev.offense}" id="attack-side">${esc(ev.call)}</div><div class="tiny" style="text-align:center">${esc(ev.tech)}</div>
+        <button class="primary" data-act="k-ev" data-p="${path}" data-t="next">${ev.exchange < ev.total ? 'Exchange done · next' : 'Last exchange done'}</button>` : ev.phase === 'hantei' ? '<p class="next-hint">Shu-shin: long + short whistle — record the side with the most flags.</p>' : ''}
+      <p class="tiny muted">${esc(kyuHelp(cfg))}</p>
+      <button data-act="k-undo" data-p="${path}" ${log.length ? '' : 'disabled'}>Undo last</button>${logHTML(log)}</div>${corner('b')}</div>`;
+}
+/** Allowed kata for the division (NCR levels): shown on the head-to-head flags sheet, with an optional record of each side's kata */
+function kataListHTML(dv, d, r) {
+  const L = dv.kataList || []; if (!L.length) return '';
+  const k = d.kata || {}, sel = s => `<select data-change="kata-pick" data-s="${s}" aria-label="${s === 'a' ? 'Aka' : 'Shiro'} kata">${opt('', '— kata —', k[s] || '')}${L.map(x => opt(x, x, k[s] || '')).join('')}</select>`;
+  return `<div class="notice info" style="display:block"><b>Allowed kata:</b> ${L.map(esc).join(' · ')}<div class="row" style="margin-top:6px;gap:8px;flex-wrap:wrap"><label class="f" style="min-width:180px"><span>Aka · ${esc(entName(r.a))}</span>${sel('a')}</label><label class="f" style="min-width:180px"><span>Shiro · ${esc(entName(r.b))}</span>${sel('b')}</label></div><span class="tiny">A competitor may repeat a kata or change it from round to round, within this list.</span></div>`;
+}
 function teamPanel(d, sc, r, out, kogo) {
   const ta = DC.teamBy[r.a] || {}, tb = DC.teamBy[r.b] || {};
   const nm = (t, id) => { const c = DC.compBy[id]; return c ? `${c.firstName} ${c.lastName}` : ''; };
@@ -214,14 +268,14 @@ function renderScore(force) {
   }
   if (r.status !== 'ready') { root.innerHTML = sheet(title, `${hdr}<p class="muted">Waiting for earlier matches.</p>`, '<button data-act="modal-close">Close</button>', sub); return; }
   if (!canS) { root.innerHTML = sheet(title, `${hdr}<p class="muted">Only the director or the manager of ${esc(ringName(rid))} can score this match.</p>`, '<button data-act="modal-close">Close</button>', sub); return; }
-  const d = loadDraft(key), out = evaluate(dv, d, m, br), k = kindOf(dv), sc = scoringOf(dv), kogo = kumiteStyle(dv) === 'kogo';
+  const d = loadDraft(key), out = evaluate(dv, d, m, br), k = kindOf(dv), sc = scoringOf(dv), kogo = kumiteStyle(dv) === 'kogo' || !!ncrLevel(dv);
   if (!d.officials) d.officials = lastOfficials(rid, positions);
   const offErr = KT.officialsCheck(positions, d.officials, (curEvent() || {}).level);
   const part = partOf(dv, m, br);
   const offs = officialsHTML(rid, k === 'fukugo' && part === 'kitei' ? 'kata' : k, positions, d.officials, true);
   let body = '';
-  if (k === 'kata') body = sc.method === 'scores' ? scoresPanel(d, sc, out) : flagsPanel(d, sc, 'flags', 'Judges’ flags');
-  else if (k === 'kumite') body = kumitePanel(d.log || [], 'log', sc, r, { kogo, kettei: sc.ketteiTime > 0 });
+  if (k === 'kata') body = sc.method === 'scores' ? scoresPanel(d, sc, out) : kataListHTML(dv, d, r) + flagsPanel(d, sc, 'flags', 'Judges’ flags');
+  else if (k === 'kumite') body = kyuCfg(dv) ? ncrPanel(d.log || [], 'log', r, Object.assign({ label: dv.group }, kyuCfg(dv))) : kumitePanel(d.log || [], 'log', sc, r, { kogo, kettei: sc.ketteiTime > 0 });
   else if (k === 'teamkumite') body = teamPanel(d, sc, r, out, kogo);
   else if (k === 'fukugo') body = fukugoPanel(d, sc, r, out, part, kogo);
   const kiken = `<div class="row small"><span class="muted">Withdrawal / no-show:</span><button class="sm ${d.kiken === 'a' ? 'danger' : ''}" data-act="kiken" data-s="a">Aka kiken</button><button class="sm ${d.kiken === 'b' ? 'danger' : ''}" data-act="kiken" data-s="b">Shiro kiken</button></div>`;
@@ -448,8 +502,8 @@ function recordHTML(dv, br, m, r) {
   const names = { a: entName(r.a), b: entName(r.b) };
   let body = '';
   if (/^Ki-ken/.test(rec.method || '')) body = '<p class="small">Decided by Ki-ken (withdrawal / no-show).</p>';
-  else if (k === 'kata') body = d.flags ? flagsRecHTML(d.flags, 'Judges’ flags') : d.sa ? scoresRecHTML(d.sa, d.sb, sc.judges) : '';
-  else if (k === 'kumite') body = logRecHTML(d.log, kogo, names);
+  else if (k === 'kata') body = (d.flags ? flagsRecHTML(d.flags, 'Judges’ flags') : d.sa ? scoresRecHTML(d.sa, d.sb, sc.judges) : '') + (d.kata && (d.kata.a || d.kata.b) ? `<p class="small">Kata — Aka: <b>${esc(d.kata.a || '—')}</b> · Shiro: <b>${esc(d.kata.b || '—')}</b></p>` : '');
+  else if (k === 'kumite') body = ncrLevel(dv) ? `<div class="small">${(d.log || []).map(e => esc(evText(e))).join(' · ') || '—'}</div>` : logRecHTML(d.log, kogo, names);
   else if (k === 'fukugo') body = KT.fukugoPart(m, br) === 'kitei' ? flagsRecHTML(d.flags, 'Ki-tei flags') : logRecHTML(d.log, kogo, names);
   else if (k === 'teamkumite') {
     const ta = DC.teamBy[r.a] || {}, tb = DC.teamBy[r.b] || {};
