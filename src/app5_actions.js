@@ -53,22 +53,26 @@ async function drawDivision(did) {
   if (bs.drawn && !(await confirmBox(`Redraw ${dv.name}? The current draw is replaced.`, 'Redraw'))) return;
   const clash = KT.seedClashes(dv.seeds);
   if (Object.keys(clash).length) { toast(seedClashText(clash) + ' Fix the seeds in Settings first.', true); return; }
+  const over = divIssues(dv).filter(i => i.kind === 'quota');   // v1.30: no draw while a country is over the limit
+  if (over.length) { toast(`${dv.name} can't be drawn yet: ${over.map(i => i.long).join('; ')}. Choose who competes first.`, true); if (isDirector()) quotaPickForm(did, over[0].group); return; }
   const list = ents.map(id => ({ id, seed: (dv.seeds || {})[id] || 0, group: entGroup(id) }));
   const br = KT.generateBracket(dv, list);
   const ok = await guard(() => S.store.set(P.live(S.evId, 'brackets', did), br), `Drew ${dv.name}`);
   if (ok) { S.ui.bracketDiv = did; }
 }
 async function drawAll() {
-  const ready = DC.divs.filter(d => !S.d.brackets[d.id] && divEntrants(d.id).length >= 1);
-  if (!ready.length) { toast('Every division with entrants is already drawn.'); return; }
-  if (!(await confirmBox(`Draw ${plural(ready.length, 'division')} now?`, 'Draw'))) return;
+  const cand = DC.divs.filter(d => !S.d.brackets[d.id] && divEntrants(d.id).length >= 1);
+  const blocked = cand.filter(d => divIssues(d).some(i => i.kind === 'quota')), ready = cand.filter(d => !blocked.includes(d));
+  const bTxt = blocked.length ? `${plural(blocked.length, 'division')} over quota ${blocked.length === 1 ? 'is' : 'are'} not drawn: ${blocked.map(d => d.name + ' (' + divIssues(d).filter(i => i.kind === 'quota').map(i => i.text).join(', ') + ')').join('; ')}.` : '';
+  if (!ready.length) { toast(blocked.length ? bTxt + ' Choose who competes first.' : 'Every division with entrants is already drawn.', !!blocked.length); return; }
+  if (!(await confirmBox(`Draw ${plural(ready.length, 'division')} now?${bTxt ? '\n\n' + bTxt + ' Use “Over quota · Choose” on those divisions first.' : ''}`, 'Draw'))) return;
   for (const d of ready) {
     const clash = KT.seedClashes(d.seeds);
     if (Object.keys(clash).length) { toast(`${d.name}: ` + seedClashText(clash), true); return; }
     const list = divEntrants(d.id).map(id => ({ id, seed: (d.seeds || {})[id] || 0, group: entGroup(id) }));
     if (!(await guard(() => S.store.set(P.live(S.evId, 'brackets', d.id), KT.generateBracket(d, list))))) return;
   }
-  toast(`Drew ${plural(ready.length, 'division')}`);
+  toast(`Drew ${plural(ready.length, 'division')}${blocked.length ? ` · ${blocked.length} over quota not drawn` : ''}`, !!blocked.length);
 }
 async function deleteEvent(id) {
   const ev = S.events[id];
@@ -213,6 +217,7 @@ const ACT = {
   'team-delete': async () => { const id = $('#f-team').dataset.id; if (!(await confirmBox('Delete this team?', 'Delete', true))) return; closeModal(); guard(() => S.store.del(P.doc(S.evId, 'teams', id)), 'Team deleted'); },
   'div-std': () => stdDivForm(false),
   'div-preset': el => presetForm(el.dataset.id),
+  'quota-pick': el => quotaPickForm(el.dataset.id, el.dataset.group),
   'div-kyu': () => stdDivForm(true),
   'div-new': () => divForm(null),
   'div-edit': el => divForm(el.dataset.id),
@@ -418,6 +423,7 @@ const CHANGE = {
   att: el => writeAttendance(S.ui.session, { [el.dataset.id]: el.checked }),
   'jimp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#jimp-text').value = decodeCsvBytes(rd.result); judgeImportPreview(); }; rd.readAsArrayBuffer(f); },
   'jimp-pick': () => jimpCount(),
+  'quota-count': () => quotaCount(),
   'imp-dates': () => { if ($('#imp-text').value.trim()) ACT['imp-preview'](); },
   'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = decodeCsvBytes(rd.result); ACT['imp-preview'](); }; rd.readAsArrayBuffer(f); },
   kscore: el => { const d = loadDraft(S.modal.key), k = el.dataset.s === 'a' ? 'sa' : 'sb'; d[k] = d[k] || []; const v = el.value.replace(',', '.'); d[k][+el.dataset.i] = v === '' ? '' : v; draftChanged(); },
@@ -585,6 +591,7 @@ function wire() {
     else if (k === 'div') saveDiv(f);
     else if (k === 'std') saveStd(f, false);
     else if (k === 'preset') applyPreset(f);
+    else if (k === 'quota') saveQuotaPick(f);
     else if (k === 'kyu') saveStd(f, true);
     else if (k === 'ring') {
       const v = fd(f); if (!v.name) return;

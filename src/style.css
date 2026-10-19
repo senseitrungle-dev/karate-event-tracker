@@ -646,3 +646,9 @@ table.imp-tbl tr.imp-warn td { background: var(--warn-soft); }
 #imp-preview { min-width: 0; overflow: hidden; } #imp-preview .tw { max-width: 100%; overflow: auto; }
 #imp-text { white-space: pre; overflow-x: auto; }
 #jimp-preview { min-width: 0; } #jimp-preview .chip { white-space: normal; max-width: 100%; } #jimp-preview td:nth-child(3) { min-width: 9em; }
+
+/* v1.30 — over-quota chip opens the picker */
+button.chip.quota-btn { cursor: pointer; min-height: 30px; white-space: normal; text-align: left; justify-content: flex-start; flex-wrap: wrap; gap: 2px 6px; max-width: 16em; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); }
+button.chip.quota-btn:hover { border-color: var(--warn); }
+label.quota-row { align-items: flex-start; padding: 8px 10px; border: 2px solid var(--line-2); border-radius: 12px; }
+label.quota-row:has(input:checked) { border-color: var(--ok); background: color-mix(in srgb, var(--ok-soft) 50%, transparent); }

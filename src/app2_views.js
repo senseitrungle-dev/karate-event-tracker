@@ -294,17 +294,57 @@ function divRowHTML(d) {
         <div class="dojo">${d.belt === 'kyu' ? esc(KT.rankLabel(d.minRank) + ' – ' + KT.rankLabel(d.maxRank)) + ' · ' : ''}${ageRange(d)}</div></td>
       <td class="small">${esc(KT.FORMATS[d.format] || d.format)}<div class="dojo">${esc(scoringLabel(d))}</div></td>
       <td class="small">${ring ? esc(ring.name) : '<span class="muted">—</span>'}</td>
-      <td class="n">${n}</td><td>${st}${divIssuesHTML(d)}</td>
+      <td class="n">${n}</td><td>${!bs.drawn && divIssues(d).some(i => i.kind === 'quota') ? '' : st}${divIssuesHTML(d)}</td>
       <td style="white-space:nowrap">${bs.drawn ? `<button class="sm" data-act="view-bracket" data-id="${esc(d.id)}">Bracket</button>` : n >= 1 ? `<button class="sm" data-act="draw" data-id="${esc(d.id)}">Draw</button>` : ''}</td></tr>`;
 }
 /** v1.29: quota per country/region/dojo and team sizes for a division */
 function divIssues(d) {
   const ents = divEntrants(d.id), lvl = (curEvent() || {}).level, out = [];
-  for (const q of KT.quotaIssues(d, ents, id => entGroupLabel(id, lvl))) out.push({ kind: 'quota', text: `${q.group} ${q.n}/${q.max}`, long: `${q.group} has ${q.n} ${KT.EVENT_TYPES[d.eventType].team ? 'teams' : 'athletes'} — limit ${q.max}` });
+  for (const q of KT.quotaIssues(d, ents, id => entGroupLabel(id, lvl))) out.push({ kind: 'quota', group: q.group, text: `${q.group} ${q.n}/${q.max}`, long: `${q.group} has ${q.n} ${KT.EVENT_TYPES[d.eventType].team ? 'teams' : 'athletes'} — limit ${q.max}` });
   if (KT.EVENT_TYPES[d.eventType].team) { const sz = KT.teamSizeFor(d); for (const id of ents) { const t = DC.teamBy[id], n = t ? (t.memberIds || []).length : 0; if (t && (n < sz[0] || n > sz[1])) out.push({ kind: 'size', text: `${t.name}: ${n} members`, long: `${t.name} has ${n} members — this division needs ${sz[0] === sz[1] ? sz[0] : sz[0] + '–' + sz[1]}` }); } }
   return out;
 }
-function divIssuesHTML(d) { return divIssues(d).map(i => ` <span class="chip warn" title="${esc(i.long)}">${i.kind === 'quota' ? 'Over quota · ' : ''}${esc(i.text)}</span>`).join(''); }
+function divIssuesHTML(d) {
+  return divIssues(d).map(i => i.kind === 'quota' && isDirector() && !S.d.brackets[d.id]
+    ? ` <button class="chip warn quota-btn" data-act="quota-pick" data-id="${esc(d.id)}" data-group="${esc(i.group)}" title="${esc(i.long)} — tap to choose who competes"><span>Over quota: ${esc(i.text)}</span> <b>Choose ›</b></button>`
+    : ` <span class="chip warn" title="${esc(i.long)}">${i.kind === 'quota' ? 'Over quota · ' : ''}${esc(i.text)}</span>`).join('');
+}
+/* v1.30: choose who competes when a country/region/dojo is over the division's quota */
+function quotaPickForm(did, group) {
+  const d = DC.divBy[did]; if (!d) return;
+  const lvl = (curEvent() || {}).level, team = KT.EVENT_TYPES[d.eventType].team, max = +d.quota || 0;
+  const ids = divEntrants(did).filter(id => entGroupLabel(id, lvl) === group);
+  if (ids.length <= max) { toast(`${group} is within the limit now.`); return; }
+  const info = id => { const c = DC.compBy[id]; if (c) return `${esc(KT.rankLabel(c.rank))}${c.age != null ? ' · age ' + esc(c.age) : ''}${(c.events || []).length > 1 ? ' · also in ' + esc((c.events || []).filter(e => e !== d.eventType).map(e => KT.EVENT_TYPES[e].short).join(', ')) : ''}`;
+    const t = DC.teamBy[id]; return t ? esc((t.memberIds || []).map(m => DC.compBy[m] ? DC.compBy[m].firstName + ' ' + DC.compBy[m].lastName : '').filter(Boolean).join(', ')) : ''; };
+  openModal(sheet(`Choose who competes · ${esc(group)}`, `<form id="f-quota" data-form="quota" data-id="${esc(did)}" data-group="${esc(group)}" class="stack">
+    <p class="small"><b>${esc(d.name)}</b> allows <b>${max} ${team ? (max === 1 ? 'team' : 'teams') : 'athletes'}</b> per ${esc(sepLabel())}; ${esc(group)} has ${ids.length}. Tick the ${max} who compete.</p>
+    <div class="stack" style="gap:6px">${ids.map(id => `<label class="check quota-row"><input type="checkbox" name="keep" data-multi="1" value="${esc(id)}" data-change="quota-count"> <span><b>${esc(entName(id))}</b><span class="tiny muted" style="display:block">${info(id)}</span></span></label>`).join('')}</div>
+    <p class="small" id="quota-msg" aria-live="polite"></p>
+    <p class="tiny muted">${team ? 'Teams not chosen are marked Withdrawn.' : `Athletes not chosen are taken out of ${esc(KT.EVENT_TYPES[d.eventType].label)} only — they stay registered and keep their other events.`} The division can be drawn once every country is within the limit.</p></form>`,
+    `<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-quota" id="quota-save" disabled>Save</button>`));
+  quotaCount();
+}
+function quotaCount() {
+  const f = $('#f-quota'); if (!f) return;
+  const d = DC.divBy[f.dataset.id], max = +d.quota || 0, n = $$('input[name="keep"]:checked', f).length;
+  const msg = $('#quota-msg'), b = $('#quota-save');
+  if (msg) { msg.textContent = n === max ? `${n} chosen — ready to save.` : n < max ? `${n} of ${max} chosen — tick ${max - n} more.` : `${n} ticked — only ${max} allowed, untick ${n - max}.`; msg.style.color = n === max ? 'var(--ok)' : n > max ? 'var(--bad)' : ''; }
+  if (b) b.disabled = n !== max;
+}
+async function saveQuotaPick(f) {
+  const d = DC.divBy[f.dataset.id]; if (!d) return;
+  const max = +d.quota || 0, keep = new Set($$('input[name="keep"]:checked', f).map(i => i.value));
+  if (keep.size !== max) { quotaCount(); return; }
+  const drop = $$('input[name="keep"]', f).map(i => i.value).filter(id => !keep.has(id));
+  for (const id of drop) {
+    const c = DC.compBy[id];
+    if (c) { const ov = Object.assign({}, c.divOverride || {}); delete ov[d.eventType];
+      await guard(() => S.store.update(P.doc(S.evId, 'competitors', id), { events: (c.events || []).filter(e => e !== d.eventType), divOverride: ov })); }
+    else if (DC.teamBy[id]) await guard(() => S.store.update(P.doc(S.evId, 'teams', id), { status: 'withdrawn' }));
+  }
+  closeModal(); toast(`${f.dataset.group}: ${max} kept in ${d.name}; ${drop.map(entName).join(', ')} ${drop.length === 1 ? 'is' : 'are'} out of this event`);
+}
 function ageRange(d) {
   const lo = d.minAge === '' || d.minAge == null ? null : d.minAge, hi = d.maxAge === '' || d.maxAge == null ? null : d.maxAge;
   if (lo == null && hi == null) return 'All ages';

@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.29.0 Requirements & Design
+# Karate Event Tracker · v1.30.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -468,3 +468,9 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
   - Other divisions not in the rule set are removed (option, only if not drawn); same event/gender/age-group divisions are updated (ages, rank, quota, team size, kumite type) keeping ring, format, bronze and timing; drawn divisions are never touched. Brackets are not drawn by this step.
 - **Ambiguities in the package (as implemented, director can edit any division)**: the 16–17 group is titled "YOUTH" on p.7 but "JUNIOR" in the combined table on p.8 and §III lists "seniors, youth, juniors and cadets" → named **Junior**. Cadet/Junior Enbu is listed as "1 Team (3 athletes)" while Youth/Senior Enbu is 2 → kept as written (3).
 - Verify: test/worlds2026.js (pop-up, 34 divisions only, event settings, age limits, Ko-go/Jiyu, team sizes, no Women's Enbu, Shodan-only + quotas, Poland sheet: Janusz born Dec 2005 → Senior by birth year, Bis 2006 → Youth, Simona 2012 → Cadet, Kisiel 2010 → Junior; over-quota flag + checklist; kyu athlete unplaced; 2-member Cadet/Junior Enbu refused, 3 accepted; judge level 4 shown); regression.
+
+## 53. v1.30.0 — choose who competes when a country is over quota; no draw while over quota (2026-10-18)
+- **Choose**: on a division that is over its quota (e.g. WTKF 2026: 3 athletes / 1 team per country), the status shows **"Over quota: Poland 4/3 · Choose ›"** (instead of "Ready to draw"). Tapping it lists that country's entrants in the division (rank, age, other events) with tick boxes; Save is enabled only when exactly the quota is ticked ("tick 1 more" / "untick 1").
+  - Athletes not chosen lose **that event only** (removed from their events, override cleared) — they stay registered and keep their other events. Teams not chosen are marked Withdrawn.
+- **Draw blocked**: Draw / Save & draw / Redraw on an undrawn over-quota division is refused with the reason and opens the picker. **Draw all ready** draws the others and lists the over-quota divisions it skipped (confirm dialog + toast). Divisions already drawn are not affected (the chip there is information only).
+- Verify: test/worlds2026.js (draw refused + picker opens, 4 listed, Save only at exactly 3, unticked athlete keeps registration but loses the event, flag cleared, division draws, Draw all warns and leaves over-quota divisions undrawn, table fits at 1280px, no sideways scroll at 390px); regression.

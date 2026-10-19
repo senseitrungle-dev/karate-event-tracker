@@ -651,16 +651,22 @@ table.imp-tbl tr.imp-warn td { background: var(--warn-soft); }
 #imp-preview { min-width: 0; overflow: hidden; } #imp-preview .tw { max-width: 100%; overflow: auto; }
 #imp-text { white-space: pre; overflow-x: auto; }
 #jimp-preview { min-width: 0; } #jimp-preview .chip { white-space: normal; max-width: 100%; } #jimp-preview td:nth-child(3) { min-width: 9em; }
+
+/* v1.30 — over-quota chip opens the picker */
+button.chip.quota-btn { cursor: pointer; min-height: 30px; white-space: normal; text-align: left; justify-content: flex-start; flex-wrap: wrap; gap: 2px 6px; max-width: 16em; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); }
+button.chip.quota-btn:hover { border-color: var(--warn); }
+label.quota-row { align-items: flex-start; padding: 8px 10px; border: 2px solid var(--line-2); border-radius: 12px; }
+label.quota-row:has(input:checked) { border-color: var(--ok); background: color-mix(in srgb, var(--ok-soft) 50%, transparent); }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.29.0 */
+<script>/* Karate Event Tracker v1.30.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.29.0';
+  const VERSION = '1.30.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -4896,17 +4902,57 @@ function divRowHTML(d) {
         <div class="dojo">${d.belt === 'kyu' ? esc(KT.rankLabel(d.minRank) + ' – ' + KT.rankLabel(d.maxRank)) + ' · ' : ''}${ageRange(d)}</div></td>
       <td class="small">${esc(KT.FORMATS[d.format] || d.format)}<div class="dojo">${esc(scoringLabel(d))}</div></td>
       <td class="small">${ring ? esc(ring.name) : '<span class="muted">—</span>'}</td>
-      <td class="n">${n}</td><td>${st}${divIssuesHTML(d)}</td>
+      <td class="n">${n}</td><td>${!bs.drawn && divIssues(d).some(i => i.kind === 'quota') ? '' : st}${divIssuesHTML(d)}</td>
       <td style="white-space:nowrap">${bs.drawn ? `<button class="sm" data-act="view-bracket" data-id="${esc(d.id)}">Bracket</button>` : n >= 1 ? `<button class="sm" data-act="draw" data-id="${esc(d.id)}">Draw</button>` : ''}</td></tr>`;
 }
 /** v1.29: quota per country/region/dojo and team sizes for a division */
 function divIssues(d) {
   const ents = divEntrants(d.id), lvl = (curEvent() || {}).level, out = [];
-  for (const q of KT.quotaIssues(d, ents, id => entGroupLabel(id, lvl))) out.push({ kind: 'quota', text: `${q.group} ${q.n}/${q.max}`, long: `${q.group} has ${q.n} ${KT.EVENT_TYPES[d.eventType].team ? 'teams' : 'athletes'} — limit ${q.max}` });
+  for (const q of KT.quotaIssues(d, ents, id => entGroupLabel(id, lvl))) out.push({ kind: 'quota', group: q.group, text: `${q.group} ${q.n}/${q.max}`, long: `${q.group} has ${q.n} ${KT.EVENT_TYPES[d.eventType].team ? 'teams' : 'athletes'} — limit ${q.max}` });
   if (KT.EVENT_TYPES[d.eventType].team) { const sz = KT.teamSizeFor(d); for (const id of ents) { const t = DC.teamBy[id], n = t ? (t.memberIds || []).length : 0; if (t && (n < sz[0] || n > sz[1])) out.push({ kind: 'size', text: `${t.name}: ${n} members`, long: `${t.name} has ${n} members — this division needs ${sz[0] === sz[1] ? sz[0] : sz[0] + '–' + sz[1]}` }); } }
   return out;
 }
-function divIssuesHTML(d) { return divIssues(d).map(i => ` <span class="chip warn" title="${esc(i.long)}">${i.kind === 'quota' ? 'Over quota · ' : ''}${esc(i.text)}</span>`).join(''); }
+function divIssuesHTML(d) {
+  return divIssues(d).map(i => i.kind === 'quota' && isDirector() && !S.d.brackets[d.id]
+    ? ` <button class="chip warn quota-btn" data-act="quota-pick" data-id="${esc(d.id)}" data-group="${esc(i.group)}" title="${esc(i.long)} — tap to choose who competes"><span>Over quota: ${esc(i.text)}</span> <b>Choose ›</b></button>`
+    : ` <span class="chip warn" title="${esc(i.long)}">${i.kind === 'quota' ? 'Over quota · ' : ''}${esc(i.text)}</span>`).join('');
+}
+/* v1.30: choose who competes when a country/region/dojo is over the division's quota */
+function quotaPickForm(did, group) {
+  const d = DC.divBy[did]; if (!d) return;
+  const lvl = (curEvent() || {}).level, team = KT.EVENT_TYPES[d.eventType].team, max = +d.quota || 0;
+  const ids = divEntrants(did).filter(id => entGroupLabel(id, lvl) === group);
+  if (ids.length <= max) { toast(`${group} is within the limit now.`); return; }
+  const info = id => { const c = DC.compBy[id]; if (c) return `${esc(KT.rankLabel(c.rank))}${c.age != null ? ' · age ' + esc(c.age) : ''}${(c.events || []).length > 1 ? ' · also in ' + esc((c.events || []).filter(e => e !== d.eventType).map(e => KT.EVENT_TYPES[e].short).join(', ')) : ''}`;
+    const t = DC.teamBy[id]; return t ? esc((t.memberIds || []).map(m => DC.compBy[m] ? DC.compBy[m].firstName + ' ' + DC.compBy[m].lastName : '').filter(Boolean).join(', ')) : ''; };
+  openModal(sheet(`Choose who competes · ${esc(group)}`, `<form id="f-quota" data-form="quota" data-id="${esc(did)}" data-group="${esc(group)}" class="stack">
+    <p class="small"><b>${esc(d.name)}</b> allows <b>${max} ${team ? (max === 1 ? 'team' : 'teams') : 'athletes'}</b> per ${esc(sepLabel())}; ${esc(group)} has ${ids.length}. Tick the ${max} who compete.</p>
+    <div class="stack" style="gap:6px">${ids.map(id => `<label class="check quota-row"><input type="checkbox" name="keep" data-multi="1" value="${esc(id)}" data-change="quota-count"> <span><b>${esc(entName(id))}</b><span class="tiny muted" style="display:block">${info(id)}</span></span></label>`).join('')}</div>
+    <p class="small" id="quota-msg" aria-live="polite"></p>
+    <p class="tiny muted">${team ? 'Teams not chosen are marked Withdrawn.' : `Athletes not chosen are taken out of ${esc(KT.EVENT_TYPES[d.eventType].label)} only — they stay registered and keep their other events.`} The division can be drawn once every country is within the limit.</p></form>`,
+    `<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-quota" id="quota-save" disabled>Save</button>`));
+  quotaCount();
+}
+function quotaCount() {
+  const f = $('#f-quota'); if (!f) return;
+  const d = DC.divBy[f.dataset.id], max = +d.quota || 0, n = $$('input[name="keep"]:checked', f).length;
+  const msg = $('#quota-msg'), b = $('#quota-save');
+  if (msg) { msg.textContent = n === max ? `${n} chosen — ready to save.` : n < max ? `${n} of ${max} chosen — tick ${max - n} more.` : `${n} ticked — only ${max} allowed, untick ${n - max}.`; msg.style.color = n === max ? 'var(--ok)' : n > max ? 'var(--bad)' : ''; }
+  if (b) b.disabled = n !== max;
+}
+async function saveQuotaPick(f) {
+  const d = DC.divBy[f.dataset.id]; if (!d) return;
+  const max = +d.quota || 0, keep = new Set($$('input[name="keep"]:checked', f).map(i => i.value));
+  if (keep.size !== max) { quotaCount(); return; }
+  const drop = $$('input[name="keep"]', f).map(i => i.value).filter(id => !keep.has(id));
+  for (const id of drop) {
+    const c = DC.compBy[id];
+    if (c) { const ov = Object.assign({}, c.divOverride || {}); delete ov[d.eventType];
+      await guard(() => S.store.update(P.doc(S.evId, 'competitors', id), { events: (c.events || []).filter(e => e !== d.eventType), divOverride: ov })); }
+    else if (DC.teamBy[id]) await guard(() => S.store.update(P.doc(S.evId, 'teams', id), { status: 'withdrawn' }));
+  }
+  closeModal(); toast(`${f.dataset.group}: ${max} kept in ${d.name}; ${drop.map(entName).join(', ')} ${drop.length === 1 ? 'is' : 'are'} out of this event`);
+}
 function ageRange(d) {
   const lo = d.minAge === '' || d.minAge == null ? null : d.minAge, hi = d.maxAge === '' || d.maxAge == null ? null : d.maxAge;
   if (lo == null && hi == null) return 'All ages';
@@ -7517,22 +7563,26 @@ async function drawDivision(did) {
   if (bs.drawn && !(await confirmBox(`Redraw ${dv.name}? The current draw is replaced.`, 'Redraw'))) return;
   const clash = KT.seedClashes(dv.seeds);
   if (Object.keys(clash).length) { toast(seedClashText(clash) + ' Fix the seeds in Settings first.', true); return; }
+  const over = divIssues(dv).filter(i => i.kind === 'quota');   // v1.30: no draw while a country is over the limit
+  if (over.length) { toast(`${dv.name} can't be drawn yet: ${over.map(i => i.long).join('; ')}. Choose who competes first.`, true); if (isDirector()) quotaPickForm(did, over[0].group); return; }
   const list = ents.map(id => ({ id, seed: (dv.seeds || {})[id] || 0, group: entGroup(id) }));
   const br = KT.generateBracket(dv, list);
   const ok = await guard(() => S.store.set(P.live(S.evId, 'brackets', did), br), `Drew ${dv.name}`);
   if (ok) { S.ui.bracketDiv = did; }
 }
 async function drawAll() {
-  const ready = DC.divs.filter(d => !S.d.brackets[d.id] && divEntrants(d.id).length >= 1);
-  if (!ready.length) { toast('Every division with entrants is already drawn.'); return; }
-  if (!(await confirmBox(`Draw ${plural(ready.length, 'division')} now?`, 'Draw'))) return;
+  const cand = DC.divs.filter(d => !S.d.brackets[d.id] && divEntrants(d.id).length >= 1);
+  const blocked = cand.filter(d => divIssues(d).some(i => i.kind === 'quota')), ready = cand.filter(d => !blocked.includes(d));
+  const bTxt = blocked.length ? `${plural(blocked.length, 'division')} over quota ${blocked.length === 1 ? 'is' : 'are'} not drawn: ${blocked.map(d => d.name + ' (' + divIssues(d).filter(i => i.kind === 'quota').map(i => i.text).join(', ') + ')').join('; ')}.` : '';
+  if (!ready.length) { toast(blocked.length ? bTxt + ' Choose who competes first.' : 'Every division with entrants is already drawn.', !!blocked.length); return; }
+  if (!(await confirmBox(`Draw ${plural(ready.length, 'division')} now?${bTxt ? '\n\n' + bTxt + ' Use “Over quota · Choose” on those divisions first.' : ''}`, 'Draw'))) return;
   for (const d of ready) {
     const clash = KT.seedClashes(d.seeds);
     if (Object.keys(clash).length) { toast(`${d.name}: ` + seedClashText(clash), true); return; }
     const list = divEntrants(d.id).map(id => ({ id, seed: (d.seeds || {})[id] || 0, group: entGroup(id) }));
     if (!(await guard(() => S.store.set(P.live(S.evId, 'brackets', d.id), KT.generateBracket(d, list))))) return;
   }
-  toast(`Drew ${plural(ready.length, 'division')}`);
+  toast(`Drew ${plural(ready.length, 'division')}${blocked.length ? ` · ${blocked.length} over quota not drawn` : ''}`, !!blocked.length);
 }
 async function deleteEvent(id) {
   const ev = S.events[id];
@@ -7677,6 +7727,7 @@ const ACT = {
   'team-delete': async () => { const id = $('#f-team').dataset.id; if (!(await confirmBox('Delete this team?', 'Delete', true))) return; closeModal(); guard(() => S.store.del(P.doc(S.evId, 'teams', id)), 'Team deleted'); },
   'div-std': () => stdDivForm(false),
   'div-preset': el => presetForm(el.dataset.id),
+  'quota-pick': el => quotaPickForm(el.dataset.id, el.dataset.group),
   'div-kyu': () => stdDivForm(true),
   'div-new': () => divForm(null),
   'div-edit': el => divForm(el.dataset.id),
@@ -7882,6 +7933,7 @@ const CHANGE = {
   att: el => writeAttendance(S.ui.session, { [el.dataset.id]: el.checked }),
   'jimp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#jimp-text').value = decodeCsvBytes(rd.result); judgeImportPreview(); }; rd.readAsArrayBuffer(f); },
   'jimp-pick': () => jimpCount(),
+  'quota-count': () => quotaCount(),
   'imp-dates': () => { if ($('#imp-text').value.trim()) ACT['imp-preview'](); },
   'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = decodeCsvBytes(rd.result); ACT['imp-preview'](); }; rd.readAsArrayBuffer(f); },
   kscore: el => { const d = loadDraft(S.modal.key), k = el.dataset.s === 'a' ? 'sa' : 'sb'; d[k] = d[k] || []; const v = el.value.replace(',', '.'); d[k][+el.dataset.i] = v === '' ? '' : v; draftChanged(); },
@@ -8049,6 +8101,7 @@ function wire() {
     else if (k === 'div') saveDiv(f);
     else if (k === 'std') saveStd(f, false);
     else if (k === 'preset') applyPreset(f);
+    else if (k === 'quota') saveQuotaPick(f);
     else if (k === 'kyu') saveStd(f, true);
     else if (k === 'ring') {
       const v = fd(f); if (!v.name) return;
