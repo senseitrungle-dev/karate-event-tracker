@@ -522,10 +522,36 @@ function bracketViewHTML(did) {
       html += `<div class="card"><div class="row between"><h3>Pool ${esc(P)}</h3>${segRingChip(did, 'P:' + P)}</div><div class="small muted">${plural(br.pools[P].length, 'entrant')}</div>${elim(P, `E${P}-`) || '<p class="small muted">Single entrant — advances automatically.</p>'}</div>`;
     }
     html += playoff();
+  } else if (br.wtkf && br.size >= 4) {
+    html += `<div class="card">${roundsRingLine(did) ? `<div class="row" style="justify-content:flex-end">${roundsRingLine(did)}</div>` : ''}${wtkfChartHTML(did, liveId)}${br.matches.B ? `<div class="stage-h label">Bronze match</div>${one('B')}` : ''}</div>`;
   } else {
     html += `<div class="card">${roundsRingLine(did) ? `<div class="row" style="justify-content:flex-end">${roundsRingLine(did)}</div>` : ''}${elim(undefined, '')}</div>`;
   }
   return html;
+}
+/** v1.33: WTKF Exhibit E / F chart — "A" bracket (A-1, A-2 pools) on the left, final in the middle, "B" bracket (B-1, B-2) mirrored on the right. */
+function wtkfChartHTML(did, liveId) {
+  const br = S.d.brackets[did], res = DC.res[did] || {}, dv = DC.divBy[did];
+  const ms = Object.values(br.matches).filter(m => m.stage === 'W');
+  const k = Math.max(...ms.map(m => m.round)), q = br.size / 4;
+  const name = r => r === k ? 'Final' : r === k - 1 ? 'Semi-final' : r === 1 ? 'First round' : r === k - 2 ? 'Pool final' : 'Round ' + r;
+  const fuku = dv && dv.eventType === 'FUKUGO';
+  const col = (r, side) => {
+    const rm = ms.filter(m => m.round === r).sort((a, b) => a.idx - b.idx), half = rm.length / 2;
+    const mine = r === k ? rm : side === 'A' ? rm.filter(m => m.idx < half) : rm.filter(m => m.idx >= half);
+    const perPool = q / Math.pow(2, r);              // matches of this round inside one pool
+    let body = '';
+    if (perPool >= 1) {
+      const pools = side === 'A' ? [0, 1] : [2, 3];
+      body = pools.map(b => `<div class="wpool"><div class="wpool-l">${KT.WTKF_POOLS[b]} pool</div>${mine.filter(m => Math.floor(m.idx / perPool) === b).map(m => bmHTML(did, m, res, m.id === liveId)).join('')}</div>`).join('');
+    } else body = mine.map(m => bmHTML(did, m, res, m.id === liveId)).join('');
+    const sub = fuku && mine[0] ? `<div class="tiny muted" style="text-align:center">(${KT.fukugoPart(mine[0], br) === 'kitei' ? 'Ki-tei' : 'Kumite'})</div>` : '';
+    return `<div class="wcol${r === k ? ' wfinal' : ''}"><div class="label">${esc(name(r))}</div>${sub}<div class="wcol-in">${body}</div></div>`;
+  };
+  const left = [], right = [];
+  for (let r = 1; r < k; r++) { left.push(col(r, 'A')); right.unshift(col(r, 'B')); }
+  return `<div class="row between small" style="margin-bottom:6px"><b>“A” bracket</b><span class="muted">${fuku ? 'WTKF Fuku-go elimination chart (Exhibit F)' : 'WTKF elimination chart (Exhibit E)'}</span><b>“B” bracket</b></div>
+    <div class="bracket-wrap"><div class="wchart">${left.join('')}${col(k, 'F')}${right.join('')}</div></div>`;
 }
 /** Ring a pool / round runs on (shown to everyone in the bracket view). */
 /** Ring a pool / round runs on. Director: a selector to move it to another ring (pools run in parallel); everyone else: a label. */
@@ -657,7 +683,7 @@ function kpViewHTML(did) {
     for (const P of Object.keys(rd.pools)) {
       const p = rd.pools[P];
       const chip = (p.rows[0] ? segRingChip(did, KT.kpSegOfKey(br, p.rows[0].key)) : '') + (p.complete ? '<span class="chip ok">Complete</span>' : `<span class="chip plain">${p.rows.filter(r => r.sheet).length}/${p.rows.length} scored</span>`);
-      h += kpTableHTML(did, `${Object.keys(rd.pools).length > 1 ? 'Pool ' + P : KT.kpRoundName(rd)}`, p.rows, p.order, { byRank: p.scoredAll, chip, needRp: p.needRp });
+      h += kpTableHTML(did, `${Object.keys(rd.pools).length > 1 ? (br.wtkf ? (rd.n === 1 ? 'Chart ' : 'Group ') + (KT.POOL_NAMES.indexOf(P) + 1) : 'Pool ' + P) : br.wtkf && rd.type === 'semi' ? 'Final elimination' : KT.kpRoundName(rd)}`, p.rows, p.order, { byRank: p.scoredAll, chip, needRp: p.needRp });
     }
     h += '</div>';
   }

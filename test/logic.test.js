@@ -631,5 +631,57 @@ t('Kyu levels: custom rank groups & exchanges (v1.32)', () => {
   assert.deepEqual(KT.kyuGroupsCheck([{ label: 'A', minRank: 'k10', maxRank: 'k4', exchanges: ['x'] }]).gaps, ['k3', 'k2', 'k1']);
   assert.equal(KT.defaultKyuGroups().length, 4);
 });
+t('WTKF Exhibit E: four pools, pool sizes and byes as in the handwritten charts', () => {
+  const sizes = { 5: [1, 2, 1, 1], 6: [1, 2, 1, 2], 7: [1, 2, 2, 2], 8: [2, 2, 2, 2], 9: [2, 3, 2, 2], 10: [2, 3, 2, 3], 11: [2, 3, 3, 3], 12: [3, 3, 3, 3],
+    13: [3, 4, 3, 3], 14: [3, 4, 3, 4], 15: [3, 4, 4, 4], 16: [4, 4, 4, 4], 17: [4, 5, 4, 4], 20: [5, 5, 5, 5], 21: [5, 6, 5, 5], 22: [5, 6, 5, 6], 23: [5, 6, 6, 6], 24: [6, 6, 6, 6] };
+  for (const [n, exp] of Object.entries(sizes)) {
+    assert.deepEqual(KT.wtkfPoolSizes(+n), exp, 'pool sizes for ' + n);
+    const size = KT.nextPow2(+n), q = size / 4, sl = KT.wtkfSlots(ents(+n), size, rng(+n));
+    assert.deepEqual([0, 1, 2, 3].map(b => sl.slice(b * q, b * q + q).filter(Boolean).length), exp, 'slots for ' + n);
+    for (let i = 0; i < size; i += 2) assert.ok(sl[i] || sl[i + 1], 'no empty match for ' + n);
+  }
+  // byes inside a pool of 8 slots: top of each half first (5 → matches 1,2,3 have byes; 6 → 1 and 3; 7 → 1)
+  const byeMatches = (n, pool) => { const size = KT.nextPow2(n), q = size / 4, sl = KT.wtkfSlots(ents(n), size, rng(1)).slice(pool * q, pool * q + q); const out = []; for (let j = 0; j < q / 2; j++) if (!sl[2 * j + 1]) out.push(j); return out; };
+  assert.deepEqual(byeMatches(17, 1), [0, 1, 2]);     // A-2 has 5
+  assert.deepEqual(byeMatches(24, 0), [0, 2]);        // 6 in a pool
+  assert.deepEqual(byeMatches(31, 0), [0]);           // A-1 has 7
+});
+t('WTKF Exhibit E: previous champions 1st A-1, 2nd B-1, 3rd B-2, 4th A-2 — top of the pool with the bye', () => {
+  for (const n of [6, 12, 21]) {
+    const e = ents(n); e[0].seed = 1; e[1].seed = 2; e[2].seed = 3; e[3].seed = 4;
+    const size = KT.nextPow2(n), q = size / 4, sl = KT.wtkfSlots(KT.orderEntrants(e, rng(4)), size, rng(4));
+    assert.deepEqual(['c1', 'c2', 'c3', 'c4'].map(id => Math.floor(sl.indexOf(id) / q)), [0, 2, 3, 1], 'pools for ' + n);
+    ['c1', 'c2', 'c3', 'c4'].forEach(id => assert.equal(sl.indexOf(id) % q, 0));
+    if (n === 6) { assert.equal(sl[1], null); assert.equal(sl[2 * q + 1], null); }   // 1st and 2nd get the byes (A-1, B-1 have one entrant)
+  }
+});
+t('WTKF Exhibit E: same country spread over the four pools, not meeting in the first match', () => {
+  for (let s = 1; s <= 15; s++) {
+    const e = ents(16, i => i < 4 ? 'JPN' : i < 8 ? 'USA' : 'C' + i), sl = KT.wtkfSlots(e, 16, rng(s));
+    const poolOf = id => Math.floor(sl.indexOf(id) / 4);
+    assert.deepEqual(['c1', 'c2', 'c3', 'c4'].map(poolOf).sort().join(), '0,1,2,3');
+    assert.deepEqual(['c5', 'c6', 'c7', 'c8'].map(poolOf).sort().join(), '0,1,2,3');
+    for (let i = 0; i < 16; i += 2) { const g = x => x && e.find(y => y.id === x).dojo; assert.ok(g(sl[i]) !== g(sl[i + 1])); }
+  }
+});
+t('WTKF Exhibit A: kata charts ≤ 12, 1/2/4/6 charts, champions at the bottom, neighbouring charts merge', () => {
+  assert.deepEqual([5, 12, 13, 24, 25, 29, 48, 49, 54, 72].map(KT.kataChartCount), [1, 1, 2, 2, 4, 4, 4, 6, 6, 6]);
+  assert.deepEqual(KT.wtkfKataCharts(ents(29), rng(2)).map(c => c.length), [7, 7, 7, 8]);
+  assert.deepEqual(KT.wtkfKataCharts(ents(54), rng(2)).map(c => c.length), [9, 9, 9, 9, 9, 9]);
+  assert.deepEqual([1, 2, 3, 4].map(sd => KT.kataSeedChart(sd, 2)), [0, 1, 1, 0]);
+  assert.deepEqual([1, 2, 3, 4].map(sd => KT.kataSeedChart(sd, 4)), [1, 2, 3, 0]);
+  const e = ents(29); [1, 2, 3, 4].forEach(sd => { e[sd - 1].seed = sd; });
+  const dv = { id: 'k', eventType: 'IKATA', format: 'KP', wtkfCharts: true, scoring: { judges: 5 } };
+  const br = KT.generateBracket(dv, e, rng(5));
+  assert.ok(br.wtkf && Object.keys(br.kpPools).length === 4);
+  const P = br.kpPools; assert.equal(P.A[P.A.length - 1], 'c4'); assert.equal(P.B[P.B.length - 1], 'c1'); assert.equal(P.C[P.C.length - 1], 'c2'); assert.equal(P.D[P.D.length - 1], 'c3');
+  // score round 1: everyone scores by entry order → round 2 groups are charts A+B and C+D (8 each)
+  for (const [pl, ids] of Object.entries(P)) ids.forEach((id, i) => { br.scores['R1_' + id] = { s: [5, 5, 5, 5, 5 + i * 0.1].map(String), kata: 'Jion' }; });
+  const st = KT.kpState(br), r2 = st.rounds[1];
+  assert.equal(Object.keys(r2.pools).length, 2);
+  const from = ids => [...new Set(ids.map(id => Object.keys(P).find(k => P[k].includes(id))))].sort().join('');
+  assert.deepEqual(Object.values(r2.pools).map(p => from(p.order)).sort(), ['AB', 'CD']);
+  assert.ok(Object.values(r2.pools).every(p => p.order.length === 8));
+});
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

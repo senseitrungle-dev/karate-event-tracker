@@ -33,14 +33,14 @@ const path = require('path');
   { const o = await page.$$eval('#br-div option', o => o.map(x => [x.value, x.textContent])); await page.selectOption('#br-div', o.find(x => /Senior Men Individual Kata/.test(x[1]))[0]); await page.waitForTimeout(200); }
   const rc = await page.$$eval('select[data-change="seg-ring"][data-seg^="P:"]', x => x.map(y => y.selectedOptions[0].textContent));
   ok('bracket shows pool rings (Ring 1 and Ring 2)', rc.some(t => /Ring 2/.test(t)) && rc.some(t => /Ring 1/.test(t)));
-  // director moves Pool C to Ring 2 straight from the bracket view
-  const selC = await page.$('select[data-change="seg-ring"][data-seg="P:C"]');
-  ok('director has a ring selector on each pool in bracket view', !!selC && (await page.$$('select[data-change="seg-ring"][data-seg^="P:"]')).length >= 3);
-  await page.selectOption('select[data-change="seg-ring"][data-seg="P:C"]', ring2); await page.waitForTimeout(300);
-  ok('Pool C now on Ring 2', (await page.$eval('select[data-change="seg-ring"][data-seg="P:C"]', s => s.value)) === ring2);
+  // director moves Pool A to Ring 2 straight from the bracket view (National event: WTKF kata charts of up to 12 → 2 charts here)
+  const selA = await page.$('select[data-change="seg-ring"][data-seg="P:A"]');
+  ok('director has a ring selector on each pool in bracket view', !!selA && (await page.$$('select[data-change="seg-ring"][data-seg^="P:"]')).length >= 2);
+  await page.selectOption('select[data-change="seg-ring"][data-seg="P:A"]', ring2); await page.waitForTimeout(300);
+  ok('Pool A now on Ring 2', (await page.$eval('select[data-change="seg-ring"][data-seg="P:A"]', s => s.value)) === ring2);
   ok('semifinal/final ring selectors shown', !!(await page.$('select[data-change="seg-ring"][data-seg="SF"]')) && !!(await page.$('select[data-change="seg-ring"][data-seg="F"]')));
   await page.screenshot({ path: 'test/shots/v15-bracket-rings.png', fullPage: false });
-  await page.selectOption('select[data-change="seg-ring"][data-seg="P:C"]', { index: 0 }); await page.waitForTimeout(300);
+  await page.selectOption('select[data-change="seg-ring"][data-seg="P:A"]', { index: 0 }); await page.waitForTimeout(300);
   // Judges tab: judges by ring, unassigned list, move between rings
   await click('.tab:has-text("Judges")');
   const unBefore = await page.$$eval('.card:has(h3:text("Unassigned")) .jrow2', x => x.length);

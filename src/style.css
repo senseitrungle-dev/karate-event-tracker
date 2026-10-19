@@ -652,3 +652,13 @@ button.chip.quota-btn { cursor: pointer; min-height: 30px; white-space: normal; 
 button.chip.quota-btn:hover { border-color: var(--warn); }
 label.quota-row { align-items: flex-start; padding: 8px 10px; border: 2px solid var(--line-2); border-radius: 12px; }
 label.quota-row:has(input:checked) { border-color: var(--ok); background: color-mix(in srgb, var(--ok-soft) 50%, transparent); }
+
+/* v1.33 — WTKF Exhibit E chart: A bracket left, final centre, B bracket mirrored right */
+.wchart { display: flex; gap: 14px; align-items: stretch; min-width: min-content; padding: 4px 2px; }
+.wcol { display: flex; flex-direction: column; gap: 6px; width: 196px; min-width: 196px; }
+.wcol > .label { text-align: center; }
+.wcol-in { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 10px; }
+.wpool { display: flex; flex-direction: column; justify-content: space-around; gap: 8px; flex: 1; border-left: 3px solid var(--line-2); padding-left: 6px; }
+.wpool-l { font: 700 .68rem var(--f-body); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.wfinal .wcol-in { justify-content: center; }
+.wfinal { border-left: 1px dashed var(--line-2); border-right: 1px dashed var(--line-2); padding: 0 8px; }

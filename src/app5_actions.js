@@ -44,6 +44,14 @@ function openEvent(id) {
   render();
 }
 
+/** v1.33: WTKF charts (Exhibit E/F elimination, Exhibit A kata) — automatic at National and International events, or set per division */
+function wtkfChartsFor(dv) {
+  if (dv.chart === 'standard') return false;
+  if (!(dv.format === 'SE' || dv.format === 'KP')) return false;
+  if (dv.chart === 'wtkf') return true;
+  const lv = (curEvent() || {}).level; return lv === 'International' || lv === 'National';
+}
+const drawDiv = dv => Object.assign({}, dv, { wtkfCharts: wtkfChartsFor(dv) });
 async function drawDivision(did) {
   const dv = DC.divBy[did]; if (!dv) return;
   const bs = bracketState(did);
@@ -56,7 +64,7 @@ async function drawDivision(did) {
   const over = divIssues(dv).filter(i => i.kind === 'quota');   // v1.30: no draw while a country is over the limit
   if (over.length) { toast(`${dv.name} can't be drawn yet: ${over.map(i => i.long).join('; ')}. Choose who competes first.`, true); if (isDirector()) quotaPickForm(did, over[0].group); return; }
   const list = ents.map(id => ({ id, seed: (dv.seeds || {})[id] || 0, group: entGroup(id) }));
-  const br = KT.generateBracket(dv, list);
+  const br = KT.generateBracket(drawDiv(dv), list);
   const ok = await guard(() => S.store.set(P.live(S.evId, 'brackets', did), br), `Drew ${dv.name}`);
   if (ok) { S.ui.bracketDiv = did; }
 }
@@ -70,7 +78,7 @@ async function drawAll() {
     const clash = KT.seedClashes(d.seeds);
     if (Object.keys(clash).length) { toast(`${d.name}: ` + seedClashText(clash), true); return; }
     const list = divEntrants(d.id).map(id => ({ id, seed: (d.seeds || {})[id] || 0, group: entGroup(id) }));
-    if (!(await guard(() => S.store.set(P.live(S.evId, 'brackets', d.id), KT.generateBracket(d, list))))) return;
+    if (!(await guard(() => S.store.set(P.live(S.evId, 'brackets', d.id), KT.generateBracket(drawDiv(d), list))))) return;
   }
   toast(`Drew ${plural(ready.length, 'division')}${blocked.length ? ` · ${blocked.length} over quota not drawn` : ''}`, !!blocked.length);
 }

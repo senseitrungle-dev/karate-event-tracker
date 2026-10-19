@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.32.0 Requirements & Design
+# Karate Event Tracker · v1.33.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -509,3 +509,18 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Scoring** (`KT.kyuEval`, generalizes the NCR engine): exchange n of 2 × list, the call "Aka <technique> — hajime", attacker/defender, then Hantei by flags (flags levels have no point buttons — Warning and Han-soku for contact). Levels left exactly as NCR keep the NCR instructions and buttons.
 - **Division settings**: kyu kumite divisions can switch to "Kyu exchanges (list below)" and edit that division's list and decision.
 - Verify: logic.test.js (custom groups → divisions, exchange order Aka then Shiro, flags-only ignores points, validation: reversed / overlap / no exchanges / gaps); test/kyugroups.js (editor: rename, re-range, remove keeps edits, Ko-go → flags shows list, overlap refused, saved on event, rules window shows the event's levels, 36 divisions, all flags, sheet calls the custom exchanges and ends in Hantei, division-level edit, reset to NCR clears the list); ncr.js; regression.
+
+## 57. v1.33.0 — WTKF charts for National & International tournaments (2026-10-18)
+- **Sources**: "Competition Drawings" (WTKF rules book appendix: Exhibit A kata/en-bu elimination chart p.119, Exhibit E kumite single elimination chart p.117, Exhibit F fuku-go chart p.120, Exhibits B–D scoring records), "Charts for Kumite" parts 1–4 (Exhibit E filled in by hand for 1 … 24+ participants) and "Flow Chart Explanation".
+- **When**: automatically for single-elimination and kata-score-pool divisions at **National and International** events; per division "Draw chart": Automatic / WTKF charts / Standard draw.
+- **Kumite, Team Kumite, Fuku-go — Exhibit E/F** (`KT.wtkfSlots`): one elimination chart in four pools **A-1, A-2 ("A" bracket) and B-1, B-2 ("B" bracket)**; pool winners → A / B semi-finals → final.
+  - Pool sizes as equal as possible; entrants beyond an even split go to **A-2, B-2, B-1, then A-1** (byes the other way) — matches every handwritten chart (5: 1/2/1/1 … 13: 3/4/3/3 … 21: 5/6/5/5 … 24: 6/6/6/6). Chart size 1, 2, 4, 8, 16, 32, 64.
+  - Byes inside a pool go to the top match of each half first (5 in 8 → matches 1–3; 6 → 1 and 3; 7 → 1), as drawn.
+  - Previous championship (seeds 1–4): **1st A-1, 2nd B-1, 3rd B-2, 4th A-2**, top of the pool, bye first.
+  - Same country / club: spread as equally as possible over the four pools (and A/B sides), not meeting in the first match unless unavoidable.
+  - **View**: "A" bracket left (A-1, A-2 pools, First round → Semi-final), Final centre, "B" bracket mirrored right; fuku-go columns marked (Kumite)/(Ki-tei).
+- **Kata, Team (synchronized) Kata, En-bu — Exhibit A** (`KT.wtkfKataCharts`, `KT.kataChartCount`): charts of **at most 12**, number of charts **1, 2, 4, 6 …** (never 3): 29 → 4 charts 7/7/7/8, 54 → 6 × 9; same country spread over the charts.
+  - Previous winners at the bottom (perform last): one chart 4th, 3rd, 2nd, 1st; two charts — chart 1: 4th, 1st · chart 2: 3rd, 2nd; four charts — 4th → chart 1, 1st → chart 2, 2nd → chart 3, 3rd → chart 4 (6 charts: 4th → 1, 1st → 2, 2nd → 4, 3rd → 5 — extended by the same pattern).
+  - Top 4 of each chart advance; **neighbouring charts merge** (1+2 | 3+4 → 2 groups of 8; 1–3 | 4–6 → 2 groups of 12); then **final elimination of 8**, then **final of 4**. Charts / groups are labelled "Chart n" / "Group n".
+- Fix found on the way: the draw crashed when no random source was passed (now defaults).
+- Verify: logic.test.js (pool sizes and empty-match check for 5–24 vs the handwritten charts, bye positions, champions' pools, country spread over 15 draws, kata chart counts/sizes, champions' charts, merging A+B / C+D into 8s); test/wtkfcharts.js (International demo: Draw chart option, seeds hint, 26 entrants → pools 6/7/6/7, champions in A-1/B-1/B-2/A-2, mirrored chart view, kata 32 → 4 charts of 8, standard draw on request); regression.

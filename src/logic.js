@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.32.0';
+  const VERSION = '1.33.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -341,6 +341,91 @@ const KT = (function () {
     const out = {}; for (const [n, ids] of Object.entries(by)) if (ids.length > 1) out[n] = ids;
     return out;
   }
+  /* ---------- v1.33: WTKF charts (Competition Drawings: Exhibit E kumite / F fuku-go elimination chart; Exhibit A kata charts) ---------- */
+  // Exhibit E: one elimination chart in four pools — A-1, A-2 (A bracket) and B-1, B-2 (B bracket); pool winners meet in the A / B
+  // semi-finals, A and B winners in the final. Previous champions: 1st A-1, 2nd B-1, 3rd B-2, 4th A-2 (and they get byes first).
+  const WTKF_POOLS = ['A-1', 'A-2', 'B-1', 'B-2'];
+  const WTKF_SEED_POOL = { 1: 0, 2: 2, 3: 3, 4: 1 };
+  const WTKF_EXTRA_ORDER = [1, 3, 2, 0];           // entrants beyond an even split go to A-2, B-2, B-1, then A-1 (byes go the other way)
+  const bitrev = m => { const b = Math.log2(m) | 0; return Array.from({ length: m }, (_, i) => { let r = 0; for (let k = 0; k < b; k++) if (i & (1 << k)) r |= 1 << (b - 1 - k); return r; }); };
+  /** Pool sizes for n entrants in the four Exhibit E pools. */
+  function wtkfPoolSizes(n) { const base = Math.floor(n / 4), out = [base, base, base, base]; for (let i = 0; i < n % 4; i++) out[WTKF_EXTRA_ORDER[i]]++; return out; }
+  /** Spread entrants over boxes with capacities: fixed ones first, then the biggest groups first, each to the box with the fewest of its group. */
+  function spreadByGroup(fixed, rest, caps, rnd, sideOf) {
+    const boxes = caps.map(() => []);
+    fixed.forEach(([e, b]) => boxes[b].push(e));
+    const cnt = {}; rest.forEach(e => { const g = grp(e); if (g) cnt[g] = (cnt[g] || 0) + 1; });
+    const queue = shuffle(rest, rnd).sort((a, b) => (cnt[grp(b)] || 0) - (cnt[grp(a)] || 0));
+    for (const e of queue) {
+      const g = grp(e); let best = -1, bk = null;
+      for (const b of shuffle(boxes.map((_, i) => i), rnd)) {
+        if (boxes[b].length >= caps[b]) continue;
+        const same = g ? boxes[b].filter(x => grp(x) === g).length : 0;
+        const side = g && sideOf ? boxes.filter((bx, j) => sideOf(j) === sideOf(b)).reduce((t, bx) => t + bx.filter(x => grp(x) === g).length, 0) : 0;
+        const key = [same, side, boxes[b].length / Math.max(1, caps[b])];
+        if (!bk || key[0] < bk[0] || (key[0] === bk[0] && (key[1] < bk[1] || (key[1] === bk[1] && key[2] < bk[2])))) { bk = key; best = b; }
+      }
+      if (best < 0) best = boxes.findIndex((bx, i) => bx.length < caps[i]);
+      boxes[best].push(e);
+    }
+    return boxes;
+  }
+  /** Exhibit E slot placement for an elimination bracket of `size` slots (null = bye). */
+  function wtkfSlots(ordered, size, rnd) {
+    rnd = rnd || Math.random;
+    const n = ordered.length;
+    if (n <= 2 || size < 4) return placeSlots(ordered, size, rnd);
+    const q = size / 4, caps = wtkfPoolSizes(n);
+    const top = ordered.filter(e => e.seed >= 1 && e.seed <= 4);
+    const fixed = top.map(e => [e, WTKF_SEED_POOL[e.seed]]);
+    fixed.forEach(([, b]) => { if (caps[b] < 1) caps[b] = 1; });
+    // the caps must still add up to n when a seed forced a pool open
+    let over = caps.reduce((a, b) => a + b, 0) - n;
+    for (const b of [0, 2, 3, 1]) while (over > 0 && caps[b] > Math.max(1, fixed.filter(f => f[1] === b).length) && caps[b] > Math.floor(n / 4)) { caps[b]--; over--; }
+    const pools = spreadByGroup(fixed, ordered.filter(e => !top.includes(e)), caps, rnd, b => (b < 2 ? 'A' : 'B'));
+    const slots = Array(size).fill(null), k = Math.log2(size);
+    pools.forEach((pl, b) => {
+      const base = b * q;
+      if (q === 1) { slots[base] = pl[0] || null; return; }
+      const m = q / 2, byes = q - pl.length, order = bitrev(m);
+      const byeM = new Set(order.slice(0, Math.max(0, byes)));
+      const open = []; for (let j = 0; j < m; j++) { open.push(base + 2 * j); if (!byeM.has(j)) open.push(base + 2 * j + 1); }
+      const seeded = pl.filter(e => top.includes(e)).sort((x, y) => x.seed - y.seed), others = pl.filter(e => !top.includes(e));
+      seeded.forEach((e, i) => { const at = base + 2 * order[i]; slots[at] = e; open.splice(open.indexOf(at), 1); });   // previous champion: top of the pool, gets a bye first
+      const costAt = (i, e) => { const g = grp(e); if (!g) return 0; let c = 0; slots.forEach((x, j) => { if (x && j !== i && grp(x) === g) c += pairCost(i, j, k); }); return c; };
+      for (const e of shuffle(others, rnd).sort((x, y) => others.filter(o => grp(o) === grp(y)).length - others.filter(o => grp(o) === grp(x)).length)) {
+        let best = -1, bc = Infinity;
+        for (const i of shuffle(open.filter(i => !slots[i]), rnd)) { const c = costAt(i, e); if (c < bc) { bc = c; best = i; } }
+        slots[best] = e;
+      }
+      const free = open.filter(i => slots[i] && !top.includes(slots[i]));
+      for (let pass = 0, better = true; pass < 4 && better; pass++) {
+        better = false;
+        for (let x = 0; x < free.length; x++) for (let y = x + 1; y < free.length; y++) {
+          const i = free[x], j = free[y], a = slots[i], c = slots[j];
+          if (grp(a) === grp(c)) continue;
+          const before = costAt(i, a) + costAt(j, c); slots[i] = c; slots[j] = a;
+          if (costAt(i, c) + costAt(j, a) < before) better = true; else { slots[i] = a; slots[j] = c; }
+        }
+      }
+    });
+    return slots.map(e => (e ? e.id : null));
+  }
+  /** Exhibit A: number of kata charts (max 12 each; 1, 2, 4, 6, … — never 3). */
+  function kataChartCount(n) { if (n <= 12) return 1; let c = 2; while (n > 12 * c) c += 2; return c; }
+  /** Chart of a previous champion (performs at the bottom of it): 1 chart all; 2 charts 4th+1st | 3rd+2nd; 4+ charts 4th, 1st | 2nd, 3rd. */
+  function kataSeedChart(seed, c) {
+    if (c === 1) return 0;
+    if (c === 2) return seed === 1 || seed === 4 ? 0 : 1;
+    const h = c / 2; return { 4: 0, 1: 1, 2: h, 3: h + 1 }[seed];
+  }
+  function wtkfKataCharts(ordered, rnd) {
+    rnd = rnd || Math.random;
+    const n = ordered.length, c = kataChartCount(n), base = Math.floor(n / c), caps = Array(c).fill(base);
+    for (let i = 0; i < n % c; i++) caps[c - 1 - i]++;                     // e.g. 29 → 7, 7, 7, 8
+    const top = ordered.filter(e => e.seed >= 1 && e.seed <= 4);
+    return spreadByGroup(top.map(e => [e, kataSeedChart(e.seed, c)]), ordered.filter(e => !top.includes(e)), caps, rnd, b => (b < c / 2 ? 0 : 1));
+  }
   /** Round in which slots i and j of an elimination bracket would meet (1 = first round). */
   const meetRound = (i, j) => Math.floor(Math.log2(i ^ j)) + 1;
   /** How bad it is for two same-group entrants to sit in slots i and j: meeting earlier costs far more. */
@@ -528,6 +613,7 @@ const KT = (function () {
    * entrants: [{id, seed?, dojo?}]
    */
   function generateBracket(division, entrants, rnd) {
+    rnd = rnd || Math.random;
     const format = division.format || 'SE';
     const ordered = orderEntrants(entrants, rnd);
     const br = { divisionId: division.id, format, entrants: ordered.map(e => e.id), bronze: division.bronze || 'two',
@@ -541,6 +627,10 @@ const KT = (function () {
       // seeded competitors perform last in their pool (Kata 1-6-B)
       const seedLast = pl => pl.filter(e => !e.seed).concat(pl.filter(e => e.seed).sort((x, y) => y.seed - x.seed));
       if (ordered.length <= KP_ADV) br.kpFinal = seedLast(ordered).map(e => e.id);
+      else if (division.wtkfCharts) {          // Exhibit A: charts of up to 12, 1/2/4/6 charts, champions at the bottom
+        br.wtkf = true; br.poolSize = 12; br.kpPools = {};
+        wtkfKataCharts(ordered, rnd).forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(shuffle(pl.filter(e => !e.seed || e.seed > 4), rnd).concat(pl.filter(e => e.seed >= 1 && e.seed <= 4))).map(e => e.id); });
+      }
       else { const pools = ordered.length <= 8 ? [ordered] : makePools(ordered, br.poolSize, Math.max(2, Math.ceil(ordered.length / br.poolSize)), rnd); br.kpPools = {}; pools.forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(pl).map(e => e.id); }); }
       return br;
     }
@@ -568,8 +658,10 @@ const KT = (function () {
       }
     } else {
       const size = nextPow2(ordered.length);
-      const slots = placeSlots(ordered, size, rnd);
+      const wtkf = !!division.wtkfCharts && ordered.length >= 3;
+      const slots = wtkf ? wtkfSlots(ordered, size, rnd) : placeSlots(ordered, size, rnd);
       br.matches = genSE(slots, '', { bronze: br.bronze });
+      if (wtkf) { br.wtkf = true; br.size = size; }
     }
     return br;
   }
@@ -657,9 +749,16 @@ const KT = (function () {
       // next round: re-pool advancers by placing (A1,B1,C1.. then A2,B2..) in snake order, <= 8 per pool
       adv.sort((a, b) => a.place - b.place || b.total - a.total);
       // continue with pools until only eight remain, then one final-elimination pool (Kata 1-6-A)
-      const np = adv.length <= 8 ? 1 : Math.max(2, Math.ceil(adv.length / (br.poolSize || KP_POOL)));
-      const next = Array.from({ length: np }, () => []);
-      adv.forEach((a, i) => { const row = Math.floor(i / np), col = i % np; next[row % 2 === 0 ? col : np - 1 - col].push(a); });
+      let np = adv.length <= 8 ? 1 : Math.max(2, Math.ceil(adv.length / (br.poolSize || KP_POOL)));
+      let next;
+      if (br.wtkf && (np = adv.length <= 8 ? 1 : kataChartCount(adv.length)) > 1 && names.length % np === 0) {
+        // Exhibit A: neighbouring charts merge (1+2 | 3+4, or 1–3 | 4–6): top 4 of each → 8 or 12 → final elimination of 8 → final 4
+        const per = names.length / np; next = Array.from({ length: np }, () => []);
+        adv.forEach(a => next[Math.floor(names.indexOf(a.pool) / per)].push(a));
+      } else {
+        next = Array.from({ length: np }, () => []);
+        adv.forEach((a, i) => { const row = Math.floor(i / np), col = i % np; next[row % 2 === 0 ? col : np - 1 - col].push(a); });
+      }
       pools = {};
       // performance order: lowest score first; equal → lower pool letter; same pool → who competed earlier (Kata 1-6-A remark 2)
       next.forEach((pl, i) => { pools[POOL_NAMES[i]] = pl.slice().sort((x, y) => x.total - y.total || x.pool.localeCompare(y.pool) || x.seq - y.seq).map(a => a.id); });
@@ -1175,7 +1274,7 @@ const KT = (function () {
 
   return {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
-    ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
+    ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
     seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS,
