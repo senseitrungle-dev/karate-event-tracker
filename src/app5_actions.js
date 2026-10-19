@@ -212,6 +212,7 @@ const ACT = {
   'team-edit': el => teamForm(el.dataset.id),
   'team-delete': async () => { const id = $('#f-team').dataset.id; if (!(await confirmBox('Delete this team?', 'Delete', true))) return; closeModal(); guard(() => S.store.del(P.doc(S.evId, 'teams', id)), 'Team deleted'); },
   'div-std': () => stdDivForm(false),
+  'div-preset': el => presetForm(el.dataset.id),
   'div-kyu': () => stdDivForm(true),
   'div-new': () => divForm(null),
   'div-edit': el => divForm(el.dataset.id),
@@ -417,6 +418,7 @@ const CHANGE = {
   att: el => writeAttendance(S.ui.session, { [el.dataset.id]: el.checked }),
   'jimp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#jimp-text').value = decodeCsvBytes(rd.result); judgeImportPreview(); }; rd.readAsArrayBuffer(f); },
   'jimp-pick': () => jimpCount(),
+  'imp-dates': () => { if ($('#imp-text').value.trim()) ACT['imp-preview'](); },
   'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = decodeCsvBytes(rd.result); ACT['imp-preview'](); }; rd.readAsArrayBuffer(f); },
   kscore: el => { const d = loadDraft(S.modal.key), k = el.dataset.s === 'a' ? 'sa' : 'sb'; d[k] = d[k] || []; const v = el.value.replace(',', '.'); d[k][+el.dataset.i] = v === '' ? '' : v; draftChanged(); },
   'bout-member': el => { const d = loadDraft(S.modal.key); const i = el.dataset.i; let b; if (i === 'd') { d.daihyo = d.daihyo || { log: [] }; b = d.daihyo; } else { d.bouts = d.bouts || []; d.bouts[+i] = d.bouts[+i] || { log: [] }; b = d.bouts[+i]; } b[el.dataset.s === 'a' ? 'ma' : 'mb'] = el.value; draftChanged(); },
@@ -582,6 +584,7 @@ function wire() {
     else if (k === 'team') saveTeam(f);
     else if (k === 'div') saveDiv(f);
     else if (k === 'std') saveStd(f, false);
+    else if (k === 'preset') applyPreset(f);
     else if (k === 'kyu') saveStd(f, true);
     else if (k === 'ring') {
       const v = fd(f); if (!v.name) return;

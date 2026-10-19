@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.27.0';
+  const VERSION = '1.29.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -13,7 +13,7 @@ const KT = (function () {
     TKATA:   { label: 'Team Kata',         short: 'Team Kata',  team: true,  genders: ['M', 'F', 'X'], kind: 'kata',       defMethod: 'scores', size: [3, 3] },
     TKUMITE: { label: 'Team Kumite',       short: 'Team Kumite',team: true,  genders: ['M', 'F'],      kind: 'teamkumite', size: [3, 5] },
     FUKUGO:  { label: 'Fukugo',            short: 'Fukugo',     team: false, genders: ['M', 'F'],      kind: 'fukugo' },
-    ENBU:    { label: 'Enbu',              short: 'Enbu',       team: true,  genders: ['M', 'F', 'X'], kind: 'kata',       defMethod: 'scores', size: [2, 2] },
+    ENBU:    { label: 'Enbu',              short: 'Enbu',       team: true,  genders: ['M', 'F', 'X'], kind: 'kata',       defMethod: 'scores', size: [2, 2] },  // pair; a division can set its own size (WTKF 2026 Cadet & Junior Enbu = 3)
   };
   const EVENT_ORDER = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'];
   const GENDERS = { M: 'Men', F: 'Women', X: 'Mixed' };
@@ -99,6 +99,43 @@ const KT = (function () {
     }
     return out;
   }
+  /* ---------- v1.29: WTKF World Championship 2026 rule set (Information Package, Washington DC, 17–20 Nov 2026, §III, §V, §VII) ----------
+     Ages by birth year (age on 31 Dec 2026): Cadet 14–15 (born 2011–12), Junior 16–17 (2009–10), Youth 18–20 (2006–08), Senior 21+ (2005 and before).
+     Shodan or higher only. Quota per National Federation: 3 athletes per individual category, 1 team per team category.
+     Cadet/Junior kumite & fuku-go = Ko-go Kumite; Youth/Senior = Jiyu Kumite (Shobu Ippon). Judges Class A(6) / B(5) / C(4). */
+  const WTKF_WORLDS_2026 = {
+    id: 'wtkf-worlds-2026', label: 'WTKF World Championship 2026', source: 'XXII WTKF Traditional Karate World Championship — Information Package (Washington DC, 17–20 Nov 2026)',
+    level: 'International', ageAsOf: '2026-12-31', judgeMin: 4, quota: 3, teamQuota: 1,
+    groups: { CAD: ['Cadet', 14, 15], JUN: ['Junior', 16, 17], YOU: ['Youth', 18, 20], SEN: ['Senior', 21, null], CJ: ['Cadet & Junior', 14, 17], YS: ['Youth & Senior', 18, null] },
+    // [group, eventType, genders, team size]
+    cats: [
+      ...['CAD', 'JUN', 'YOU', 'SEN'].flatMap(g => [[g, 'IKATA', ['F', 'M']], [g, 'FUKUGO', ['F', 'M']], [g, 'IKUMITE', ['F', 'M']]]),
+      ['CJ', 'TKATA', ['F', 'M'], [3, 3]], ['CJ', 'ENBU', ['M', 'X'], [3, 3]],
+      ['YS', 'TKATA', ['M', 'F'], [3, 3]], ['YS', 'ENBU', ['M', 'X'], [2, 2]], ['YS', 'TKUMITE', ['M', 'F'], [3, 4]],
+    ],
+  };
+  const PRESETS = { [WTKF_WORLDS_2026.id]: WTKF_WORLDS_2026 };
+  function presetDivisions(pr) {
+    const out = [];
+    pr.cats.forEach(([gk, et, genders, size], ci) => genders.forEach((g, gi) => {
+      const [label, min, max] = pr.groups[gk], T = EVENT_TYPES[et];
+      const dv = { eventType: et, gender: g, belt: 'black', group: label, minAge: min, maxAge: max, minRank: 'd1', maxRank: 'd10',
+        format: defaultFormat(et, 'black', 'SE'), scoring: defaultScoring(et), bronze: 'two', reset: false, preset: pr.id, quota: T.team ? pr.teamQuota : pr.quota, order: ci * 10 + gi };
+      if (size) dv.teamSize = size;
+      dv.scoring.style = KUMITE_EVENTS[et] ? (max != null && max <= 17 ? 'kogo' : 'shobu') : 'shobu';
+      if (dv.format === 'KP') dv.scoring = Object.assign(dv.scoring, { method: 'scores', judges: 6 });
+      dv.name = divisionName(dv); out.push(dv);
+    }));
+    return out;
+  }
+  /** National-federation quota: groups (country / region / dojo key) with more entrants than the division allows. */
+  function quotaIssues(dv, entrantIds, groupOf) {
+    const max = +dv.quota || 0; if (!max) return [];
+    const n = {}; for (const id of entrantIds || []) { const g = groupOf(id) || ''; if (g) n[g] = (n[g] || 0) + 1; }
+    return Object.entries(n).filter(([, k]) => k > max).map(([group, k]) => ({ group, n: k, max }));
+  }
+  /** Team size allowed in a division (division setting wins over the event type). */
+  function teamSizeFor(dv, eventType) { const s = dv && Array.isArray(dv.teamSize) ? dv.teamSize : (EVENT_TYPES[eventType || (dv && dv.eventType)] || {}).size; return s || [1, 99]; }
   /** Kyu divisions from a director template {label,minRank,maxRank,minAge,maxAge}. */
   function kyuDivisions(tpl, eventTypes, format) {
     const out = [];
@@ -606,14 +643,14 @@ const KT = (function () {
   }
   /* ---------- judges ---------- */
   /** Credential needed (WTKF levels 1–7): levels 3–7 for National/International, 1–2 enough for Regional/Local. */
-  function judgeNeed(eventLevel) { return eventLevel === 'National' || eventLevel === 'International' ? 3 : 1; }
+  function judgeNeed(eventLevel, min) { return +min || (eventLevel === 'National' || eventLevel === 'International' ? 3 : 1); }
   function judgeLevelFor(j, kind) {
     const ka = +j.kataLevel || 0, ku = +j.kumiteLevel || 0;
     if (kind === 'kata') return ka;
     if (kind === 'fukugo') return Math.min(ka, ku);
     return ku;
   }
-  function judgeEligible(j, kind, eventLevel) { return judgeLevelFor(j, kind) >= judgeNeed(eventLevel); }
+  function judgeEligible(j, kind, eventLevel, min) { return judgeLevelFor(j, kind) >= judgeNeed(eventLevel, min); }
   /** Where a judge is from, by event level: International → country, National → region, Regional/Local → dojo. */
   function judgeFrom(j, eventLevel) {
     if (eventLevel === 'International') return j.country || '';
@@ -1045,7 +1082,7 @@ const KT = (function () {
 
   return {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
-    ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions,
+    ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
     seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS,

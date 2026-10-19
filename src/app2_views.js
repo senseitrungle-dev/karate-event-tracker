@@ -164,7 +164,7 @@ function overviewHTML() {
     if (Object.keys(S.d.judges).length && noJ.length) warn.push(`No judges on ${esc(noJ.map(ringName).join(', '))}. <button class="sm" data-act="tab" data-v="judges">Judges</button>`);
     const unJ = judgesList().filter(j => !S.d.rings[j.ringId]).length;
     if (unJ && busy.size) warn.push(`${plural(unJ, 'judge')} not assigned to a ring. <button class="sm" data-act="tab" data-v="judges">Judges</button>`);
-    const need = KT.judgeNeed(ev.level), low = judgesList().filter(j => S.d.rings[j.ringId] && (+j.kataLevel || 0) < need && (+j.kumiteLevel || 0) < need).length;
+    const need = KT.judgeNeed(ev.level, ev.judgeMin), low = judgesList().filter(j => S.d.rings[j.ringId] && (+j.kataLevel || 0) < need && (+j.kumiteLevel || 0) < need).length;
     if (low) warn.push(`${plural(low, 'judge')} on a ring below the level ${need} credential for ${esc(ev.level)} events.`);
   }
   const steps = dir ? `<div class="card"><h3>Director checklist</h3><ol class="small" style="margin:8px 0 0;padding-left:20px;display:grid;gap:4px">
@@ -254,7 +254,7 @@ function divisionsHTML() {
   const ev = curEvent();
   const f = S.ui.divFilter;
   const list = DC.divs.filter(d => !f || d.eventType === f);
-  const acts = `<button data-act="div-std">Add black-belt divisions</button><button data-act="div-kyu">Add kyu divisions</button><button data-act="div-new">New division</button>
+  const acts = `<button data-act="div-preset" data-id="wtkf-worlds-2026" title="Divisions and rules from the WTKF 2026 Information Package">WTKF Worlds 2026 rules</button><button data-act="div-std">Add black-belt divisions</button><button data-act="div-kyu">Add kyu divisions</button><button data-act="div-new">New division</button>
     <button class="primary" data-act="draw-all">Draw all ready</button>`;
   if (!DC.divs.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No divisions yet</h2>
     <p class="muted" style="max-width:56ch">Start with the standard black-belt age groups — Senior 21+, Youth 19–20, Junior 16–18, Cadet 14–15 — for every event you offer, then define kyu divisions by rank and age.</p><div class="row">${acts}</div></div>`;
@@ -294,9 +294,17 @@ function divRowHTML(d) {
         <div class="dojo">${d.belt === 'kyu' ? esc(KT.rankLabel(d.minRank) + ' – ' + KT.rankLabel(d.maxRank)) + ' · ' : ''}${ageRange(d)}</div></td>
       <td class="small">${esc(KT.FORMATS[d.format] || d.format)}<div class="dojo">${esc(scoringLabel(d))}</div></td>
       <td class="small">${ring ? esc(ring.name) : '<span class="muted">—</span>'}</td>
-      <td class="n">${n}</td><td>${st}</td>
+      <td class="n">${n}</td><td>${st}${divIssuesHTML(d)}</td>
       <td style="white-space:nowrap">${bs.drawn ? `<button class="sm" data-act="view-bracket" data-id="${esc(d.id)}">Bracket</button>` : n >= 1 ? `<button class="sm" data-act="draw" data-id="${esc(d.id)}">Draw</button>` : ''}</td></tr>`;
 }
+/** v1.29: quota per country/region/dojo and team sizes for a division */
+function divIssues(d) {
+  const ents = divEntrants(d.id), lvl = (curEvent() || {}).level, out = [];
+  for (const q of KT.quotaIssues(d, ents, id => entGroupLabel(id, lvl))) out.push({ kind: 'quota', text: `${q.group} ${q.n}/${q.max}`, long: `${q.group} has ${q.n} ${KT.EVENT_TYPES[d.eventType].team ? 'teams' : 'athletes'} — limit ${q.max}` });
+  if (KT.EVENT_TYPES[d.eventType].team) { const sz = KT.teamSizeFor(d); for (const id of ents) { const t = DC.teamBy[id], n = t ? (t.memberIds || []).length : 0; if (t && (n < sz[0] || n > sz[1])) out.push({ kind: 'size', text: `${t.name}: ${n} members`, long: `${t.name} has ${n} members — this division needs ${sz[0] === sz[1] ? sz[0] : sz[0] + '–' + sz[1]}` }); } }
+  return out;
+}
+function divIssuesHTML(d) { return divIssues(d).map(i => ` <span class="chip warn" title="${esc(i.long)}">${i.kind === 'quota' ? 'Over quota · ' : ''}${esc(i.text)}</span>`).join(''); }
 function ageRange(d) {
   const lo = d.minAge === '' || d.minAge == null ? null : d.minAge, hi = d.maxAge === '' || d.maxAge == null ? null : d.maxAge;
   if (lo == null && hi == null) return 'All ages';

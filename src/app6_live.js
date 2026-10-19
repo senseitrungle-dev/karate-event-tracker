@@ -42,9 +42,9 @@ async function syncScorers() {
 const judgesList = () => Object.values(S.d.judges).sort((a, b) => String(a.name).localeCompare(String(b.name)));
 function judgeShort(id) { const j = S.d.judges[id]; if (!j) return ''; const p = String(j.name || '').trim().split(/\s+/); return p.length > 1 ? `${p[0][0]}. ${p[p.length - 1]}` : p[0] || ''; }
 function judgeChips(j, kind) {
-  const ev = curEvent(), need = KT.judgeNeed(ev.level);
+  const ev = curEvent(), need = KT.judgeNeed(ev.level, ev.judgeMin);
   const c = (lbl, lv) => `<span class="chip ${lv >= need ? 'plain' : 'bad'}" title="${lv >= need ? '' : `Level ${need}+ needed for ${esc(ev.level)} events`}">${lbl} L${lv || '–'}</span>`;
-  return `${c('Kata', +j.kataLevel || 0)}${c('Kumite', +j.kumiteLevel || 0)}${kind && !KT.judgeEligible(j, kind, ev.level) ? '<span class="chip bad">Not qualified for this level</span>' : ''}`;
+  return `${c('Kata', +j.kataLevel || 0)}${c('Kumite', +j.kumiteLevel || 0)}${kind && !KT.judgeEligible(j, kind, ev.level, ev.judgeMin) ? '<span class="chip bad">Not qualified for this level</span>' : ''}`;
 }
 /** Judges working on a ring (a pool / round placed on that ring uses them). */
 function ringJudges(rid) { return rid ? judgesList().filter(j => j.ringId === rid) : []; }
@@ -55,7 +55,7 @@ function ringJudgesSummary(rid) {
 async function setJudgeRing(jid, rid) {
   const j = S.d.judges[jid]; if (!j) return;
   const ok = await guard(() => S.store.update(P.doc(S.evId, 'judges', jid), { ringId: rid || '' }), rid ? `${j.name} → ${ringName(rid)}` : `${j.name} unassigned`);
-  if (ok && rid) { const ev = curEvent(), need = KT.judgeNeed(ev.level); if ((+j.kataLevel || 0) < need && (+j.kumiteLevel || 0) < need) toast(`${j.name} is below level ${need} for ${ev.level} events`, true); }
+  if (ok && rid) { const ev = curEvent(), need = KT.judgeNeed(ev.level, ev.judgeMin); if ((+j.kataLevel || 0) < need && (+j.kumiteLevel || 0) < need) toast(`${j.name} is below level ${need} for ${ev.level} events`, true); }
 }
 function ringMoveSelect(j, label) {
   return `<select id="jring-${esc(j.id)}" class="rmove" data-change="judge-ring" data-id="${esc(j.id)}" aria-label="Move ${esc(j.name)}">${opt('', label, '')}${DC.rings.filter(r => r.id !== j.ringId).map(r => opt(r.id, 'To ' + r.name, '')).join('')}${j.ringId ? opt('__none', 'Unassign', '') : ''}</select>`;
@@ -66,7 +66,7 @@ function judgeRow(j) {
     <span class="pill-list">${judgeChips(j)}<button class="chip ${j.checkedIn ? 'ok' : 'plain'} jin" data-act="judge-in" data-id="${esc(j.id)}" aria-pressed="${!!j.checkedIn}">${j.checkedIn ? '✓ Checked in' : 'Check in'}</button></span>${ringMoveSelect(j, j.ringId ? 'Move…' : 'Assign to ring…')}</div>`;
 }
 function judgesHTML() {
-  const ev = curEvent(), list = judgesList(), need = KT.judgeNeed(ev.level);
+  const ev = curEvent(), list = judgesList(), need = KT.judgeNeed(ev.level, ev.judgeMin);
   const where = ev.level === 'International' ? 'country' : ev.level === 'National' ? 'region' : 'dojo';
   const un = list.filter(j => !S.d.rings[j.ringId]);
   const ringCards = DC.rings.map(r => { const js = ringJudges(r.id); return `<div class="card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${js.length ? '' : 'plain'}">${plural(js.length, 'judge')}</span></div>
@@ -95,7 +95,7 @@ function judgeForm(id) {
 async function saveJudge(form) {
   const v = fd(form); if (!v.name) { toast('Enter the judge’s name.', true); return; }
   const rec = { name: v.name, country: v.country, region: v.region, dojo: v.dojo, kataLevel: +v.kataLevel, kumiteLevel: +v.kumiteLevel, ringId: v.ringId || '', notes: v.notes };
-  const ev = curEvent(), need = KT.judgeNeed(ev.level);
+  const ev = curEvent(), need = KT.judgeNeed(ev.level, ev.judgeMin);
   const ok = await guard(() => S.store.set(P.doc(S.evId, 'judges', form.dataset.id || uid()), rec), 'Judge saved');
   if (ok) { closeModal(); if (rec.kataLevel < need && rec.kumiteLevel < need) toast(`Saved · below level ${need}: not qualified for ${ev.level} events`, true); }
 }
@@ -112,13 +112,13 @@ function lastOfficials(rid, positions) {
 function rememberOfficials(rid, o) { try { localStorage.setItem(offKey(rid), JSON.stringify(o || {})); } catch (e) { /* ignore */ } }
 function officialsHTML(rid, kind, positions, officials, editable) {
   const ev = curEvent(), o = officials || {};
-  const req = KT.judgeNeed(ev.level) >= 3;
+  const req = KT.judgeNeed(ev.level, ev.judgeMin) >= 3;
   const all = judgesList(), onRing = all.filter(j => j.ringId === rid), others = all.filter(j => j.ringId !== rid);
   const filled = positions.filter(p => o[p.key]).length;
   const optsFor = key => {
     const sel = o[key] || '';
     const taken = new Set(positions.filter(p => p.key !== key).map(p => o[p.key]).filter(Boolean)); // already seated → not offered again
-    const name = j => j.name + (KT.judgeEligible(j, kind, ev.level) ? '' : ' ⚠');
+    const name = j => j.name + (KT.judgeEligible(j, kind, ev.level, ev.judgeMin) ? '' : ' ⚠');
     const a = onRing.filter(j => !taken.has(j.id)), b = others.filter(j => !taken.has(j.id));
     return opt('', '— Select judge —', sel)
       + (a.length ? `<optgroup label="${esc(ringName(rid))} judges">${a.map(j => opt(j.id, name(j), sel)).join('')}</optgroup>` : '')
@@ -327,7 +327,7 @@ function judgeImportRows(text) {
   const errors = [];
   if (ix.name < 0 && (ix.first < 0 || ix.last < 0)) return { rows: [], errors: ['A “name” column (or first_name and last_name) is required.'], fed };
   if (!fed && ix.kata < 0 && ix.kumite < 0 && ix.level < 0) return { rows: [], errors: ['Credential columns are required: kata_level and kumite_level (or a single “level”).'] };
-  const ev = curEvent(), need = KT.judgeNeed(ev.level), where = ev.level === 'International' ? 'country' : ev.level === 'National' ? 'region' : '';
+  const ev = curEvent(), need = KT.judgeNeed(ev.level, ev.judgeMin), where = ev.level === 'International' ? 'country' : ev.level === 'National' ? 'region' : '';
   const g = (r, i) => (i >= 0 ? String(r[i] || '').trim() : '');
   const ringBy = {}; DC.rings.forEach(r => { ringBy[r.name.toLowerCase()] = r.id; ringBy[r.name.toLowerCase().replace(/^ring\s*/, '')] = r.id; });
   const key = j => [String(j.name || '').toLowerCase().replace(/\s+/g, ' '), String(j.country || j.region || j.dojo || '').toLowerCase()].join('|');
@@ -367,7 +367,7 @@ function judgeImportRows(text) {
   return { rows: out, errors, fed };
 }
 function judgeImportForm() {
-  const ev = curEvent(), need = KT.judgeNeed(ev.level);
+  const ev = curEvent(), need = KT.judgeNeed(ev.level, ev.judgeMin);
   const others = Object.values(S.events).filter(e => e.id !== S.evId && (isLocal() || isEventDirector(e)));
   openModal(sheet('Import judges', `<p class="small">Paste the judges list (from a spreadsheet or the federation’s register) or choose a .csv file. It needs a row of column headings. A <b>WTKF National Federation registration sheet</b> can be chosen as it is — its judges/coaches section is read (country and federation from the top of the sheet).</p>
     <p class="tiny mono muted">${JUDGE_COLS}</p>

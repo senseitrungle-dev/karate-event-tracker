@@ -206,6 +206,15 @@ function entGroup(id, level) {
   const ds = [...new Set((t.memberIds || []).map(m => DC.compBy[m] && (DC.compBy[m][f] || '').trim().toLowerCase()).filter(Boolean))];
   return ds.length === 1 ? ds[0] : '';
 }
+/** Display name of an entrant's separation group (country / region / dojo), as typed. */
+function entGroupLabel(id, level) {
+  level = level || ((curEvent() || {}).level);
+  const f = level === 'International' ? 'country' : level === 'National' ? 'state' : 'dojo';
+  const c = DC.compBy[id]; if (c) return (c[f] || '').trim();
+  const t = DC.teamBy[id]; if (!t) return '';
+  const ds = [...new Set((t.memberIds || []).map(m => DC.compBy[m] && (DC.compBy[m][f] || '').trim()).filter(Boolean))];
+  return ds.length === 1 ? ds[0] : (f === 'dojo' ? t.dojo || '' : '');
+}
 function divEntrants(did) { return (DC.assign.byDiv[did] || []); }
 function bracketState(did) {
   const br = S.d.brackets[did];

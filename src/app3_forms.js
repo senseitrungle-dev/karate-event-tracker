@@ -17,6 +17,7 @@ function eventForm(id) {
         <label class="f"><span>Ages calculated as of</span><input type="date" name="ageAsOf" id="ev-asof" value="${esc(e.ageAsOf || '')}"><span class="tiny muted">Blank = start date</span></label>
         <label class="f"><span>Default bracket</span><select name="defaultFormat" id="ev-fmt">${Object.entries(KT.FORMATS).map(([k, v]) => opt(k, v, e.defaultFormat)).join('')}</select></label>
         <label class="f"><span>Third place</span><select name="bronze" id="ev-bronze">${opt('two', 'Two bronze medals', e.bronze)}${opt('match', 'Bronze match (one bronze)', e.bronze)}</select></label>
+        <label class="f"><span>Minimum judge level</span><select name="judgeMin" id="ev-jmin">${opt('', 'By event level (National/International 3, others 1)', String(e.judgeMin || ''))}${[1, 2, 3, 4, 5, 6, 7].map(x => opt(String(x), 'Level ' + x + (x === 4 ? ' — WTKF Class C' : x === 5 ? ' — Class B' : x === 6 ? ' — Class A' : ''), String(e.judgeMin || ''))).join('')}</select></label>
       </div>
       <div><div class="label" style="margin-bottom:6px">Events offered</div><div class="pill-list">${KT.EVENT_ORDER.map(k => `<label class="check chip plain"><input type="checkbox" data-multi="1" name="eventTypes" value="${k}" ${et.has(k) ? 'checked' : ''}> ${esc(KT.EVENT_TYPES[k].label)}</label>`).join('')}</div></div>
     </div></fieldset>
@@ -86,8 +87,9 @@ async function saveComp(form) {
 function importForm() {
   openModal(sheet('Import competitors', `<p class="small">Paste CSV text or choose a .csv file. It needs a row of column headings (it doesn’t have to be the first row). Recognised columns:</p>
     <p class="tiny mono muted">first_name, last_name, gender, dob, rank, dojo, state, country, email, phone, emergency_name, emergency_phone, waiver, paid, events</p>
-    <p class="tiny muted">Dates as YYYY-MM-DD, DD.MM.YYYY or M/D/YYYY · ranks like “3rd Kyu”, “Shodan”, “2nd Dan”, “1 dan”, k3, d2 · events either separated by “;” in an events column (Individual Kata; Individual Kumite; Team Kata; Team Kumite; Fukugo; Enbu) or one column per event marked X.</p>
+    <p class="tiny muted">Birth dates: YYYY-MM-DD, or day and month in either order — <b>day-month-year</b> (Europe and most countries, 27.07.2012 or 27/07/2012) or <b>month-day-year</b> (USA, 07/27/2012). The order is worked out for the whole file (from dates like 27.07 that can only be one way, then the country); you can set it below · ranks like “3rd Kyu”, “Shodan”, “2nd Dan”, “1 dan”, k3, d2 · events either separated by “;” in an events column (Individual Kata; Individual Kumite; Team Kata; Team Kumite; Fukugo; Enbu) or one column per event marked X.</p>
     <p class="tiny muted"><b>WTKF National Federation registration sheet</b>: choose the .csv as it is (File → Save As → CSV UTF-8 in Excel). The country and federation are read from the top of the sheet; the judges/coaches and photographer sections are skipped. Names typed in capitals are changed to Name Case. People already registered (same name and birth date) are skipped.</p>
+    <label class="f" style="max-width:420px"><span>Birth dates are</span><select id="imp-dates" data-change="imp-dates">${opt('auto', 'Work it out (recommended)', 'auto')}${opt('DMY', 'Day-month-year · Europe & most countries (27.07.2012)', '')}${opt('MDY', 'Month-day-year · USA (07/27/2012)', '')}</select></label>
     <input type="file" id="imp-file" accept=".csv,text/csv" data-change="imp-file">
     <textarea id="imp-text" rows="10" placeholder="first_name,last_name,gender,dob,rank,dojo,events&#10;Aiko,Tanaka,F,2001-04-12,Shodan,Hoshi Dojo,Individual Kata;Individual Kumite"></textarea>
     <div id="imp-preview" class="small muted"></div>`,
@@ -113,14 +115,41 @@ const EV_ALIASES = { 'individual kata': 'IKATA', kata: 'IKATA', ikata: 'IKATA', 
 const EV_COLS = { individualkata: 'IKATA', kata: 'IKATA', individualkumite: 'IKUMITE', kumite: 'IKUMITE', teamkata: 'TKATA', teamkumite: 'TKUMITE',
   fukugo: 'FUKUGO', fukogo: 'FUKUGO', enbu: 'ENBU', mixedenbu: 'ENBU', manmanenbu: 'ENBU', womanwomanenbu: 'ENBU', menenbu: 'ENBU', womenenbu: 'ENBU' };
 const normH = x => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
-/** dd.mm.yyyy · d.m.yyyy · dd-mm-yyyy · yyyy-mm-dd · yyyy/mm/dd · m/d/yyyy → yyyy-mm-dd ('' if not a real date) */
-function importDate(s) {
-  s = String(s || '').trim(); let y, m, d, k;
-  if ((k = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/))) [y, m, d] = [k[1], k[2], k[3]];
-  else if ((k = s.match(/^(\d{1,2})[.-](\d{1,2})[.-](\d{4})$/))) [d, m, y] = [k[1], k[2], k[3]];          // European day.month.year
-  else if ((k = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) { [m, d, y] = [k[1], k[2], k[3]]; if (+m > 12) [m, d] = [d, m]; } // US m/d/yyyy (d/m if month > 12)
-  else return '';
-  const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, t = new Date(iso + 'T00:00:00Z');
+/* v1.28: birth-date order per file. Europe and most of the world write day-month-year (27.07.2012), the USA month-day-year (07/27/2012).
+   The separator says nothing, so the order is decided once per file: 1) the director's choice, 2) the dates themselves (a first number
+   above 12 can only be a day, a second number above 12 can only be a day), 3) the country on the sheet / in the rows (USA → month first),
+   4) otherwise day first. Year-first dates (2012-07-27) are always year-month-day. 8 digits without separators (27072012) follow the same order. */
+const US_NAMES = /^(us|usa|u\.s\.a?\.?|united states( of america)?|america|puerto rico|guam)$/i;
+function splitDate(s) {
+  s = String(s || '').trim(); let k;
+  if ((k = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/))) return { ymd: true, y: k[1], a: +k[2], b: +k[3] };
+  if ((k = s.match(/^(\d{1,2})[-/. ](\d{1,2})[-/. ](\d{4})$/))) return { a: +k[1], b: +k[2], y: k[3] };
+  if ((k = s.match(/^(\d{2})(\d{2})(\d{4})$/))) return { a: +k[1], b: +k[2], y: k[3] };
+  return null;
+}
+/** decide day-first (DMY) or month-first (MDY) for a list of raw dates; returns { order, why, clash } */
+function dateOrder(raw, countries, choice) {
+  if (choice === 'DMY' || choice === 'MDY') return { order: choice, why: 'chosen by you' };
+  const ps = raw.map(splitDate).filter(p => p && !p.ymd);
+  const dayFirst = ps.find(p => p.a > 12 && p.b <= 12), monFirst = ps.find(p => p.b > 12 && p.a <= 12);
+  const ex = p => `${String(p.a).padStart(2, '0')}·${String(p.b).padStart(2, '0')}·${p.y}`;
+  const us = countries.filter(Boolean).some(c => US_NAMES.test(String(c).trim())), other = countries.filter(Boolean).some(c => !US_NAMES.test(String(c).trim()));
+  const byCountry = us && !other ? { order: 'MDY', why: 'country USA' } : other && !us ? { order: 'DMY', why: 'country outside the USA' } : null;
+  if (dayFirst && monFirst) return Object.assign({ clash: true }, byCountry || { order: 'DMY', why: 'mixed dates — check the file' }, { why: `the file mixes both orders (${ex(dayFirst)} and ${ex(monFirst)})` });
+  if (dayFirst) return { order: 'DMY', why: `dates like ${ex(dayFirst)} can only be day-month-year` };
+  if (monFirst) return { order: 'MDY', why: `dates like ${ex(monFirst)} can only be month-day-year` };
+  if (byCountry) return byCountry;
+  const loc = String((curEvent() || {}).location || '');
+  if (/\b(USA|U\.S\.A?\.?|United States)\b|,\s*(A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY])\b/.test(loc)) return { order: 'MDY', why: 'the event is in the USA' };
+  const lang = (navigator.languages && navigator.languages[0]) || navigator.language || '';
+  if (/^en-US$/i.test(lang)) return { order: 'MDY', why: 'nothing in the file decides it — your device uses US dates' };
+  return { order: 'DMY', why: 'nothing in the file decides it — day first assumed' };
+}
+/** raw date → yyyy-mm-dd in the given order ('' if impossible) */
+function importDate(s, order) {
+  const p = splitDate(s); if (!p) return '';
+  const [m, d] = p.ymd ? [p.a, p.b] : order === 'MDY' ? [p.a, p.b] : [p.b, p.a];
+  const iso = `${p.y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, t = new Date(iso + 'T00:00:00Z');
   return !isNaN(t) && t.toISOString().slice(0, 10) === iso ? iso : '';
 }
 /** "ANNA-MARIA" → "Anna-Maria" when a name is typed in capitals; mixed-case names are kept as typed */
@@ -162,6 +191,10 @@ function importRows(text) {
   const recs = [], errors = [];
   const g = (r, i) => (i >= 0 ? (r[i] || '').trim() : '');
   const yes = s => /^(y|yes|true|1|x|✓|✔)$/i.test(s);
+  const body = rows.slice(hi + 1);
+  const rawDate = r => g(r, ix.dob) || (ix.age >= 0 && splitDate(g(r, ix.age)) ? g(r, ix.age) : '');
+  const dord = dateOrder(body.map(rawDate).filter(Boolean), [info.country, ...body.map(r => g(r, ix.country))], (($('#imp-dates') || {}).value) || 'auto');
+  info.dates = dord;
   const isTournament = curEvent().kind === 'tournament';
   const seen = new Map(DC.comps.map(c => [[normH(c.firstName), normH(c.lastName), c.dob || ''].join('|'), c]));
   for (let n = hi + 1; n < rows.length; n++) {
@@ -170,7 +203,7 @@ function importRows(text) {
     if (lead && !/^\d+$/.test(lead) && /[A-Za-z]{4,}/.test(lead) && !g(r, ix.first) && !g(r, ix.last)) { info.skipped.push(lead.replace(/\s+/g, ' ')); break; }
     if (r.map(normH).some(x => x === 'firstname') && r.map(normH).some(x => x === 'lastname')) break;
     if (!g(r, ix.first) && !g(r, ix.last)) continue;                                 // empty numbered slot
-    let dob = importDate(g(r, ix.dob)); if (!dob && ix.age >= 0) dob = importDate(g(r, ix.age));   // the federation sheet puts the birth date under "Age"
+    const dob = importDate(rawDate(r), dord.order);   // the federation sheet puts the birth date under "Age"
     const gs = g(r, ix.gender).toLowerCase();
     const evText = g(r, ix.events).split(/[;|]/).map(s => EV_ALIASES[s.trim().toLowerCase()] || (KT.EVENT_TYPES[s.trim().toUpperCase()] ? s.trim().toUpperCase() : null));
     const fee = g(r, ix.fee).replace(/[^0-9.]/g, '');
@@ -180,7 +213,7 @@ function importRows(text) {
       events: [...new Set([...evText, ...evCols.filter(([i]) => yes(g(r, i))).map(([, e]) => e)].filter(Boolean))] };
     const miss = [];
     if (!rec.firstName || !rec.lastName) miss.push('name'); if (!rec.rank) miss.push('rank' + (g(r, ix.rank) ? ` (“${g(r, ix.rank)}”)` : ''));
-    if (isTournament) { if (!rec.gender) miss.push('gender'); if (!rec.dob) miss.push('date of birth' + (g(r, ix.dob) || g(r, ix.age) ? ` (“${g(r, ix.dob) || g(r, ix.age)}”)` : '')); }
+    if (isTournament) { if (!rec.gender) miss.push('gender'); if (!rec.dob) miss.push(rawDate(r) ? `a valid date of birth (“${rawDate(r)}” is not a date as ${dord.order === 'MDY' ? 'month-day-year' : 'day-month-year'})` : 'date of birth'); }
     const who = `${rec.firstName} ${rec.lastName}`.trim();
     if (miss.length) { errors.push(`Row ${n + 1}${who ? ' · ' + who : ''}: missing ${miss.join(', ')}`); continue; }
     const key = [normH(rec.firstName), normH(rec.lastName), rec.dob].join('|');
@@ -201,9 +234,10 @@ function importPreviewHTML() {
   const evs = e => (e || []).map(x => KT.EVENT_TYPES[x].short).join(', ') || '<span class="muted">none</span>';
   const head = info && info.sheet ? `<div class="notice info" style="display:block"><b>WTKF National Federation sheet</b>${info.country ? ' · ' + esc(info.country) : ''}${info.federation ? ' · ' + esc(info.federation) : ''}<br><span class="tiny">Athletes are imported with country ${esc(info.country || '—')} and dojo/club “${esc(info.federation || '—')}”. ${info.skipped.length ? 'Sections after the athletes (' + esc(info.skipped.join(', ')) + ' …) are not competitors and are skipped.' : ''}</span></div>` : '';
   const warn = recs.some(r => r.warn) ? `<div class="notice warn" style="display:block">Some names contain “?” — the file lost its accented letters (e.g. Ł, Ń, Ę) when it was saved. In Excel use <b>File → Save As → CSV UTF-8</b> and import that file, or fix the names after importing.</div>` : '';
-  const tbl = recs.length ? `<div class="tw" style="max-height:320px;overflow:auto"><table class="imp-tbl"><thead><tr><th>#</th><th>Name</th><th>G</th><th>Born</th><th>Rank</th><th>Country</th><th>Events</th></tr></thead><tbody>${recs.map((r, i) => `<tr${r.warn ? ' class="imp-warn"' : ''}><td class="n">${i + 1}</td><td>${esc(r.lastName)}, ${esc(r.firstName)}${r.fixId ? ' <span class="chip ok">name fix</span>' : ''}</td><td>${r.gender === 'F' ? 'W' : 'M'}</td><td class="mono">${esc(r.dob || '')}</td><td>${esc(KT.rankLabel(r.rank))}</td><td>${esc(r.country || '')}</td><td>${evs(r.events)}</td></tr>`).join('')}</tbody></table></div>` : '';
+  const tbl = recs.length ? `<div class="tw" style="max-height:320px;overflow:auto"><table class="imp-tbl"><thead><tr><th>#</th><th>Name</th><th>G</th><th>Born</th><th>Rank</th><th>Country</th><th>Events</th></tr></thead><tbody>${recs.map((r, i) => `<tr${r.warn ? ' class="imp-warn"' : ''}><td class="n">${i + 1}</td><td>${esc(r.lastName)}, ${esc(r.firstName)}${r.fixId ? ' <span class="chip ok">name fix</span>' : ''}</td><td>${r.gender === 'F' ? 'W' : 'M'}</td><td class="mono" title="year-month-day">${esc(r.dob ? new Date(r.dob + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '')}</td><td>${esc(KT.rankLabel(r.rank))}</td><td>${esc(r.country || '')}</td><td>${evs(r.events)}</td></tr>`).join('')}</tbody></table></div>` : '';
   const fixes = recs.filter(r => r.fixId), adds = recs.length - fixes.length;
-  return `${head}${warn}<p><b>${plural(adds, 'competitor')} ready to import.</b>${fixes.length ? ` <b>${plural(fixes.length, 'name')} will be corrected</b> (${fixes.map(r => esc(r.was) + ' → ' + esc(r.firstName + ' ' + r.lastName)).join(', ')}).` : ''}${errors.length ? `<br><span class="small" style="color:var(--bad)">${errors.slice(0, 10).map(esc).join('<br>')}${errors.length > 10 ? '<br>…and ' + (errors.length - 10) + ' more' : ''}</span>` : ''}</p>${tbl}`;
+  const dd = info && info.dates, dline = dd ? `<div class="notice ${dd.clash ? 'warn' : 'info'}" style="display:block">Birth dates read as <b>${dd.order === 'MDY' ? 'month-day-year (USA, 07/27/2012 = July 27)' : 'day-month-year (Europe, 27.07.2012 = 27 July)'}</b> — ${esc(dd.why)}. ${dd.clash ? 'Rows that don’t fit are listed below. ' : ''}Change it with “Birth dates are” above if this is wrong.</div>` : '';
+  return `${head}${dline}${warn}<p><b>${plural(adds, 'competitor')} ready to import.</b>${fixes.length ? ` <b>${plural(fixes.length, 'name')} will be corrected</b> (${fixes.map(r => esc(r.was) + ' → ' + esc(r.firstName + ' ' + r.lastName)).join(', ')}).` : ''}${errors.length ? `<br><span class="small" style="color:var(--bad)">${errors.slice(0, 10).map(esc).join('<br>')}${errors.length > 10 ? '<br>…and ' + (errors.length - 10) + ' more' : ''}</span>` : ''}</p>${tbl}`;
 }
 async function runImport() {
   const { recs, errors } = importRows($('#imp-text').value);
@@ -246,8 +280,11 @@ async function saveTeam(form) {
   const v = fd(form), et = form.dataset.et, T = KT.EVENT_TYPES[et], id = form.dataset.id || uid();
   if (!v.name) { toast('Give the team a name.', true); return; }
   const mids = v.memberIds || [];
-  if (mids.length < T.size[0] || mids.length > T.size[1]) { toast(`${T.label} teams need ${T.size[0] === T.size[1] ? T.size[0] : T.size[0] + '–' + T.size[1]} members (selected ${mids.length}).`, true); return; }
   const mem = mids.map(i => DC.compBy[i]).filter(Boolean);
+  // v1.29: the division decides the team size (e.g. WTKF 2026 Enbu: Cadet & Junior 3, Youth & Senior 2; Team Kumite 3 + 1 reserve)
+  const tdiv = v.divisionId ? DC.divBy[v.divisionId] : (mem.length ? KT.teamCandidates({ eventType: et }, mem, DC.divs, DC.asOf)[0] : null);
+  const sz = KT.teamSizeFor(tdiv, et), szTxt = sz[0] === sz[1] ? sz[0] : sz[0] + '–' + sz[1];
+  if (mids.length < sz[0] || mids.length > sz[1]) { toast(`${tdiv ? tdiv.name : T.label} teams need ${szTxt} members (selected ${mids.length}).`, true); return; }
   const g = KT.teamGender(mem);
   if (!T.genders.includes(g)) { toast(`${T.label} has no mixed division. Pick members of one gender.`, true); return; }
   if (!v.dojo && mem.length && mem.every(m => m.dojo === mem[0].dojo)) v.dojo = mem[0].dojo;
@@ -361,6 +398,54 @@ async function saveStd(form, kyu) {
   const add = list.filter(d => !have.has(key(d)));
   for (const d of add) { d.bronze = ev.bronze || 'two'; d.ringId = ''; d.ringOrder = Date.now(); await guard(() => S.store.set(P.doc(S.evId, 'divisions', uid()), d)); }
   closeModal(); toast(add.length ? `Created ${plural(add.length, 'division')}` : 'Those divisions already exist');
+}
+/* ---------- v1.29: rule-set presets (WTKF World Championship 2026) ---------- */
+function presetForm(pid) {
+  const pr = KT.PRESETS[pid || 'wtkf-worlds-2026'], ev = curEvent(), list = KT.presetDivisions(pr);
+  const key = d => [d.eventType, d.gender, d.group].join('|');
+  const keys = new Set(list.map(key));
+  const others = DC.divs.filter(d => !keys.has(key(d)));
+  const removable = others.filter(d => !S.d.brackets[d.id]), kept = others.filter(d => S.d.brackets[d.id]);
+  const byGroup = {}; list.forEach(d => (byGroup[d.group] = byGroup[d.group] || []).push(d));
+  const gtxt = Object.entries(pr.groups).map(([, [l, a, b]]) => `${l} ${b == null ? a + '+' : a + '–' + b}`).join(' · ');
+  openModal(sheet(esc(pr.label), `<form id="f-preset" data-form="preset" data-id="${esc(pr.id)}" class="stack">
+    <p class="small">From the <b>${esc(pr.source)}</b>. Applying it sets this event up for the championship:</p>
+    <ul class="small" style="margin:0;padding-left:20px;display:grid;gap:4px">
+      <li><b>${list.length} divisions</b> — ${esc(gtxt)}. Black belts only (Shodan and higher).</li>
+      <li><b>Ages by birth year</b>: ages are counted on 31 Dec 2026 (Cadet = born 2011–2012, Junior 2009–2010, Youth 2006–2008, Senior 2005 and before).</li>
+      <li><b>Kumite & Fuku-go</b>: Cadet and Junior = Ko-go Kumite; Youth and Senior = Jiyu Kumite (Shobu Ippon).</li>
+      <li><b>Teams</b>: Synchronized (Team) Kata 3 · Enbu 3 for Cadet & Junior, 2 for Youth & Senior · Team Kumite 3 + 1 reserve.</li>
+      <li><b>Quota per National Federation</b>: ${pr.quota} athletes per individual category, ${pr.teamQuota} team per team category — countries over the limit are flagged on the division and in the go-live checklist.</li>
+      <li><b>Draw</b>: International — athletes of the same country are kept apart in pools and bracket halves. Kata/Enbu = score pools, Kumite = elimination, Fuku-go = single elimination.</li>
+      <li><b>Judges</b>: Class A (6), B (5), C (4) — minimum judge level 4.</li></ul>
+    <details class="card"><summary class="small"><b>The ${list.length} divisions</b></summary><div class="stack" style="gap:8px;margin-top:8px">${Object.entries(byGroup).map(([g, ds]) => `<div><div class="label">${esc(g)}</div><div class="small">${ds.map(d => esc(d.name.replace(/^Black Belt /, '').replace(g + ' ', '')) + (d.teamSize ? ` <span class="muted">(${d.teamSize[0] === d.teamSize[1] ? d.teamSize[0] : d.teamSize[0] + '–' + d.teamSize[1]})</span>` : '') + (d.scoring.style === 'kogo' ? ' <span class="muted">Ko-go</span>' : KT.EVENT_TYPES[d.eventType].kind === 'kumite' || d.eventType === 'FUKUGO' || d.eventType === 'TKUMITE' ? ' <span class="muted">Jiyu</span>' : '')).join(' · ')}</div></div>`).join('')}</div></details>
+    <label class="check"><input type="checkbox" name="settings" checked> Also set the event to International, ages as of 31 Dec 2026, minimum judge level 4, all six events offered</label>
+    ${removable.length ? `<label class="check"><input type="checkbox" name="removeOld" checked> Remove the ${plural(removable.length, 'other division')} not in this rule set (none drawn yet) — otherwise their age groups (e.g. Junior 16–18) would compete for the same athletes</label>` : ''}
+    ${kept.length ? `<p class="notice warn small" style="display:block">${plural(kept.length, 'division')} outside the rule set already ${kept.length === 1 ? 'has' : 'have'} a bracket and ${kept.length === 1 ? 'is' : 'are'} kept: ${kept.map(d => esc(d.name)).join(', ')}.</p>` : ''}
+    <p class="tiny muted">Divisions that already exist (same event, gender and age group) get these ages, ranks, quotas, team sizes and kumite type unless they have been drawn; their ring, bracket format and timing are kept. Brackets are not drawn by this step — check entrants and quotas, then use Draw all ready.</p></form>`,
+    `<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-preset">Apply rule set</button>`), { wide: true });
+}
+async function applyPreset(form) {
+  const pr = KT.PRESETS[form.dataset.id], v = fd(form), ev = curEvent(); if (!pr) return;
+  const list = KT.presetDivisions(pr), key = d => [d.eventType, d.gender, d.group].join('|');
+  const mine = {}; DC.divs.forEach(d => { mine[key(d)] = d; });
+  let added = 0, updated = 0, removed = 0;
+  if (v.settings) await guard(() => S.store.update(P.event(S.evId), { level: pr.level, ageAsOf: pr.ageAsOf, judgeMin: String(pr.judgeMin), preset: pr.id, eventTypes: KT.EVENT_ORDER.slice() }));
+  for (const d of list) {
+    const cur = mine[key(d)];
+    if (cur && S.d.brackets[cur.id]) continue;
+    if (cur) { // keep the director's ring, order, format, bronze, timing; apply ages, rank, quota, team size and kumite type
+      const { ringId, ringOrder, seeds, officials, format, bronze, scoring, reset, order, ...rules } = d;
+      rules.scoring = Object.assign({}, cur.scoring || scoring, { style: scoring.style });
+      await guard(() => S.store.update(P.doc(S.evId, 'divisions', cur.id), rules)); updated++; }
+    else { d.ringId = ''; d.ringOrder = Date.now() + added; await guard(() => S.store.set(P.doc(S.evId, 'divisions', uid()), d)); added++; }
+  }
+  if (v.removeOld) {
+    const keep = new Set(list.map(key));
+    for (const d of DC.divs) if (!keep.has(key(d)) && !S.d.brackets[d.id]) { await guard(() => S.store.del(P.doc(S.evId, 'divisions', d.id))); removed++; }
+  }
+  if (v.settings && ev.ageAsOf !== pr.ageAsOf) for (const c of DC.comps) if (c.dob) await guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { age: KT.ageOn(c.dob, pr.ageAsOf) }));
+  closeModal(); toast(`${pr.label}: ${plural(added, 'division')} added${updated ? `, ${updated} updated` : ''}${removed ? `, ${removed} removed` : ''}`);
 }
 function ringForm(id) {
   const r = id ? S.d.rings[id] : {};

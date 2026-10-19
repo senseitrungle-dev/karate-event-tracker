@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.27.0 Requirements & Design
+# Karate Event Tracker · v1.29.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -441,3 +441,30 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
   - Re-import: the same person (name, accents ignored) is updated, not duplicated; levels already set are kept; a corrected file (UTF-8 / Windows-1250) fixes names that had "?" ("name corrected from …").
   - Ordinary judge CSVs unchanged (credential columns still required there).
 - Verify: test/fedjudges.js (2 of 2 people found, warnings, untick → Import 1, country/federation/rank, Not set levels, set levels, re-import corrects name + adds the other without duplicates + keeps levels); test/judgeimport.js updated for the tick column; fedimport.js; regression.
+
+## 51. v1.28.0 — birth dates: day-month-year (Europe) vs month-day-year (USA) (2026-10-18)
+- **Requirement**: Europe (and most countries) write dates day-month-year (27.07.2012), the USA month-day-year (07/27/2012). The separator ("." "/" "-") does not tell which — the v1.26 rule (dots = European, slashes = US) was wrong for European files with slashes and US files with dots.
+- **Rule — one order per file**, decided in this order and shown in the preview with the reason:
+  1. **Birth dates are** selector in the import form (Work it out · Day-month-year · Month-day-year).
+  2. The file's own dates: a first number above 12 can only be a day (27.07.2012 → day first); a second number above 12 can only be a day (07/27/2012 → month first).
+  3. Country: the sheet's COUNTRY or the rows' country column — USA → month first; any other country → day first.
+  4. The event location names the USA (USA / United States / ", ST" state code) → month first.
+  5. The director's device set to US English → month first; otherwise day first.
+- Year-first dates (2012-07-27) are always year-month-day. 8 digits without separators (27072012 / 07272012) follow the file's order. Impossible dates (31.02) are rejected with the original text.
+- A file mixing both orders gets a warning; rows that don't fit the chosen order are listed as problems instead of being imported with a wrong date.
+- Preview shows birth dates as "27 Jul 2012" so day/month can't be misread.
+- Verify: test/dates.js (proof by 27.07, proof by 07/27, USA country, Poland with slashes, override, 8 digits, mixed file, impossible date, undecided → device locale, US device, federation sheet); fedimport.js; e2e; regression.
+
+## 52. v1.29.0 — WTKF World Championship 2026 rule set (Information Package) (2026-10-18)
+- **Source**: "XXII WTKF Traditional Karate World Championship & Judges' Seminar — Information Package", Washington DC, 17–20 Nov 2026 (competition Fri 20 Nov, Springhill Recreation Center, McLean VA). §III Participants, §V Categories, §VII Judges.
+- **Divisions → "WTKF Worlds 2026 rules"** opens a summary and applies the rule set (`KT.PRESETS['wtkf-worlds-2026']`, `KT.presetDivisions`):
+  - **34 divisions**, black belts only (Shodan+): Cadet 14–15, Junior 16–17, Youth 18–20, Senior 21+ — each Women/Men Individual Kata, Fuku-go, Individual Kumite (24); Cadet & Junior 14–17 — Women's & Men's Synchronized (Team) Kata, Men's & Mixed Enbu (4); Youth & Senior 18+ — Men's & Women's Synchronized Kata, Men's & Mixed Enbu, Men's & Women's Team Kumite (6). No Women's Enbu; no Cadet/Junior Team Kumite.
+  - **Ages by birth year**: event "ages as of" = 31 Dec 2026 (born 2011–12 = Cadet, 2009–10 Junior, 2006–08 Youth, ≤2005 Senior); stored ages recalculated.
+  - **Kumite type**: Cadet/Junior Individual Kumite & Fuku-go = Ko-go; Youth/Senior = Jiyu (Shobu Ippon).
+  - **Team sizes per division** (`dv.teamSize`, `KT.teamSizeFor`): Synchronized Kata 3; Enbu 3 (Cadet & Junior) / 2 (Youth & Senior); Team Kumite 3 + 1 reserve (3–4). Team save checks the size of the team's division. Enbu stays 2 by default; only the division setting changes it.
+  - **Quota per National Federation** (`dv.quota`, `KT.quotaIssues`): 3 athletes per individual category, 1 team per team category, counted by country (International). Shown as "Over quota · Poland 4/3" on the division and as a (non-blocking) go-live checklist item "Quotas and team sizes" — the director decides who is withdrawn.
+  - **Judges**: Class A(6)/B(5)/C(4) → event `judgeMin` = 4 (new "Minimum judge level" in Event settings; `KT.judgeNeed(level, min)`).
+  - Event set to International (draw keeps same-country athletes apart), all six events offered.
+  - Other divisions not in the rule set are removed (option, only if not drawn); same event/gender/age-group divisions are updated (ages, rank, quota, team size, kumite type) keeping ring, format, bronze and timing; drawn divisions are never touched. Brackets are not drawn by this step.
+- **Ambiguities in the package (as implemented, director can edit any division)**: the 16–17 group is titled "YOUTH" on p.7 but "JUNIOR" in the combined table on p.8 and §III lists "seniors, youth, juniors and cadets" → named **Junior**. Cadet/Junior Enbu is listed as "1 Team (3 athletes)" while Youth/Senior Enbu is 2 → kept as written (3).
+- Verify: test/worlds2026.js (pop-up, 34 divisions only, event settings, age limits, Ko-go/Jiyu, team sizes, no Women's Enbu, Shodan-only + quotas, Poland sheet: Janusz born Dec 2005 → Senior by birth year, Bis 2006 → Youth, Simona 2012 → Cadet, Kisiel 2010 → Junior; over-quota flag + checklist; kyu athlete unplaced; 2-member Cadet/Junior Enbu refused, 3 accepted; judge level 4 shown); regression.

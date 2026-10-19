@@ -175,6 +175,8 @@ function liveChecks() {
   const withEnt = DC.divs.filter(d => divEntrants(d.id).length);
   const undrawn = withEnt.filter(d => !S.d.brackets[d.id]);
   add(withEnt.length > 0 && !undrawn.length, 'Event set up — every division with competitors is drawn', undrawn.length ? `${plural(undrawn.length, 'division')} not drawn yet` : `${plural(withEnt.length, 'division')} drawn`, 'divisions');
+  const iss = withEnt.flatMap(d => divIssues(d).map(i => ({ d, i })));
+  if (withEnt.some(d => +d.quota) || iss.length) add(!iss.length, 'Quotas and team sizes', iss.length ? iss.slice(0, 4).map(x => `${x.d.name}: ${x.i.long}`).join(' · ') + (iss.length > 4 ? ` · +${iss.length - 4} more` : '') : 'Every country within its limit; every team the right size', 'divisions', false);
   const noRing = withEnt.filter(d => !S.d.rings[d.ringId]);
   add(DC.rings.length > 0 && !noRing.length, 'Every division is on a ring', noRing.length ? `${plural(noRing.length, 'division')} without a ring` : `${plural(ringsInUse().length, 'ring')} in use`, 'rings');
   const act = DC.comps.filter(c => c.status !== 'withdrawn'), notIn = act.filter(c => !c.checkedIn);
@@ -182,7 +184,7 @@ function liveChecks() {
   const onRing = judgesList().filter(j => S.d.rings[j.ringId]), jOut = onRing.filter(j => !j.checkedIn);
   add(onRing.length > 0 && !jOut.length, 'All judges checked in', jOut.length ? `${jOut.length} of ${onRing.length} judges on rings not checked in` : `${onRing.length} judges checked in`, 'judges');
   const short = ringsInUse().filter(r => ringJudges(r.id).filter(j => j.checkedIn).length < ringNeed(r.id));
-  add(!short.length, 'Each ring has a full judging panel', short.length ? short.map(r => `${r.name}: ${ringJudges(r.id).filter(j => j.checkedIn).length}/${ringNeed(r.id)}`).join(' · ') : 'Enough checked-in judges on every ring', 'judges', KT.judgeNeed(curEvent().level) >= 3);
+  add(!short.length, 'Each ring has a full judging panel', short.length ? short.map(r => `${r.name}: ${ringJudges(r.id).filter(j => j.checkedIn).length}/${ringNeed(r.id)}`).join(' · ') : 'Enough checked-in judges on every ring', 'judges', KT.judgeNeed(curEvent().level, curEvent().judgeMin) >= 3);
   const noMgr = ringsInUse().filter(r => !(r.managerIds || []).length);
   add(!noMgr.length, 'Every ring has a ring manager', noMgr.length ? noMgr.map(r => r.name).join(', ') + ' without a manager' : 'All rings staffed', 'rings');
   const notReady = ringsInUse().filter(r => !(S.d.ringready[r.id] || {}).ready);
