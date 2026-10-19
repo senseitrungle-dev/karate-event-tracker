@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.30.0 Requirements & Design
+# Karate Event Tracker · v1.30.1 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -474,3 +474,9 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
   - Athletes not chosen lose **that event only** (removed from their events, override cleared) — they stay registered and keep their other events. Teams not chosen are marked Withdrawn.
 - **Draw blocked**: Draw / Save & draw / Redraw on an undrawn over-quota division is refused with the reason and opens the picker. **Draw all ready** draws the others and lists the over-quota divisions it skipped (confirm dialog + toast). Divisions already drawn are not affected (the chip there is information only).
 - Verify: test/worlds2026.js (draw refused + picker opens, 4 listed, Save only at exactly 3, unticked athlete keeps registration but loses the event, flag cleared, division draws, Draw all warns and leaves over-quota divisions undrawn, table fits at 1280px, no sideways scroll at 390px); regression.
+
+## 54. v1.30.1 — go-live checklist: an empty event no longer passes (2026-10-18)
+- **Locate**: Dashboard → "Ready to go live?" on a new event with no competitors, judges or managers showed ✓ "Each ring has a full judging panel", ✓ "Every ring has a ring manager", ✓ "Rings, managers and helpers ready".
+- **Diagnose**: those checks (and "Every division is on a ring") only looked at *rings in use* (rings holding a division with competitors). With no competitors there are no rings in use, so "no ring is missing anything" was true for an empty list — nothing to check was counted as done.
+- **Fix**: each ring check now also requires at least one ring in use (and "Every division is on a ring" requires a division with competitors). When there is nothing yet, the item stays ✗/! and says why: "No divisions set up yet" / "No division has competitors yet" / "No rings set up yet" / "No ring has a division with competitors yet"; competitors and judges items say "No competitors registered yet" / "No judges added yet" / "No judges assigned to a ring yet".
+- Verify: test/emptychecks.js (new empty tournament: no item ticked, reasons shown, Go live disabled); golive.js, public.js, worlds2026.js; regression.
