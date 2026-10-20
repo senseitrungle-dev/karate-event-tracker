@@ -203,7 +203,7 @@ function competitorsHTML() {
   const word = tour ? 'competitor' : 'participant';
   const tools = `<div class="row"><input id="comp-q" class="search" type="search" placeholder="Search name, dojo…" value="${esc(S.ui.q)}" data-input="q" aria-label="Search">
     <select id="comp-f" data-change="filter" aria-label="Filter">${opt('all', 'All', f)}${opt('out', 'Not checked in', f)}${opt('in', 'Checked in', f)}${dir ? opt('incomplete', 'Missing information', f) : ''}${tour && dir ? opt('unplaced', 'No division match', f) : ''}${opt('withdrawn', 'Withdrawn', f)}</select></div>`;
-  const acts = dir ? `<button data-act="import-open">Import CSV</button><button data-act="export-comps">Export CSV</button><button class="primary" data-act="comp-new">Add ${word}</button>` : '';
+  const acts = dir ? `<button data-act="import-open">Import CSV</button><button data-act="export-comps">Export CSV</button>${DC.comps.length ? '<button class="danger" data-act="rm-group">Remove group…</button>' : ''}<button class="primary" data-act="comp-new">Add ${word}</button>` : '';
   if (!DC.comps.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No ${word}s registered</h2><p class="muted">${dir ? `Add ${word}s one at a time or import a spreadsheet (CSV).` : 'Registrations will appear here.'}</p>${dir ? `<div class="row">${acts}</div>` : ''}</div>`;
   const rows = list.map(c => {
     const age = KT.ageOf(c, DC.asOf), miss = dir ? KT.validateCompetitor(c, DC.asOf) : [];

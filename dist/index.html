@@ -680,16 +680,21 @@ table.imp-tbl td.imp-need { white-space: normal; min-width: 14em; color: var(--w
 button.ent-link { padding: 0; min-height: 0; background: none; border: 0; color: var(--ai); font: inherit; cursor: pointer; text-align: left; }
 button.ent-link:hover b { text-decoration: underline; }
 button.chip.ent-chip { cursor: pointer; min-height: 32px; }
+
+/* v1.36 — bulk remove */
+.rg-list { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+label.rg-row { padding: 4px 0; align-items: flex-start; }
+label.rg-row.locked { opacity: .75; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.35.0 */
+<script>/* Karate Event Tracker v1.36.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.35.0';
+  const VERSION = '1.36.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -5028,7 +5033,7 @@ function competitorsHTML() {
   const word = tour ? 'competitor' : 'participant';
   const tools = `<div class="row"><input id="comp-q" class="search" type="search" placeholder="Search name, dojo…" value="${esc(S.ui.q)}" data-input="q" aria-label="Search">
     <select id="comp-f" data-change="filter" aria-label="Filter">${opt('all', 'All', f)}${opt('out', 'Not checked in', f)}${opt('in', 'Checked in', f)}${dir ? opt('incomplete', 'Missing information', f) : ''}${tour && dir ? opt('unplaced', 'No division match', f) : ''}${opt('withdrawn', 'Withdrawn', f)}</select></div>`;
-  const acts = dir ? `<button data-act="import-open">Import CSV</button><button data-act="export-comps">Export CSV</button><button class="primary" data-act="comp-new">Add ${word}</button>` : '';
+  const acts = dir ? `<button data-act="import-open">Import CSV</button><button data-act="export-comps">Export CSV</button>${DC.comps.length ? '<button class="danger" data-act="rm-group">Remove group…</button>' : ''}<button class="primary" data-act="comp-new">Add ${word}</button>` : '';
   if (!DC.comps.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No ${word}s registered</h2><p class="muted">${dir ? `Add ${word}s one at a time or import a spreadsheet (CSV).` : 'Registrations will appear here.'}</p>${dir ? `<div class="row">${acts}</div>` : ''}</div>`;
   const rows = list.map(c => {
     const age = KT.ageOf(c, DC.asOf), miss = dir ? KT.validateCompetitor(c, DC.asOf) : [];
@@ -5813,12 +5818,14 @@ async function runImport() {
   const { recs, errors } = importRows($('#imp-text').value);
   if (!recs.length) { $('#imp-preview').textContent = errors.join(' · ') || 'Nothing to import.'; return; }
   const btn = $('[data-act="imp-run"]'); btn.disabled = true;
+  const batch = { id: uid(), name: S.ui.impName || 'Pasted list', at: new Date().toISOString() };
   let done = 0;
   for (const r of recs) {
     if (r.fixId) { if (!(await guard(() => S.store.update(P.doc(S.evId, 'competitors', r.fixId), { firstName: r.firstName, lastName: r.lastName })))) break; done++; continue; }
     const id = uid();
     const pub = { firstName: r.firstName, lastName: r.lastName, gender: r.gender, rank: r.rank, dojo: r.dojo, state: r.state, country: r.country, waiver: r.waiver, feePaid: r.feePaid,
-      checkedIn: false, status: 'active', events: r.events, divOverride: {}, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : null, createdAt: new Date().toISOString() };
+      checkedIn: false, status: 'active', events: r.events, divOverride: {}, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : null, createdAt: new Date().toISOString(),
+      importId: batch.id, importName: batch.name, importAt: batch.at };     // v1.36: which import a competitor came from (bulk remove)
     const ok = await guard(async () => { await S.store.set(P.doc(S.evId, 'competitors', id), pub); await S.store.set(P.pv(S.evId, id), { dob: r.dob, email: r.email, phone: r.phone, emergencyName: r.emergencyName, emergencyPhone: r.emergencyPhone, feeAmount: r.feeAmount || '', notes: '' }); return true; });
     if (!ok) break;
     done++; $('#imp-preview').textContent = `Imported ${done} of ${recs.length}…`;
@@ -6168,6 +6175,66 @@ async function saveCombine(f) {
   await guard(() => S.store.update(P.doc(S.evId, 'divisions', t.id), { combinedFrom: [...new Set([...(t.combinedFrom || []), d.name])] }));
   if (v.removeOld && !S.d.brackets[d.id]) await guard(() => S.store.del(P.doc(S.evId, 'divisions', d.id)));
   closeModal(); toast(`${plural(ents.length, 'entrant')} moved into ${t.name}${v.removeOld ? ` · ${d.name} removed` : ''}`);
+}
+/* ---------- v1.36: bulk remove competitors of one import / dojo, club, federation / region / country ---------- */
+function compHasResults(id) {
+  for (const did in S.d.brackets) {
+    const br = S.d.brackets[did];
+    if (br.format === 'KP') { if (Object.keys(br.scores || {}).some(k => (k.split('_')[1] || '') === id && br.scores[k])) return true; continue; }
+    const res = DC.res[did] || {};
+    for (const mid in br.results || {}) { const r = res[mid]; if (r && (r.a === id || r.b === id)) return true; }
+  }
+  return false;
+}
+function inDrawnBracket(id) { return Object.values(S.d.brackets).some(br => (br.entrants || []).includes(id)); }
+function removeGroups() {
+  const out = [], add = (key, label, kind, ids) => ids.length && out.push({ key, label, kind, ids });
+  const by = (f) => { const m = {}; DC.comps.forEach(c => { const v = String(c[f] || '').trim(); if (v) (m[v] = m[v] || []).push(c.id); }); return Object.entries(m).sort((a, b) => a[0].localeCompare(b[0])); };
+  const imp = {}; DC.comps.forEach(c => { if (c.importId) (imp[c.importId] = imp[c.importId] || { name: c.importName, at: c.importAt, ids: [] }).ids.push(c.id); });
+  Object.entries(imp).sort((a, b) => String(b[1].at).localeCompare(String(a[1].at))).forEach(([k, v]) => add('import:' + k, `${v.name || 'Import'} · ${v.at ? new Date(v.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}`, 'From an import', v.ids));
+  by('dojo').forEach(([v, ids]) => add('dojo:' + v, v, 'Dojo / club / federation', ids));
+  by('state').forEach(([v, ids]) => add('state:' + v, v, 'State / region', ids));
+  by('country').forEach(([v, ids]) => add('country:' + v, v, 'Country', ids));
+  return out;
+}
+function removeGroupForm(key) {
+  const groups = removeGroups();
+  if (!groups.length) { toast('No competitors to remove.', true); return; }
+  const g = groups.find(x => x.key === key) || groups[0];
+  const kinds = [...new Set(groups.map(x => x.kind))];
+  const sel = `<select id="rg-group" data-change="rg-group" aria-label="Group">${kinds.map(k => `<optgroup label="${esc(k)}">${groups.filter(x => x.kind === k).map(x => opt(x.key, `${x.label} (${x.ids.length})`, g.key)).join('')}</optgroup>`).join('')}</select>`;
+  const rows = g.ids.map(id => DC.compBy[id]).filter(Boolean).sort((a, b) => String(a.lastName).localeCompare(String(b.lastName)) || String(a.firstName).localeCompare(String(b.firstName))).map(c => {
+    const locked = compHasResults(c.id), drawn = !locked && inDrawnBracket(c.id);
+    return `<label class="check rg-row${locked ? ' locked' : ''}"><input type="checkbox" name="rm" value="${esc(c.id)}" ${locked ? 'disabled' : 'checked'} data-change="rg-count"> <span><b>${esc(c.lastName)}, ${esc(c.firstName)}</b> <span class="tiny muted">${esc([c.dojo, c.state, c.country].filter(Boolean).join(' · '))}</span>${locked ? ' <span class="chip bad">has results — kept</span>' : drawn ? ' <span class="chip warn">in a drawn bracket</span>' : ''}</span></label>`;
+  }).join('');
+  openModal(sheet('Remove a group of competitors', `<form id="f-rmgroup" data-form="rmgroup" class="stack">
+    <p class="small">Take out everyone from one import, dojo / club / federation, region or country — e.g. to import a corrected file again. Competitors with recorded results are kept.</p>
+    <label class="f"><span>Group</span>${sel}</label>
+    <div class="row between small"><span><b id="rg-n"></b></span><span><button type="button" class="sm ghost" data-act="rg-all" data-v="1">Tick all</button><button type="button" class="sm ghost" data-act="rg-all" data-v="0">Untick all</button></span></div>
+    <div class="stack rg-list" style="gap:4px">${rows}</div>
+    <p class="tiny muted">Removing deletes their registration and private details in this event and takes them off any team (a team left with nobody is deleted). Drawn brackets that included them show “Entrants changed” and need a redraw. This can’t be undone — import the corrected file afterwards.</p></form>`,
+    `<button data-act="modal-close">Cancel</button><button class="danger primary" type="submit" form="f-rmgroup" id="rg-go">Remove</button>`), { wide: true });
+  rgCount();
+}
+function rgCount() {
+  const n = $$('#f-rmgroup input[name="rm"]:checked').length, kept = $$('#f-rmgroup input[name="rm"]:disabled').length;
+  const el = $('#rg-n'); if (el) el.textContent = `${plural(n, 'competitor')} selected${kept ? ` · ${kept} with results kept` : ''}`;
+  const b = $('#rg-go'); if (b) { b.disabled = !n; b.textContent = n ? `Remove ${n}` : 'Remove'; }
+}
+async function removeGroup(f) {
+  const ids = $$('input[name="rm"]:checked', f).map(i => i.value).filter(id => DC.compBy[id] && !compHasResults(id));
+  if (!ids.length) return;
+  const gl = ($('#rg-group') || {}).selectedOptions ? $('#rg-group').selectedOptions[0].textContent.replace(/\s*\(\d+\)$/, '') : '';
+  if (!(await confirmBox(`Remove ${plural(ids.length, 'competitor')}${gl ? ' of ' + gl : ''}? Their registrations are deleted from this event.`, `Remove ${ids.length}`, true))) return;
+  const set = new Set(ids);
+  for (const t of DC.teams) {
+    const left = (t.memberIds || []).filter(m => !set.has(m));
+    if (left.length === (t.memberIds || []).length) continue;
+    await guard(() => left.length ? S.store.update(P.doc(S.evId, 'teams', t.id), { memberIds: left }) : S.store.del(P.doc(S.evId, 'teams', t.id)));
+  }
+  let n = 0;
+  for (const id of ids) { if (await guard(async () => { await S.store.del(P.doc(S.evId, 'competitors', id)); await S.store.del(P.pv(S.evId, id)); return true; })) n++; }
+  closeModal(); S.ui.filter = 'all'; toast(`Removed ${plural(n, 'competitor')}${gl ? ' · ' + gl : ''}. You can import the corrected file now.`);
 }
 function ringForm(id) {
   const r = id ? S.d.rings[id] : {};
@@ -8209,7 +8276,7 @@ const ACT = {
     closeModal(); await guard(async () => { await S.store.del(P.doc(S.evId, 'competitors', id)); await S.store.del(P.pv(S.evId, id)); }, 'Deleted');
   },
   checkin: (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { checkedIn: !c.checkedIn })); },
-  'import-open': () => importForm(),
+  'import-open': () => { S.ui.impName = ''; importForm(); },
   'imp-preview': () => { const el = $('#imp-preview'); el.innerHTML = importPreviewHTML(); try { el.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* old browsers */ } },
   'imp-run': () => runImport(),
   'export-comps': () => {
@@ -8236,6 +8303,8 @@ const ACT = {
   'div-preset': el => presetForm(el.dataset.id),
   'div-ncr': () => ncrForm(),
   'div-combine': el => combineForm(el.dataset.id),
+  'rm-group': () => removeGroupForm(),
+  'rg-all': el => { $$('#f-rmgroup input[name="rm"]:not(:disabled)').forEach(i => { i.checked = el.dataset.v === '1'; }); rgCount(); },
   'ent-open': el => { const id = el.dataset.id; if (DC.compBy[id]) compForm(id); else if (DC.teamBy[id]) teamForm(id); },
   'kyu-groups': () => kyuGroupsForm(),
   'kyu-add': () => { const g = kyuReadForm(); g.push({ id: uid(), label: 'Level ' + (g.length + 1), minRank: 'k3', maxRank: 'k1', decide: 'flags', kata: [], exchanges: [] }); kyuGroupsForm(g); },
@@ -8454,7 +8523,9 @@ const CHANGE = {
   'kyu-decide': () => kyuGroupsForm(kyuReadForm()),
   'kata-pick': el => { const d = loadDraft(S.modal.key); d.kata = Object.assign({}, d.kata || {}, { [el.dataset.s]: el.value }); draftChanged(); },
   'imp-dates': () => { if ($('#imp-text').value.trim()) ACT['imp-preview'](); },
-  'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = decodeCsvBytes(rd.result); ACT['imp-preview'](); }; rd.readAsArrayBuffer(f); },
+  'rg-group': el => removeGroupForm(el.value),
+  'rg-count': () => rgCount(),
+  'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; S.ui.impName = f.name; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = decodeCsvBytes(rd.result); ACT['imp-preview'](); }; rd.readAsArrayBuffer(f); },
   kscore: el => { const d = loadDraft(S.modal.key), k = el.dataset.s === 'a' ? 'sa' : 'sb'; d[k] = d[k] || []; const v = el.value.replace(',', '.'); d[k][+el.dataset.i] = v === '' ? '' : v; draftChanged(); },
   'bout-member': el => { const d = loadDraft(S.modal.key); const i = el.dataset.i; let b; if (i === 'd') { d.daihyo = d.daihyo || { log: [] }; b = d.daihyo; } else { d.bouts = d.bouts || []; d.bouts[+i] = d.bouts[+i] || { log: [] }; b = d.bouts[+i]; } b[el.dataset.s === 'a' ? 'ma' : 'mb'] = el.value; draftChanged(); },
 };
@@ -8625,6 +8696,7 @@ function wire() {
     else if (k === 'preset') applyPreset(f);
     else if (k === 'quota') saveQuotaPick(f);
     else if (k === 'combine') saveCombine(f);
+    else if (k === 'rmgroup') removeGroup(f);
     else if (k === 'ncr') applyNcr(f);
     else if (k === 'kyugroups') saveKyuGroups();
     else if (k === 'kyu') saveStd(f, true);

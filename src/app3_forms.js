@@ -287,12 +287,14 @@ async function runImport() {
   const { recs, errors } = importRows($('#imp-text').value);
   if (!recs.length) { $('#imp-preview').textContent = errors.join(' · ') || 'Nothing to import.'; return; }
   const btn = $('[data-act="imp-run"]'); btn.disabled = true;
+  const batch = { id: uid(), name: S.ui.impName || 'Pasted list', at: new Date().toISOString() };
   let done = 0;
   for (const r of recs) {
     if (r.fixId) { if (!(await guard(() => S.store.update(P.doc(S.evId, 'competitors', r.fixId), { firstName: r.firstName, lastName: r.lastName })))) break; done++; continue; }
     const id = uid();
     const pub = { firstName: r.firstName, lastName: r.lastName, gender: r.gender, rank: r.rank, dojo: r.dojo, state: r.state, country: r.country, waiver: r.waiver, feePaid: r.feePaid,
-      checkedIn: false, status: 'active', events: r.events, divOverride: {}, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : null, createdAt: new Date().toISOString() };
+      checkedIn: false, status: 'active', events: r.events, divOverride: {}, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : null, createdAt: new Date().toISOString(),
+      importId: batch.id, importName: batch.name, importAt: batch.at };     // v1.36: which import a competitor came from (bulk remove)
     const ok = await guard(async () => { await S.store.set(P.doc(S.evId, 'competitors', id), pub); await S.store.set(P.pv(S.evId, id), { dob: r.dob, email: r.email, phone: r.phone, emergencyName: r.emergencyName, emergencyPhone: r.emergencyPhone, feeAmount: r.feeAmount || '', notes: '' }); return true; });
     if (!ok) break;
     done++; $('#imp-preview').textContent = `Imported ${done} of ${recs.length}…`;
@@ -642,6 +644,66 @@ async function saveCombine(f) {
   await guard(() => S.store.update(P.doc(S.evId, 'divisions', t.id), { combinedFrom: [...new Set([...(t.combinedFrom || []), d.name])] }));
   if (v.removeOld && !S.d.brackets[d.id]) await guard(() => S.store.del(P.doc(S.evId, 'divisions', d.id)));
   closeModal(); toast(`${plural(ents.length, 'entrant')} moved into ${t.name}${v.removeOld ? ` · ${d.name} removed` : ''}`);
+}
+/* ---------- v1.36: bulk remove competitors of one import / dojo, club, federation / region / country ---------- */
+function compHasResults(id) {
+  for (const did in S.d.brackets) {
+    const br = S.d.brackets[did];
+    if (br.format === 'KP') { if (Object.keys(br.scores || {}).some(k => (k.split('_')[1] || '') === id && br.scores[k])) return true; continue; }
+    const res = DC.res[did] || {};
+    for (const mid in br.results || {}) { const r = res[mid]; if (r && (r.a === id || r.b === id)) return true; }
+  }
+  return false;
+}
+function inDrawnBracket(id) { return Object.values(S.d.brackets).some(br => (br.entrants || []).includes(id)); }
+function removeGroups() {
+  const out = [], add = (key, label, kind, ids) => ids.length && out.push({ key, label, kind, ids });
+  const by = (f) => { const m = {}; DC.comps.forEach(c => { const v = String(c[f] || '').trim(); if (v) (m[v] = m[v] || []).push(c.id); }); return Object.entries(m).sort((a, b) => a[0].localeCompare(b[0])); };
+  const imp = {}; DC.comps.forEach(c => { if (c.importId) (imp[c.importId] = imp[c.importId] || { name: c.importName, at: c.importAt, ids: [] }).ids.push(c.id); });
+  Object.entries(imp).sort((a, b) => String(b[1].at).localeCompare(String(a[1].at))).forEach(([k, v]) => add('import:' + k, `${v.name || 'Import'} · ${v.at ? new Date(v.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}`, 'From an import', v.ids));
+  by('dojo').forEach(([v, ids]) => add('dojo:' + v, v, 'Dojo / club / federation', ids));
+  by('state').forEach(([v, ids]) => add('state:' + v, v, 'State / region', ids));
+  by('country').forEach(([v, ids]) => add('country:' + v, v, 'Country', ids));
+  return out;
+}
+function removeGroupForm(key) {
+  const groups = removeGroups();
+  if (!groups.length) { toast('No competitors to remove.', true); return; }
+  const g = groups.find(x => x.key === key) || groups[0];
+  const kinds = [...new Set(groups.map(x => x.kind))];
+  const sel = `<select id="rg-group" data-change="rg-group" aria-label="Group">${kinds.map(k => `<optgroup label="${esc(k)}">${groups.filter(x => x.kind === k).map(x => opt(x.key, `${x.label} (${x.ids.length})`, g.key)).join('')}</optgroup>`).join('')}</select>`;
+  const rows = g.ids.map(id => DC.compBy[id]).filter(Boolean).sort((a, b) => String(a.lastName).localeCompare(String(b.lastName)) || String(a.firstName).localeCompare(String(b.firstName))).map(c => {
+    const locked = compHasResults(c.id), drawn = !locked && inDrawnBracket(c.id);
+    return `<label class="check rg-row${locked ? ' locked' : ''}"><input type="checkbox" name="rm" value="${esc(c.id)}" ${locked ? 'disabled' : 'checked'} data-change="rg-count"> <span><b>${esc(c.lastName)}, ${esc(c.firstName)}</b> <span class="tiny muted">${esc([c.dojo, c.state, c.country].filter(Boolean).join(' · '))}</span>${locked ? ' <span class="chip bad">has results — kept</span>' : drawn ? ' <span class="chip warn">in a drawn bracket</span>' : ''}</span></label>`;
+  }).join('');
+  openModal(sheet('Remove a group of competitors', `<form id="f-rmgroup" data-form="rmgroup" class="stack">
+    <p class="small">Take out everyone from one import, dojo / club / federation, region or country — e.g. to import a corrected file again. Competitors with recorded results are kept.</p>
+    <label class="f"><span>Group</span>${sel}</label>
+    <div class="row between small"><span><b id="rg-n"></b></span><span><button type="button" class="sm ghost" data-act="rg-all" data-v="1">Tick all</button><button type="button" class="sm ghost" data-act="rg-all" data-v="0">Untick all</button></span></div>
+    <div class="stack rg-list" style="gap:4px">${rows}</div>
+    <p class="tiny muted">Removing deletes their registration and private details in this event and takes them off any team (a team left with nobody is deleted). Drawn brackets that included them show “Entrants changed” and need a redraw. This can’t be undone — import the corrected file afterwards.</p></form>`,
+    `<button data-act="modal-close">Cancel</button><button class="danger primary" type="submit" form="f-rmgroup" id="rg-go">Remove</button>`), { wide: true });
+  rgCount();
+}
+function rgCount() {
+  const n = $$('#f-rmgroup input[name="rm"]:checked').length, kept = $$('#f-rmgroup input[name="rm"]:disabled').length;
+  const el = $('#rg-n'); if (el) el.textContent = `${plural(n, 'competitor')} selected${kept ? ` · ${kept} with results kept` : ''}`;
+  const b = $('#rg-go'); if (b) { b.disabled = !n; b.textContent = n ? `Remove ${n}` : 'Remove'; }
+}
+async function removeGroup(f) {
+  const ids = $$('input[name="rm"]:checked', f).map(i => i.value).filter(id => DC.compBy[id] && !compHasResults(id));
+  if (!ids.length) return;
+  const gl = ($('#rg-group') || {}).selectedOptions ? $('#rg-group').selectedOptions[0].textContent.replace(/\s*\(\d+\)$/, '') : '';
+  if (!(await confirmBox(`Remove ${plural(ids.length, 'competitor')}${gl ? ' of ' + gl : ''}? Their registrations are deleted from this event.`, `Remove ${ids.length}`, true))) return;
+  const set = new Set(ids);
+  for (const t of DC.teams) {
+    const left = (t.memberIds || []).filter(m => !set.has(m));
+    if (left.length === (t.memberIds || []).length) continue;
+    await guard(() => left.length ? S.store.update(P.doc(S.evId, 'teams', t.id), { memberIds: left }) : S.store.del(P.doc(S.evId, 'teams', t.id)));
+  }
+  let n = 0;
+  for (const id of ids) { if (await guard(async () => { await S.store.del(P.doc(S.evId, 'competitors', id)); await S.store.del(P.pv(S.evId, id)); return true; })) n++; }
+  closeModal(); S.ui.filter = 'all'; toast(`Removed ${plural(n, 'competitor')}${gl ? ' · ' + gl : ''}. You can import the corrected file now.`);
 }
 function ringForm(id) {
   const r = id ? S.d.rings[id] : {};

@@ -200,7 +200,7 @@ const ACT = {
     closeModal(); await guard(async () => { await S.store.del(P.doc(S.evId, 'competitors', id)); await S.store.del(P.pv(S.evId, id)); }, 'Deleted');
   },
   checkin: (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { checkedIn: !c.checkedIn })); },
-  'import-open': () => importForm(),
+  'import-open': () => { S.ui.impName = ''; importForm(); },
   'imp-preview': () => { const el = $('#imp-preview'); el.innerHTML = importPreviewHTML(); try { el.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* old browsers */ } },
   'imp-run': () => runImport(),
   'export-comps': () => {
@@ -227,6 +227,8 @@ const ACT = {
   'div-preset': el => presetForm(el.dataset.id),
   'div-ncr': () => ncrForm(),
   'div-combine': el => combineForm(el.dataset.id),
+  'rm-group': () => removeGroupForm(),
+  'rg-all': el => { $$('#f-rmgroup input[name="rm"]:not(:disabled)').forEach(i => { i.checked = el.dataset.v === '1'; }); rgCount(); },
   'ent-open': el => { const id = el.dataset.id; if (DC.compBy[id]) compForm(id); else if (DC.teamBy[id]) teamForm(id); },
   'kyu-groups': () => kyuGroupsForm(),
   'kyu-add': () => { const g = kyuReadForm(); g.push({ id: uid(), label: 'Level ' + (g.length + 1), minRank: 'k3', maxRank: 'k1', decide: 'flags', kata: [], exchanges: [] }); kyuGroupsForm(g); },
@@ -445,7 +447,9 @@ const CHANGE = {
   'kyu-decide': () => kyuGroupsForm(kyuReadForm()),
   'kata-pick': el => { const d = loadDraft(S.modal.key); d.kata = Object.assign({}, d.kata || {}, { [el.dataset.s]: el.value }); draftChanged(); },
   'imp-dates': () => { if ($('#imp-text').value.trim()) ACT['imp-preview'](); },
-  'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = decodeCsvBytes(rd.result); ACT['imp-preview'](); }; rd.readAsArrayBuffer(f); },
+  'rg-group': el => removeGroupForm(el.value),
+  'rg-count': () => rgCount(),
+  'imp-file': el => { const f = el.files && el.files[0]; if (!f) return; S.ui.impName = f.name; const rd = new FileReader(); rd.onload = () => { $('#imp-text').value = decodeCsvBytes(rd.result); ACT['imp-preview'](); }; rd.readAsArrayBuffer(f); },
   kscore: el => { const d = loadDraft(S.modal.key), k = el.dataset.s === 'a' ? 'sa' : 'sb'; d[k] = d[k] || []; const v = el.value.replace(',', '.'); d[k][+el.dataset.i] = v === '' ? '' : v; draftChanged(); },
   'bout-member': el => { const d = loadDraft(S.modal.key); const i = el.dataset.i; let b; if (i === 'd') { d.daihyo = d.daihyo || { log: [] }; b = d.daihyo; } else { d.bouts = d.bouts || []; d.bouts[+i] = d.bouts[+i] || { log: [] }; b = d.bouts[+i]; } b[el.dataset.s === 'a' ? 'ma' : 'mb'] = el.value; draftChanged(); },
 };
@@ -616,6 +620,7 @@ function wire() {
     else if (k === 'preset') applyPreset(f);
     else if (k === 'quota') saveQuotaPick(f);
     else if (k === 'combine') saveCombine(f);
+    else if (k === 'rmgroup') removeGroup(f);
     else if (k === 'ncr') applyNcr(f);
     else if (k === 'kyugroups') saveKyuGroups();
     else if (k === 'kyu') saveStd(f, true);

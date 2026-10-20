@@ -675,3 +675,8 @@ table.imp-tbl td.imp-need { white-space: normal; min-width: 14em; color: var(--w
 button.ent-link { padding: 0; min-height: 0; background: none; border: 0; color: var(--ai); font: inherit; cursor: pointer; text-align: left; }
 button.ent-link:hover b { text-decoration: underline; }
 button.chip.ent-chip { cursor: pointer; min-height: 32px; }
+
+/* v1.36 — bulk remove */
+.rg-list { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+label.rg-row { padding: 4px 0; align-items: flex-start; }
+label.rg-row.locked { opacity: .75; }

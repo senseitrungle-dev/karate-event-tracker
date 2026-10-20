@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.35.0 Requirements & Design
+# Karate Event Tracker · v1.36.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -544,3 +544,12 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Entrants open their card**: in Division settings (Entrants & seeds) and in the division panel (new "Entrants" list) every name is a button that opens the competitor (or team) card, where the division for that event can be changed (Auto or a chosen division).
 - **Minimum 3 per division — combine** (`MIN_DIV = 3`): an undrawn division with 1–2 entrants shows "n entrants · min 3 · Combine ›" in the Divisions list, and a notice in its panel / settings. **Combine** lists the other divisions of the same event, closest first (same gender, nearest age group and ranks; drawn ones last), shows the new total (and warns: still under 3, different gender, already drawn → redraw), and moves every entrant there (competitor: division set on their card for that event; team: its division), then deletes the empty division (option). The target keeps its name, ages and rules and shows "incl. <old division>".
 - Verify: test/combine.js (typed date: format shown, partial-year hint, July 27 2012 · age 14, impossible date refused, saved ISO, YYYY-MM-DD accepted; 2-entrant division chip, panel entrants + notice, name → card with division choice, Combine suggests Junior Men Kata, source removed, both entrants moved, "incl." label, Division settings names open the card); regression.
+
+## 61. v1.36.0 — bulk remove a group of competitors (to re-import a corrected file) (2026-10-20)
+- **Competitors → Remove group…** (directors): pick one group —
+  - **From an import**: every import is now tagged on the competitor (`importId`, `importName` = file name or "Pasted list", `importAt`), listed newest first, e.g. "wtkf-federation-sheet.csv · Oct 20, 2:45 PM (29)";
+  - **Dojo / club / federation**, **State / region**, **Country** (with counts).
+- Everyone in the group is listed with a tick box (all ticked; Tick all / Untick all; "Remove N"). A competitor with any **recorded result** (match result or kata score) is shown "has results — kept" and cannot be removed; one already in a drawn bracket is marked "in a drawn bracket" (that bracket shows "Entrants changed" afterwards).
+- Confirm → deletes each registration and its private details in this event, takes them off teams (a team left empty is deleted); the list returns to "All" and the toast suggests importing the corrected file. Re-importing then adds them again (people still registered are skipped as before).
+- Rules unchanged (directors already delete competitors, private details and teams of their events).
+- Verify: test/rmgroup.js (29 imported and tagged with the file name; groups offered by import / federation / region / country; 29 listed; untick one → Remove 28; confirm; 28 and their private details deleted; corrected file re-imports 28; scored competitor locked and kept when removing a dojo; drawn-bracket note; teams cleaned, empty teams deleted); regression.
