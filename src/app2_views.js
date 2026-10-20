@@ -288,10 +288,11 @@ function divSortCmp(a, b) {
 }
 function divRowHTML(d) {
     const n = divEntrants(d.id).length, bs = bracketState(d.id), ring = S.d.rings[d.ringId];
-    const st = !bs.drawn ? (n >= 2 ? '<span class="chip plain">Ready to draw</span>' : n === 1 ? '<span class="chip warn">1 entrant</span>' : '<span class="chip plain">Empty</span>')
+    const small = !bs.drawn && n >= 1 && n < 3 && isDirector();
+    const st = !bs.drawn ? (small ? `<button class="chip warn quota-btn" data-act="div-combine" data-id="${esc(d.id)}" title="At least 3 entrants needed — combine with another division"><span>${plural(n, 'entrant')} · min 3</span> <b>Combine ›</b></button>` : n >= 3 ? '<span class="chip plain">Ready to draw</span>' : n === 2 ? '<span class="chip warn">2 entrants</span>' : n === 1 ? '<span class="chip warn">1 entrant</span>' : '<span class="chip plain">Empty</span>')
       : bs.complete ? '<span class="chip ok">Finished</span>' : `<span class="chip">${bs.fought}/${bs.playable} ${bs.kp ? 'performances' : 'matches'}</span>${bs.changed ? ' <span class="chip warn">Entrants changed</span>' : ''}`;
     return `<tr><td><button class="ghost sm" style="padding:0;min-height:0;text-align:left;justify-content:flex-start" data-act="div-panel" data-id="${esc(d.id)}"><span class="name">${esc(d.name)}</span></button>
-        <div class="dojo">${d.belt === 'kyu' ? esc(KT.rankLabel(d.minRank) + ' – ' + KT.rankLabel(d.maxRank)) + ' · ' : ''}${ageRange(d)}</div></td>
+        <div class="dojo">${d.belt === 'kyu' ? esc(KT.rankLabel(d.minRank) + ' – ' + KT.rankLabel(d.maxRank)) + ' · ' : ''}${ageRange(d)}${(d.combinedFrom || []).length ? ' · <span title="Combined">incl. ' + esc(d.combinedFrom.join(', ')) + '</span>' : ''}</div></td>
       <td class="small">${esc(KT.FORMATS[d.format] || d.format)}<div class="dojo">${esc(scoringLabel(d))}</div></td>
       <td class="small">${ring ? esc(ring.name) : '<span class="muted">—</span>'}</td>
       <td class="n">${n}</td><td>${!bs.drawn && divIssues(d).some(i => i.kind === 'quota') ? '' : st}${divIssuesHTML(d)}</td>

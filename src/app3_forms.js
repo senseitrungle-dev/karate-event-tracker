@@ -44,7 +44,7 @@ function compForm(id) {
       <label class="f req"><span>First name</span><input name="firstName" id="c-first" required value="${esc(c.firstName || '')}"></label>
       <label class="f req"><span>Last name</span><input name="lastName" id="c-last" required value="${esc(c.lastName || '')}"></label>
       <label class="f ${tour ? 'req' : ''}"><span>Gender</span><select name="gender" id="c-gender" ${tour ? 'required' : ''}>${opt('', 'Select…', c.gender)}${opt('M', 'Male', c.gender)}${opt('F', 'Female', c.gender)}</select></label>
-      <label class="f ${tour ? 'req' : ''}"><span>Date of birth</span><input type="date" name="dob" id="c-dob" ${tour ? 'required' : ''} value="${esc(c.dob || '')}"></label>
+      <label class="f ${tour ? 'req' : ''}"><span>Date of birth · ${dobFmt()}</span><input type="text" inputmode="numeric" autocomplete="off" name="dobText" id="c-dob" ${tour ? 'required' : ''} value="${esc(dobShow(c.dob))}" placeholder="${dobFmt()}" data-input="dob-type"><span class="tiny muted" id="c-dob-out">${c.dob ? esc(dobRead(c.dob)) : 'Type the full year, e.g. ' + (dobOrderNow() === 'MDY' ? '07/27/2012' : '27/07/2012')}</span></label>
       <label class="f req"><span>Rank</span><select name="rank" id="c-rank" required>${rankOptions(c.rank)}</select></label>
       <label class="f req"><span>Dojo / club</span><input name="dojo" id="c-dojo" required value="${esc(c.dojo || '')}" list="dojo-list"><datalist id="dojo-list">${[...new Set(DC.comps.map(x => x.dojo).filter(Boolean))].map(d => `<option value="${esc(d)}">`).join('')}</datalist></label>
       <label class="f"><span>State / region</span><input name="state" id="c-state" value="${esc(c.state || '')}"></label>
@@ -68,8 +68,15 @@ function compForm(id) {
     `${id ? '<button class="danger" data-act="comp-delete" style="margin-right:auto">Delete</button>' : ''}<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-comp">Save</button>`));
 }
 const PV_FIELDS = ['dob', 'email', 'phone', 'emergencyName', 'emergencyPhone', 'feeAmount', 'notes'];
+/* v1.35: birth date typed as text (the browser date picker can't take a typed year on some phones) — same reading rules as the import */
+function dobOrderNow() { return dateOrder([], [], 'auto').order; }
+function dobFmt() { return dobOrderNow() === 'MDY' ? 'MM/DD/YYYY' : 'DD/MM/YYYY'; }
+function dobShow(iso) { if (!iso) return ''; const [y, m, d] = iso.split('-'); return dobOrderNow() === 'MDY' ? `${m}/${d}/${y}` : `${d}/${m}/${y}`; }
+function dobRead(iso) { const a = KT.ageOn(iso, DC.asOf); return new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) + (a != null ? ` · age ${a} on ${fmtDate(DC.asOf)}` : ''); }
+function dobParse(txt) { txt = String(txt || '').trim(); if (!txt) return ''; return importDate(txt.replace(/\s+/g, ''), dobOrderNow()); }
 async function saveComp(form) {
   const ev = curEvent(), id = form.dataset.id || uid(), v = fd(form);
+  if (v.dobText != null) { const t = String(v.dobText).trim(); v.dob = dobParse(t); delete v.dobText; if (t && !v.dob) { toast(`“${t}” is not a date — type it as ${dobFmt()} (or YYYY-MM-DD).`, true); return; } }
   const tour = ev.kind === 'tournament';
   if (!v.firstName || !v.lastName || !v.rank || (tour && (!v.gender || !v.dob))) { toast('Name, rank' + (tour ? ', gender and date of birth are' : ' are') + ' required.', true); return; }
   const divOverride = {};
@@ -373,7 +380,7 @@ function divForm(id) {
       <label class="f"><span>Kettei-sen (seconds, 0 = none)</span><input type="number" name="ketteiTime" id="d-kt" min="0" max="180" step="10" value="${esc(sc.ketteiTime)}"></label>` : ''}
       ${k === 'teamkumite' ? `<label class="f"><span>Rounds per team match</span><select name="bouts" id="d-bouts">${opt('3', '3 (WTKF)', sc.bouts)}${opt('5', '5', sc.bouts)}</select></label>` : ''}
     </div></fieldset>
-    ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${ents.length ? `<div class="stack" style="gap:6px">${ents.map(e => `<div class="row between small"><span style="min-width:0"><b>${esc(entName(e))}</b> <span class="muted">${esc(entDojo(e))}</span></span>
+    ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${smallDivHTML(id)}${ents.length ? `<div class="stack" style="gap:6px">${ents.map(e => `<div class="row between small"><span style="min-width:0"><button type="button" class="ghost ent-link" data-act="ent-open" data-id="${esc(e)}" title="Open — change division, details"><b>${esc(entName(e))}</b> ›</button> <span class="muted">${esc(entDojo(e))}</span></span>
       <input type="number" min="1" max="64" name="seed_${esc(e)}" id="seed-${esc(e)}" data-input="seed" value="${esc((d.seeds || {})[e] || '')}" placeholder="Seed" style="width:86px" aria-label="Seed"></div>`).join('')}</div>
       <p class="notice bad small" id="seed-msg" hidden style="margin-top:6px"></p>
       <p class="tiny muted" style="margin-top:6px">Each seed number can be given to one entrant only. ${d.chart !== 'standard' && (d.chart === 'wtkf' || ['International', 'National'].includes(ev.level)) ? 'WTKF charts: seeds 1–4 = last championship’s 1st–4th (kumite: 1st A-1, 2nd B-1, 3rd B-2, 4th A-2 with byes first; kata: at the bottom of their chart).' : ''} Seeded entrants are kept apart in the draw; the others are placed at random, with entrants from the same ${esc(sepLabel())} put in different pools and bracket halves wherever possible.</p>` : '<p class="small muted">No entrants match this division yet.</p>'}</fieldset>` : ''}</form>`,
@@ -586,6 +593,55 @@ async function saveKyuGroups() {
   const same = canon(groups) === canon(KT.defaultKyuGroups());
   if (!(await guard(() => S.store.update(P.event(S.evId), { kyuGroups: same ? [] : groups }), same ? 'Kyu levels: NCR v3.3' : `Saved ${plural(groups.length, 'kyu level')}`))) return;
   ncrForm(same ? [] : groups);
+}
+/* ---------- v1.35: too few entrants → combine with another division (minimum 3) ---------- */
+const MIN_DIV = 3;
+function smallDivHTML(did) {
+  const d = DC.divBy[did]; if (!d) return '';
+  const n = divEntrants(did).length; if (!n || n >= MIN_DIV || S.d.brackets[did]) return '';
+  return `<div class="notice warn" style="display:block;margin-bottom:8px"><b>${plural(n, 'entrant')}</b> — a division needs at least ${MIN_DIV}. <button type="button" class="sm" data-act="div-combine" data-id="${esc(did)}">Combine with another division…</button><div class="tiny" style="margin-top:4px">Or tap a name to move just that ${KT.EVENT_TYPES[d.eventType].team ? 'team' : 'competitor'}.</div></div>`;
+}
+/** other divisions of the same event, closest first (same gender, overlapping / next age group, closest ranks) */
+function combineTargets(d) {
+  const mid = x => (x == null || x === '' ? null : +x);
+  const ageMid = v => { const lo = mid(v.minAge) ?? 0, hi = mid(v.maxAge) ?? 70; return (lo + hi) / 2; };
+  const rk = v => ((KT.rankValue(v.minRank) || 0) + (KT.rankValue(v.maxRank) || 0)) / 2;
+  return DC.divs.filter(x => x.id !== d.id && x.eventType === d.eventType && x.belt === d.belt)
+    .map(x => ({ x, cost: (x.gender === d.gender || x.open || d.open ? 0 : 100) + Math.abs(ageMid(x) - ageMid(d)) + Math.abs(rk(x) - rk(d)) * 3 + (S.d.brackets[x.id] ? 50 : 0) }))
+    .sort((a, b) => a.cost - b.cost).map(o => o.x).concat(DC.divs.filter(x => x.id !== d.id && x.eventType === d.eventType && x.belt !== d.belt));
+}
+function combineForm(did) {
+  const d = DC.divBy[did]; if (!d) return;
+  const ents = divEntrants(did), tg = combineTargets(d), team = KT.EVENT_TYPES[d.eventType].team;
+  if (!tg.length) { toast(`No other ${KT.EVENT_TYPES[d.eventType].label} division to combine with — create one or edit this division’s ages / ranks.`, true); return; }
+  const lbl = x => `${x.name} · ${plural(divEntrants(x.id).length, 'entrant')}${S.d.brackets[x.id] ? ' · drawn' : ''}`;
+  openModal(sheet(`Combine · ${esc(d.name)}`, `<form id="f-combine" data-form="combine" data-id="${esc(did)}" class="stack">
+    <p class="small">${plural(ents.length, team ? 'team' : 'entrant')} here — at least ${MIN_DIV} are needed. Move ${ents.length === 1 ? 'it' : 'them'} into another ${esc(KT.EVENT_TYPES[d.eventType].label)} division:</p>
+    <div class="pill-list">${ents.map(e => `<span class="chip plain">${esc(entName(e))}</span>`).join('')}</div>
+    <label class="f"><span>Combine into</span><select name="target" id="cmb-target" data-change="combine-target">${tg.map(x => opt(x.id, lbl(x), tg[0].id)).join('')}</select></label>
+    <p class="small" id="cmb-out"></p>
+    <label class="check"><input type="checkbox" name="removeOld" checked> Delete “${esc(d.name)}” once it is empty</label>
+    <p class="tiny muted">${team ? 'Each team is assigned to the chosen division.' : 'Each competitor gets the chosen division for this event (shown on their card, where it can be set back to Auto).'} The chosen division keeps its name, ages and rules; ${S.d.brackets[tg[0].id] ? 'if it is already drawn it must be redrawn.' : 'draw it when ready.'}</p></form>`,
+    `<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-combine">Combine</button>`));
+  combineOut();
+}
+function combineOut() {
+  const f = $('#f-combine'); if (!f) return;
+  const d = DC.divBy[f.dataset.id], t = DC.divBy[$('#cmb-target').value]; if (!d || !t) return;
+  const total = divEntrants(d.id).length + divEntrants(t.id).length;
+  $('#cmb-out').innerHTML = `${esc(t.name)} will have <b>${total}</b>${total >= MIN_DIV ? '' : ' <span style="color:var(--warn)">(still under ' + MIN_DIV + ')</span>'}${t.gender !== d.gender && !t.open ? ' · <span style="color:var(--warn)">different gender</span>' : ''}${S.d.brackets[t.id] ? ' · <span style="color:var(--warn)">already drawn — redraw it after combining</span>' : ''}.`;
+}
+async function saveCombine(f) {
+  const d = DC.divBy[f.dataset.id], v = fd(f), t = DC.divBy[v.target]; if (!d || !t) return;
+  const ents = divEntrants(d.id).slice();
+  for (const id of ents) {
+    const c = DC.compBy[id];
+    if (c) await guard(() => S.store.update(P.doc(S.evId, 'competitors', id), { divOverride: Object.assign({}, c.divOverride || {}, { [d.eventType]: t.id }) }));
+    else if (DC.teamBy[id]) await guard(() => S.store.update(P.doc(S.evId, 'teams', id), { divisionId: t.id }));
+  }
+  await guard(() => S.store.update(P.doc(S.evId, 'divisions', t.id), { combinedFrom: [...new Set([...(t.combinedFrom || []), d.name])] }));
+  if (v.removeOld && !S.d.brackets[d.id]) await guard(() => S.store.del(P.doc(S.evId, 'divisions', d.id)));
+  closeModal(); toast(`${plural(ents.length, 'entrant')} moved into ${t.name}${v.removeOld ? ` · ${d.name} removed` : ''}`);
 }
 function ringForm(id) {
   const r = id ? S.d.rings[id] : {};

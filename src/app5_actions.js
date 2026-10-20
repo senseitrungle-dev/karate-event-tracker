@@ -226,6 +226,8 @@ const ACT = {
   'div-std': () => stdDivForm(false),
   'div-preset': el => presetForm(el.dataset.id),
   'div-ncr': () => ncrForm(),
+  'div-combine': el => combineForm(el.dataset.id),
+  'ent-open': el => { const id = el.dataset.id; if (DC.compBy[id]) compForm(id); else if (DC.teamBy[id]) teamForm(id); },
   'kyu-groups': () => kyuGroupsForm(),
   'kyu-add': () => { const g = kyuReadForm(); g.push({ id: uid(), label: 'Level ' + (g.length + 1), minRank: 'k3', maxRank: 'k1', decide: 'flags', kata: [], exchanges: [] }); kyuGroupsForm(g); },
   'kyu-del': el => { const g = kyuReadForm(); g.splice(+el.dataset.i, 1); kyuGroupsForm(g); },
@@ -439,6 +441,7 @@ const CHANGE = {
   'jimp-file': el => { const f = el.files && el.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { $('#jimp-text').value = decodeCsvBytes(rd.result); judgeImportPreview(); }; rd.readAsArrayBuffer(f); },
   'jimp-pick': () => jimpCount(),
   'quota-count': () => quotaCount(),
+  'combine-target': () => combineOut(),
   'kyu-decide': () => kyuGroupsForm(kyuReadForm()),
   'kata-pick': el => { const d = loadDraft(S.modal.key); d.kata = Object.assign({}, d.kata || {}, { [el.dataset.s]: el.value }); draftChanged(); },
   'imp-dates': () => { if ($('#imp-text').value.trim()) ACT['imp-preview'](); },
@@ -453,6 +456,9 @@ async function writeAttendance(sid, present) {
 }
 let searchT = null;
 const INPUT = {
+  'dob-type': el => { const out = $('#c-dob-out'); if (!out) return; const t = el.value.trim(), iso = dobParse(t);
+    out.textContent = !t ? `Type the full year, e.g. ${dobOrderNow() === 'MDY' ? '07/27/2012' : '27/07/2012'}` : iso ? '= ' + dobRead(iso) : /^\d{1,2}\D\d{1,2}\D\d{0,3}$/.test(t) ? 'Keep typing the year (4 digits)…' : `Not a date yet — ${dobFmt()}`;
+    out.style.color = t && !iso && !/^\d{1,2}\D\d{1,2}\D\d{0,3}$/.test(t) ? 'var(--bad)' : ''; },
   q: el => { S.ui.q = el.value; render(); },
   fq: el => { S.ui.fq = el.value; render(); },
   dq: el => { S.ui.dq = el.value; render(); },
@@ -609,6 +615,7 @@ function wire() {
     else if (k === 'std') saveStd(f, false);
     else if (k === 'preset') applyPreset(f);
     else if (k === 'quota') saveQuotaPick(f);
+    else if (k === 'combine') saveCombine(f);
     else if (k === 'ncr') applyNcr(f);
     else if (k === 'kyugroups') saveKyuGroups();
     else if (k === 'kyu') saveStd(f, true);
