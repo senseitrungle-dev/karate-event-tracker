@@ -683,5 +683,10 @@ t('WTKF Exhibit A: kata charts ≤ 12, 1/2/4/6 charts, champions at the bottom, 
   assert.deepEqual(Object.values(r2.pools).map(p => from(p.order)).sort(), ['AB', 'CD']);
   assert.ok(Object.values(r2.pools).every(p => p.order.length === 8));
 });
+t('Kata averages shown to 3 decimals (v1.33.1)', () => {
+  const r = KT.scoresEval(['7.5', '7.6', '7.6', '7.5', '7.7'], ['7.4', '7.5', '7.5', '7.6', '7.4'], 5);
+  assert.equal(r.method, 'Score 7.567–7.467');           // (7.6+7.6+7.5)/3 vs (7.5+7.5+7.4)/3
+  assert.equal(KT.scoreTotal(['8.1', '8.2', '8.2', '8.3', '8.0'], 5).avg, 8.167);
+});
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

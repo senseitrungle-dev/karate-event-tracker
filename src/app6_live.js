@@ -220,7 +220,7 @@ function entrantStatus(did, id) {
     const st = KT.kpState(br);
     const rows = st.final ? st.final.rows : (st.rounds.length ? Object.values(st.rounds[st.rounds.length - 1].pools).flatMap(p => p.rows) : []);
     const row = rows.find(x => x.id === id);
-    if (row && row.sheet) return { text: `Scored ${(row.total / ((br.judges || 6) >= 5 ? (br.judges || 6) - 2 : br.judges || 6)).toFixed(2)} · place ${row.rank || '–'} · waiting for others`, cls: 'plain' };
+    if (row && row.sheet) return { text: `Scored ${(row.total / ((br.judges || 6) >= 5 ? (br.judges || 6) - 2 : br.judges || 6)).toFixed(3)} · place ${row.rank || '–'} · waiting for others`, cls: 'plain' };
     return { text: pl.complete ? 'Finished' : 'Eliminated', cls: 'plain' };
   }
   const res = DC.res[did] || {}, ms = Object.values(br.matches);

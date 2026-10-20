@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.33.0 Requirements & Design
+# Karate Event Tracker · v1.34.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -524,3 +524,17 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
   - Top 4 of each chart advance; **neighbouring charts merge** (1+2 | 3+4 → 2 groups of 8; 1–3 | 4–6 → 2 groups of 12); then **final elimination of 8**, then **final of 4**. Charts / groups are labelled "Chart n" / "Group n".
 - Fix found on the way: the draw crashed when no random source was passed (now defaults).
 - Verify: logic.test.js (pool sizes and empty-match check for 5–24 vs the handwritten charts, bye positions, champions' pools, country spread over 15 draws, kata chart counts/sizes, champions' charts, merging A+B / C+D into 8s); test/wtkfcharts.js (International demo: Draw chart option, seeds hint, 26 entrants → pools 6/7/6/7, champions in A-1/B-1/B-2/A-2, mirrored chart view, kata 32 → 4 charts of 8, standard draw on request); regression.
+
+## 58. v1.33.1 — kata averages to 3 decimals (2026-10-19)
+- Kata / team kata / en-bu score averages (judges' scores, highest and lowest dropped with 5+ judges) are shown to **3 decimals** (e.g. 7.567) everywhere: score sheet, score-pool tables, head-to-head score result ("Score 7.567–7.467"), ring "On the mat" / public status, scorer toast. Ranking still uses the exact totals (then all scores), so no placing changes.
+- Verify: logic.test.js (3-decimal method text and average); regression.
+
+## 59. v1.34.0 — competitor import: take what is there, flag what is missing, preview everything (2026-10-19)
+- **Requirement** (local tournaments' sign-up sheets): scan the file, import every recognised column even when others are missing, flag the missing information for manual entry later, and show all data that will be imported before committing.
+- **Column scan** (shown after Check): **Columns found** (field ← file heading, e.g. "Rank ← Belt", "Dojo / club ← Club", "Emergency phone ← Parent Phone"), **Not in the file — enter later** (Name parts, Gender and Date of birth for tournaments, Rank, Dojo / club, Emergency contact, Waiver, Events for tournaments), **Not used** (unrecognised headings, e.g. T-shirt size).
+- **Names**: First/Last name columns, or **one name column** ("Name", "Competitor", "Athlete", "Student", …) split as "Last, First" or "First Last". A file without any name column is refused with a clear message. More heading aliases: Born, Kyu, Belt rank, Parent / Guardian (name, phone), FName / LName.
+- **Rows**: every row with a name is imported (only empty rows and rows without a name are left out — the latter reported "Row n: no name — not imported"). Missing or unreadable values are not guessed: they are left empty and listed per competitor ("Rank (“Yellow” not recognised)", "Date of birth (“31.02.2012” is not a date …)"). Previously such rows were skipped.
+- **Preview table** (wide pop-up, scrolls into view after Check): #, Name, Gender, Born, Rank, Dojo / club, Country or State, Events, Emergency, Waiver and **Needs later**; empty required values show "missing"; incomplete rows marked on the left. Summary "N competitors ready to import — M with details to enter later".
+- **After import**: incomplete competitors carry the existing **Incomplete** tag; the Competitors list switches to the **Missing information** filter and the toast says how many need details. Applies to every event (local sign-up sheets were the trigger; the federation sheet works as before).
+- Verify: test/lenientimport.js (one name column split both ways, columns found / missing / not used, all values shown with "missing", unrecognised belt flagged with its text, no-name row reported, 3 imported with what the file had, list switches to Missing information, no-name-column file refused, no date notice without dates); dates.js updated (bad dates now imported and flagged instead of rejected); fedimport.js; regression.
+- Test harness fix (found while verifying): the Firebase mock (test/fbmock.js) re-parsed its whole database for every permission check (`uid()` → `JSON.parse`), so with two demo events a page could stall for minutes — the cause of the earlier "flaky under load" Firebase tests. It now parses each stored version once. App code unaffected; full suite (42 files) passes in parallel.

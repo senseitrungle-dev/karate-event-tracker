@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.33.0';
+  const VERSION = '1.34.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -1211,7 +1211,7 @@ const KT = (function () {
     const A = scoreTotal(aArr, judges), B = scoreTotal(bArr, judges);
     if (!A || !B) return { done: false };
     const cmp = (A.total - B.total) || (A.all - B.all);
-    const f = x => x.avg.toFixed(2);
+    const f = x => x.avg.toFixed(3);
     if (cmp !== 0) return { done: true, winner: cmp > 0 ? 'a' : 'b', method: `Score ${f(A)}–${f(B)}`, score: { a: A.avg, b: B.avg } };
     if (tieSide === 'a' || tieSide === 'b') return { done: true, winner: tieSide, method: `Tie ${f(A)} · Court Judges`, score: { a: A.avg, b: B.avg } };
     return { done: false, tie: true, score: { a: A.avg, b: B.avg } };

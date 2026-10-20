@@ -662,3 +662,11 @@ label.quota-row:has(input:checked) { border-color: var(--ok); background: color-
 .wpool-l { font: 700 .68rem var(--f-body); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 .wfinal .wcol-in { justify-content: center; }
 .wfinal { border-left: 1px dashed var(--line-2); border-right: 1px dashed var(--line-2); padding: 0 8px; }
+
+/* v1.34 — import preview: columns found / missing, every value, what to enter later */
+.imp-cols { display: grid; gap: 8px; margin: 8px 0; }
+.imp-cols b { font-size: .82rem; }
+.imp-wrap { max-height: 360px; overflow: auto; }
+.imp-miss { color: var(--warn); font-weight: 700; font-size: .74rem; }
+table.imp-tbl tr.imp-inc td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+table.imp-tbl td.imp-need { white-space: normal; min-width: 14em; color: var(--warn); font-size: .76rem; }

@@ -655,7 +655,7 @@ function staffHTML() {
 /* ---------- kata score pools view ---------- */
 function kpTableHTML(did, title, rows, order, opts) {
   const br = S.d.brackets[did], J = br.judges || 6, can = (rows[0] || order[0]) ? canScoreKP(did, (rows[0] || {}).key || '') : false, k = J >= 5 ? J - 2 : J;
-  const f = x => (x / k).toFixed(2);
+  const f = x => (x / k).toFixed(3);
   const byId = Object.fromEntries(rows.map(r => [r.id, r]));
   const seq = opts.byRank ? rows : order.map(id => byId[id]);
   const sc = (r) => {

@@ -120,7 +120,7 @@ function scoresPanel(d, sc, out) {
     const t = KT.scoreTotal(arr || [], J);
     return `<div class="srow" style="--j:${J}"><span class="side"><span class="belt ${side}"></span><b>${side === 'a' ? 'Aka' : 'Shiro'}</b></span>
       ${Array.from({ length: J }, (_, i) => `<input id="sc-${side}-${i}" inputmode="decimal" data-change="kscore" data-s="${side}" data-i="${i}" value="${esc((arr || [])[i] ?? '')}" placeholder="0.0" aria-label="${side === 'a' ? 'Aka' : 'Shiro'} judge ${i + 1}">`).join('')}
-      <span class="tot">${t ? t.avg.toFixed(2) : '—'}</span></div>`;
+      <span class="tot">${t ? t.avg.toFixed(3) : '—'}</span></div>`;
   };
   return `<div class="stack"><div class="row between"><h3>Judges’ scores</h3><span class="small muted">0.0–10.0${J >= 5 ? ' · highest and lowest dropped, average of the rest' : ''}</span></div>
     <div class="tw"><div class="stack" style="min-width:${120 + J * 60 + 80}px"><div class="srow" style="--j:${J}"><span></span>${Array.from({ length: J }, (_, i) => `<span class="label" style="text-align:center">J${i + 1}${posName(d.officials, i) ? `<br><span class="tiny">${esc(posName(d.officials, i))}</span>` : ''}</span>`).join('')}<span class="label" style="text-align:right">Score</span></div>${row('a', d.sa)}${row('b', d.sb)}</div></div>
@@ -416,7 +416,7 @@ function kpEval() {
 function kpPaint() {
   const M = S.modal; if (!M || M.type !== 'kp') return;
   const { t, a, err, ok, k, hansoku } = kpEval();
-  const f = x => (x / k).toFixed(2);
+  const f = x => (x / k).toFixed(3);
   const sum = $('#kp-sum');
   let h = '<span class="small muted">Enter every judge’s score.</span>';
   if (hansoku) h = '<span>Han-soku · score <b>0.00</b></span>';
@@ -435,7 +435,7 @@ function kpPushLive(clear) {
   const M = S.modal; const dv = DC.divBy[M.did]; if (!dv || !S.d.rings[M.rid] || S.readOnly) return;
   const d = loadDraft(M.dkey), { t, a, k } = kpEval();
   const n = (d.s || []).filter(x => x !== '' && x != null).length;
-  const doc = clear ? { did: '', mid: '', at: new Date().toISOString() } : { did: M.did, kp: M.key, seg: M.seg, kata: d.kata || '', score: t ? ((t.total + (a ? a.total : 0)) / k).toFixed(2) : '', log: [entName(M.ctx.id) + ' · ' + M.ctx.label, d.kata ? 'Kata: ' + d.kata : '', `Scores entered ${n}/${(S.d.brackets[M.did] || {}).judges || 6}`].filter(Boolean), at: new Date().toISOString(), by: S.myId || '' };
+  const doc = clear ? { did: '', mid: '', at: new Date().toISOString() } : { did: M.did, kp: M.key, seg: M.seg, kata: d.kata || '', score: t ? ((t.total + (a ? a.total : 0)) / k).toFixed(3) : '', log: [entName(M.ctx.id) + ' · ' + M.ctx.label, d.kata ? 'Kata: ' + d.kata : '', `Scores entered ${n}/${(S.d.brackets[M.did] || {}).judges || 6}`].filter(Boolean), at: new Date().toISOString(), by: S.myId || '' };
   S.store.set(P.live(S.evId, 'ringstate', M.rid), doc).catch(e => console.warn(e));
 }
 async function kpSave() {
@@ -449,7 +449,7 @@ async function kpSave() {
   const saved = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { scores: { [M.key]: rec } }));
   if (!saved) return;
   kpPushLive(true); dropDraft(M.dkey);
-  toast(`${entName(M.ctx.id)} · ${d.hansoku ? 'Han-soku' : ((ev.t.total + (ev.a ? ev.a.total : 0)) / kpKept(br)).toFixed(2)}`);
+  toast(`${entName(M.ctx.id)} · ${d.hansoku ? 'Han-soku' : ((ev.t.total + (ev.a ? ev.a.total : 0)) / kpKept(br)).toFixed(3)}`);
   closeModal();
 }
 
@@ -469,7 +469,7 @@ function scoresRecHTML(sa, sb, J) {
   const row = (lbl, arr) => {
     const v = (arr || []).map(Number), t = KT.scoreTotal(v, J);
     const hi = Math.max(...v), lo = Math.min(...v); let dh = J >= 5, dl = J >= 5;
-    return `<tr><td><b>${lbl}</b></td>${v.map(x => { let c = ''; if (dh && x === hi) { c = 'dropped'; dh = false; } else if (dl && x === lo) { c = 'dropped'; dl = false; } return `<td class="n"><span class="js ${c}">${x.toFixed(1)}</span></td>`; }).join('')}<td class="n"><b>${t ? t.avg.toFixed(2) : ''}</b></td></tr>`;
+    return `<tr><td><b>${lbl}</b></td>${v.map(x => { let c = ''; if (dh && x === hi) { c = 'dropped'; dh = false; } else if (dl && x === lo) { c = 'dropped'; dl = false; } return `<td class="n"><span class="js ${c}">${x.toFixed(1)}</span></td>`; }).join('')}<td class="n"><b>${t ? t.avg.toFixed(3) : ''}</b></td></tr>`;
   };
   return `<div class="tw"><table><thead><tr><th></th>${Array.from({ length: J }, (_, i) => `<th class="n">${i === 0 ? 'Shu-shin' : 'J' + (i + 1)}</th>`).join('')}<th class="n">Score</th></tr></thead><tbody>${row('Aka', sa)}${row('Shiro', sb)}</tbody></table></div>`;
 }
@@ -517,7 +517,7 @@ function recordHTML(dv, br, m, r) {
 function kpRecTable(arr, J, label) {
   const v = (arr || []).map(Number), t = KT.scoreTotal(v, J); if (!t) return '';
   const hi = Math.max(...v), lo = Math.min(...v); let dh = J >= 5, dl = J >= 5;
-  return `<div class="tw"><table><thead><tr><th></th>${v.map((_, i) => `<th class="n">${i === 0 ? 'Shu-shin' : 'J' + (i + 1)}</th>`).join('')}<th class="n">Avg</th></tr></thead><tbody><tr><td><b>${esc(label)}</b></td>${v.map(x => { let c = ''; if (dh && x === hi) { c = 'dropped'; dh = false; } else if (dl && x === lo) { c = 'dropped'; dl = false; } return `<td class="n"><span class="js ${c}">${x.toFixed(1)}</span></td>`; }).join('')}<td class="n"><b>${t.avg.toFixed(2)}</b></td></tr></tbody></table></div>`;
+  return `<div class="tw"><table><thead><tr><th></th>${v.map((_, i) => `<th class="n">${i === 0 ? 'Shu-shin' : 'J' + (i + 1)}</th>`).join('')}<th class="n">Avg</th></tr></thead><tbody><tr><td><b>${esc(label)}</b></td>${v.map(x => { let c = ''; if (dh && x === hi) { c = 'dropped'; dh = false; } else if (dl && x === lo) { c = 'dropped'; dl = false; } return `<td class="n"><span class="js ${c}">${x.toFixed(1)}</span></td>`; }).join('')}<td class="n"><b>${t.avg.toFixed(3)}</b></td></tr></tbody></table></div>`;
 }
 
 /* ---------- v1.17: judges' score entry moves on by itself ---------- */

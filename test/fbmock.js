@@ -1,16 +1,18 @@
 (function(){
+  // parse cache: the mock re-reads its whole database for every rule check — parse a given stored string only once (read-only use)
+  let _rs=null,_rd=null; const peek=()=>{ const r=localStorage.getItem('fbmock')||'{}'; if(r!==_rs){ _rs=r; _rd=JSON.parse(r); } return _rd; };
   const KEY='fbmock', load=()=>JSON.parse(localStorage.getItem(KEY)||'{}'), save=d=>localStorage.setItem(KEY,JSON.stringify(d));
   const subs=new Set(); const fire=()=>setTimeout(()=>subs.forEach(f=>f()),1);
   window.addEventListener('storage',e=>{ if(e.key===KEY) fire(); });
   const merge=(t,p)=>{for(const k in p){const v=p[k]; if(v&&typeof v==='object'&&!Array.isArray(v)&&t[k]&&typeof t[k]==='object'&&!Array.isArray(t[k]))merge(t[k],v); else t[k]=v;} return t;};
   const rawUid=()=>sessionStorage.getItem('fbuid');
-  const uid=()=>{ const u=rawUid(); if(!u) return null; const d=JSON.parse(localStorage.getItem(KEY)||'{}'); return d['blocked/'+u]?null:u; };   // blocked = signed out (v1.21 rules)
+  const uid=()=>{ const u=rawUid(); if(!u) return null; const d=peek(); return d['blocked/'+u]?null:u; };   // blocked = signed out (v1.21 rules)
   // simplified mirror of firestore.rules (v1.9 per-event access)
   const role=d=>(d['roles/'+uid()]||{}).role||'';
   const isDir=d=>['director','admin'].includes(role(d));
   const isOrg=d=>isDir(d)||role(d)==='organizer';
   const A_KEY='fbmock_auth', accts=()=>JSON.parse(localStorage.getItem(A_KEY)||'{}'), saveA=a=>localStorage.setItem(A_KEY,JSON.stringify(a));
-  const em=()=>{ if(!uid()) return ''; const e=sessionStorage.getItem('fbemail'); if(!e) return uid()+'@x.test'; const a=accts()[e]; if(a&&a.verified) return e; const c=load()['claims/'+uid()]; return c&&c.email===e?e:''; };   // verified, or created with an invitation code   // unverified email accounts: no invitations
+  const em=()=>{ if(!uid()) return ''; const e=sessionStorage.getItem('fbemail'); if(!e) return uid()+'@x.test'; const a=accts()[e]; if(a&&a.verified) return e; const c=peek()['claims/'+uid()]; return c&&c.email===e?e:''; };   // verified, or created with an invitation code   // unverified email accounts: no invitations
   const inv=d=>d['invites/'+em()];
   const ev=(d,e)=>d['events/'+e]||{};
   const evDir=(d,e)=>isDir(d)||(!!uid()&&(ev(d,e).directorIds||[]).includes(uid()));

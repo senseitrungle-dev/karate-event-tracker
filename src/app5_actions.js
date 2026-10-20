@@ -201,7 +201,7 @@ const ACT = {
   },
   checkin: (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { checkedIn: !c.checkedIn })); },
   'import-open': () => importForm(),
-  'imp-preview': () => { $('#imp-preview').innerHTML = importPreviewHTML(); },
+  'imp-preview': () => { const el = $('#imp-preview'); el.innerHTML = importPreviewHTML(); try { el.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* old browsers */ } },
   'imp-run': () => runImport(),
   'export-comps': () => {
     const dir = isDirector();
