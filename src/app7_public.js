@@ -189,7 +189,7 @@ function liveChecks() {
   add(used.length > 0 && !short.length, 'Each ring has a full judging panel', !used.length ? none : short.length ? short.map(r => `${r.name}: ${ringJudges(r.id).filter(j => j.checkedIn).length}/${ringNeed(r.id)}`).join(' · ') : 'Enough checked-in judges on every ring', 'judges', KT.judgeNeed(curEvent().level, curEvent().judgeMin) >= 3);
   const noMgr = used.filter(r => !(r.managerIds || []).length);
   add(used.length > 0 && !noMgr.length, 'Every ring has a ring manager', !used.length ? none : noMgr.length ? noMgr.map(r => r.name).join(', ') + ' without a manager' : 'All rings staffed', 'rings');
-  const notReady = used.filter(r => !(S.d.ringready[r.id] || {}).ready);
+  const notReady = used.filter(r => !ringIsReady(r.id));
   add(used.length > 0 && !notReady.length, 'Rings, managers and helpers ready', !used.length ? none : notReady.length ? notReady.map(r => r.name).join(', ') + ' not confirmed ready' : 'All rings confirmed ready', 'mat');
   return out;
 }
@@ -231,15 +231,20 @@ async function endLive() {
   await guard(() => S.store.update(P.event(ev.id), { live: false, endedAt: new Date().toISOString() }), 'Live ended');
 }
 /* ---------- ring readiness (ring manager or director) ---------- */
-function ringReadyHTML(r) {
+/** v1.40: a ring is ready only once its manager has ticked the whole checklist and tapped "Ring is ready" — not ready by default. */
+function ringIsReady(rid) { const rr = S.d.ringready[rid] || {}; return !!rr.ready && KT.ringReadyOk(rr.checks); }
+function ringReadyHTML(r, named) {
   const ev = curEvent(); if (!ev || ev.live || isPublicView()) return '';
   const can = isDirector() || (role() === 'manager' && myRingIds().includes(r.id)); if (!can) return '';
-  const rr = S.d.ringready[r.id] || {};
+  const rr = S.d.ringready[r.id] || {}, checks = rr.checks || {}, ready = ringIsReady(r.id);
+  const done = KT.ringChecksDone(checks), all = KT.RING_CHECKS.length;
   const nJ = ringJudges(r.id).filter(j => j.checkedIn).length, need = ringNeed(r.id);
-  return `<div class="ready-box ${rr.ready ? 'on' : ''}"><div class="row between"><b>Before the start</b>${rr.ready ? '<span class="chip ok">Ready</span>' : '<span class="chip warn">Not ready</span>'}</div>
+  return `<div class="ready-box ${ready ? 'on' : ''}" data-ring="${esc(r.id)}"><div class="row between"><b>${named ? `<span class="ready-ring">${esc(r.name)}</span> · ` : ''}Before the start</b>${ready ? '<span class="chip ok">Ready</span>' : '<span class="chip warn">Not ready</span>'}</div>
     <div class="tiny muted">Judges checked in ${nJ}/${need || '—'} · Manager ${(r.managerIds || []).length ? '✓' : '—'}</div>
+    <div class="ready-checks"><div class="row between"><span class="label">Ring manager checklist</span><span class="tiny muted">${done}/${all}</span></div>
+    ${KT.RING_CHECKS.map(c => `<label class="check-in"><input type="checkbox" data-change="ring-check" data-ring="${esc(r.id)}" data-k="${c.k}" ${checks[c.k] ? 'checked' : ''}> <span>${esc(c.label)}</span></label>`).join('')}</div>
     <label class="f"><span>Helpers (scorekeeper, timekeeper…)</span><input id="helpers-${esc(r.id)}" data-change="ring-helpers" data-ring="${esc(r.id)}" value="${esc(rr.helpers || '')}" placeholder="Names"></label>
-    <button class="sm ${rr.ready ? '' : 'go'}" data-act="ring-ready" data-ring="${esc(r.id)}">${rr.ready ? 'Mark not ready' : 'Ring is ready'}</button></div>`;
+    <button class="sm ${ready ? '' : 'go'}" data-act="ring-ready" data-ring="${esc(r.id)}" ${ready || done === all ? '' : 'disabled'}>${ready ? 'Mark not ready' : 'Ring is ready'}</button>${ready || done === all ? '' : `<span class="tiny muted">Tick all ${all} items to mark ${esc(r.name)} ready.</span>`}</div>`;
 }
 async function setRingReady(rid, patch) {
   const cur = S.d.ringready[rid] || {};

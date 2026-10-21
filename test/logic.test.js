@@ -754,5 +754,14 @@ t('3rd-place match always before the championship (v1.39)', () => {
     play(des, m.id); }
   assert.ok(KT.placings(des).complete);
 });
+t('ring checklist: not ready until every item is ticked (v1.40)', () => {
+  assert.ok(KT.RING_CHECKS.length >= 5);
+  assert.equal(KT.ringReadyOk(undefined), false);
+  assert.equal(KT.ringReadyOk({}), false);
+  const all = Object.fromEntries(KT.RING_CHECKS.map(x => [x.k, true]));
+  assert.equal(KT.ringReadyOk(all), true);
+  assert.equal(KT.ringChecksDone(Object.assign({}, all, { mat: false })), KT.RING_CHECKS.length - 1);
+  assert.equal(KT.ringReadyOk(Object.assign({}, all, { mat: false })), false);
+});
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

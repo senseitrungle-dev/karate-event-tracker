@@ -24,6 +24,9 @@ const path = require('path');
   const hs = await d.$$eval('input[data-change="ring-helpers"]', x => x.map(y => y.id));
   ok('ring readiness boxes before the start', hs.length === 2);
   for (const id of hs) { await d.fill('#' + id, 'Sam (score), Lee (time)'); await d.dispatchEvent('#' + id, 'change'); await d.waitForTimeout(150); }
+  ok('rings not ready by default', (await d.$$('.ready-box.on')).length === 0 && (await d.$$('.ring-card .mat-status:text("Not ready")')).length === 2);
+  ok('Ring is ready disabled until the checklist is done', await d.$$eval('button[data-act="ring-ready"]', x => x.every(y => y.disabled)));
+  for (let k = 0; k < 40; k++) { const c = await d.$('input[data-change="ring-check"]:not(:checked)'); if (!c) break; await c.check(); await d.waitForTimeout(80); }
   for (let k = 0; k < 2; k++) { await d.click('button[data-act="ring-ready"]:has-text("Ring is ready")'); await d.waitForTimeout(200); }
   ok('both rings marked ready', (await d.$$('.ready-box.on')).length === 2);
   await d.screenshot({ path: 'test/shots/golive-mat.png' });

@@ -428,7 +428,8 @@ function ringBoardHTML(rings, withActions) {
     const isNow = x => rs && x.did === rs.did && (x.kp ? rs.kp === x.kp.key : x.m.id === rs.mid);
     const next = q.filter(x => !isNow(x)).slice(0, withActions ? 12 : 3);
     const openBtn = withActions && now && (rs.kp ? canScoreKP(rs.did, rs.kp) : canScoreMatch(rs.did, rs.mid)) ? `<div class="row" style="margin-top:8px"><button class="go" ${rs.kp ? `data-act="kp-score" data-did="${esc(rs.did)}" data-key="${esc(rs.kp)}"` : `data-act="score" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}"`}>Open scoresheet</button></div>` : '';
-    return `<div class="card ring-card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${q.length ? '' : 'plain'}">${q.length} waiting</span></div>
+    const ev = curEvent() || {}, rdy = withActions && !ev.live && role() !== 'viewer' && !isPublicView() ? (ringIsReady(r.id) ? '<span class="chip ok mat-status">Ready</span>' : '<span class="chip warn mat-status">Not ready</span>') : '';
+    return `<div class="card ring-card stack" data-ring="${esc(r.id)}"><div class="row between"><h3>${esc(r.name)}</h3><div class="row" style="gap:6px">${rdy}<span class="chip ${q.length ? '' : 'plain'}">${q.length} waiting</span></div></div>
       <div>${now || '<div class="small muted">Nothing on the mat.</div>'}${openBtn}</div>
       ${withActions ? callPanelHTML(r) : calledHTML(r.id)}
       <div class="queue"><div class="label">Up next</div>${next.map(x => {
@@ -453,7 +454,7 @@ function matHTML() {
   const note = r === 'manager' ? `<div class="notice info">You manage ${mine.length ? mine.map(id => esc((S.d.rings[id] || {}).name || '')).join(', ') : 'no ring yet'}. You can score matches for divisions assigned to your ring${mine.length === 1 ? '' : 's'}.</div>`
     : r === 'viewer' ? `<div class="notice info">Live view. Scores update as ring managers record them.</div>` : '';
   return eventHeader(`<select id="mat-ring" data-change="ring" aria-label="Ring" style="max-width:200px">${opt('', 'All rings', sel)}${DC.rings.map(x => opt(x.id, x.name + (mine.includes(x.id) && r === 'manager' ? ' (yours)' : ''), sel)).join('')}</select>`)
-    + note + (role() !== 'viewer' && !(curEvent() || {}).live ? `<div class="grid2" style="margin-bottom:14px">${rings.map(ringReadyHTML).filter(Boolean).map(h => `<div class="card">${h}</div>`).join('')}</div>` : '') + ringBoardHTML(rings, true);
+    + note + (role() !== 'viewer' && !(curEvent() || {}).live ? `<div class="grid2" style="margin-bottom:14px">${rings.map(x => ringReadyHTML(x, true)).filter(Boolean).map(h => `<div class="card">${h}</div>`).join('')}</div>` : '') + ringBoardHTML(rings, true);
 }
 
 /* ---------- brackets ---------- */
