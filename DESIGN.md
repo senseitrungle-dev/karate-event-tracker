@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.37.0 Requirements & Design
+# Karate Event Tracker · v1.40.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -590,3 +590,13 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Diagnose**: commit 556ac2c replaced `vercel/firebase-config.js` with the example template (`window.KT_FIREBASE_CONFIG_EXAMPLE`, `YOUR_PROJECT`). With no `window.KT_FIREBASE_CONFIG` the app silently fell back to local mode (this browser's empty storage). The data in Firebase project `karate-event-webapp` was never touched.
 - **Fix**: `vercel/firebase-config.js` restored from v1.37. On a real web host (not a file or localhost / *.localhost / *.test) with the Firebase build loaded, a missing or placeholder config now shows the sign-in screen's "not connected to your Firebase project" notice (sign-in disabled) instead of local mode, saying the data is safe in Firebase. Release check `test/config.js` (now part of `npm test`) fails if the config file is not the real project.
 - **Verify**: test/config.js; test/hosted.js (vercel.app with example file / no file / placeholders → notice, no local mode; development host → local mode allowed); unit 133; signin, fb, e2e, ringcall, public, access, emailsignin, about.
+
+## §66 Mat card: ring name, not ready by default, ring manager checklist (v1.40.0)
+**Requirement.** On the Mat tab each readiness card names its ring. A ring (mat) is **Not ready** by default. The ring manager completes a checklist, then taps "Ring is ready".
+**Design.**
+- `KT.RING_CHECKS` (7 items: mat laid out, judges seated with flags, scoreboard/timer/scoresheets, scorekeeper & timekeeper, Aka/Shiro belts, first aid, running order & first call), `KT.ringChecksDone`, `KT.ringReadyOk`.
+- Stored in `live/<ev>/ringready/<ring>.checks = {key: true}` next to `ready` and `helpers`. No rule change (ring managers already write their ringready doc).
+- `ringIsReady(rid)` = `ready` **and** every item ticked. An older doc with `ready` but no checklist reads as Not ready. Used by the readiness card, the mat card and the go-live check "Rings, managers and helpers ready".
+- Readiness card (`ringReadyHTML(r, named)`): on the Mat tab the heading is "<Ring name> · Before the start". It shows the checklist with an n/7 count. "Ring is ready" stays disabled until all items are ticked (with a hint). Unticking any item sets the ring back to Not ready.
+- Mat ring card: before going live, staff see a Ready / Not ready chip beside "N waiting".
+**Verify.** logic.test (ring checklist). test/matready.js (desktop and 390 px: ring name labels, Not ready default, checklist gating, tap → Ready on both cards, untick → Not ready, no horizontal scroll). golive.js updated to tick the checklist. e2e set, ringcall, matnow, emptychecks.

@@ -176,7 +176,10 @@ async function createDemo(kind) {
 const ACT = {
   home: () => { closeModal(); if (S.pub) return; openEvent(null); },
   'live-go': el => goLive(!!el.dataset.force), 'live-end': () => endLive(),
-  'ring-ready': el => setRingReady(el.dataset.ring, { ready: !(S.d.ringready[el.dataset.ring] || {}).ready }),
+  'ring-ready': el => { const rid = el.dataset.ring, rr = S.d.ringready[rid] || {};
+    if (ringIsReady(rid)) return setRingReady(rid, { ready: false });
+    if (!KT.ringReadyOk(rr.checks)) { toast('Tick every item on the checklist first.', true); return; }
+    setRingReady(rid, { ready: true }); },
   'judge-in': (el, e) => { if (e) e.stopPropagation(); const j = S.d.judges[el.dataset.id]; if (j) guard(() => S.store.update(P.doc(S.evId, 'judges', j.id), { checkedIn: !j.checkedIn })); },
   'share-on': () => shareOn(), 'share-off': () => shareOff(), 'share-copy': () => shareCopy(),
   'open-event': el => openEvent(el.dataset.id),
@@ -417,6 +420,8 @@ const CHANGE = {
   'evdir-add': el => { if (el.value) setEventDirector(el.dataset.ev, el.value, true); },
   'org-add': el => { if (el.value) setOrganizer(el.value, true); },
   'person-ring': el => { const v = el.value, id = el.dataset.id; if (!v) return; if (v === '__dir') setDirector(id, true); else setPersonRing(id, v === '__none' ? '' : v); },
+  'ring-check': el => { const rid = el.dataset.ring, rr = S.d.ringready[rid] || {}, checks = Object.assign({}, rr.checks, { [el.dataset.k]: el.checked });
+    setRingReady(rid, KT.ringReadyOk(checks) ? { checks } : { checks, ready: false }); },   // unticking an item makes the ring not ready again
   'ring-helpers': el => setRingReady(el.dataset.ring, { helpers: el.value.trim() }),
   'ring-addmgr': el => { if (el.value) setPersonRing(el.value, el.dataset.ring); },
   'inv-role': el => { const f = $('#inv-ring-f'); if (f) f.hidden = el.value !== 'manager'; },

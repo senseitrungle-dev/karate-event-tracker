@@ -462,6 +462,9 @@ ul.checks li.adv .ck { background: var(--warn-soft); color: var(--warn); }
 .ready-box { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px dashed var(--line-2); border-radius: 12px; }
 .ready-box.on { border-style: solid; border-color: color-mix(in srgb, var(--ok) 50%, transparent); background: color-mix(in srgb, var(--ok-soft) 40%, transparent); }
 .ready-box button { align-self: flex-start; }
+.ready-box .ready-ring { font-size: 1.05em; }
+.ready-checks { display: flex; flex-direction: column; gap: 0; }
+.ready-checks .check-in { min-height: 36px; padding: 4px 0; }
 button.chip.jin { cursor: pointer; min-height: 30px; }
 .ev-card.locked { opacity: .82; cursor: default; }
 .ev-card.locked h3 { color: var(--ink-2); }
@@ -696,14 +699,14 @@ label.rg-row.locked { opacity: .75; }
 .called-line { margin-top: 8px; overflow-wrap: anywhere; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.39.1 */
+<script>/* Karate Event Tracker v1.40.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.39.1';
+  const VERSION = '1.40.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -1986,6 +1989,19 @@ const KT = (function () {
   }
 
   function csvEscape(v) { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+  /** v1.40: ring manager's checklist before a ring (mat) can be marked ready. A ring is not ready until every item is ticked. */
+  const RING_CHECKS = [
+    { k: 'mat', label: 'Mat laid out, boundary and start lines marked, area clear' },
+    { k: 'judges', label: 'Judges seated with flags (Aka red / Shiro white)' },
+    { k: 'table', label: 'Scoreboard, timer and scoresheets working' },
+    { k: 'helpers', label: 'Scorekeeper and timekeeper at the table' },
+    { k: 'belts', label: 'Aka / Shiro belts at the ring' },
+    { k: 'medical', label: 'First aid knows where this ring is' },
+    { k: 'order', label: 'Running order and first call checked' },
+  ];
+  function ringChecksDone(checks) { const c = checks || {}; return RING_CHECKS.filter(x => c[x.k]).length; }
+  function ringReadyOk(checks) { return ringChecksDone(checks) === RING_CHECKS.length; }
+
   function toCSV(rows) { return rows.map(r => r.map(csvEscape).join(',')).join('\n'); }
 
   return {
@@ -1993,7 +2009,7 @@ const KT = (function () {
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, ageFromYear, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
     seedOrder, nextPow2, orderEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
-    kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS,
+    kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS, RING_CHECKS, ringChecksDone, ringReadyOk,
   };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = KT;
@@ -5294,7 +5310,8 @@ function ringBoardHTML(rings, withActions) {
     const isNow = x => rs && x.did === rs.did && (x.kp ? rs.kp === x.kp.key : x.m.id === rs.mid);
     const next = q.filter(x => !isNow(x)).slice(0, withActions ? 12 : 3);
     const openBtn = withActions && now && (rs.kp ? canScoreKP(rs.did, rs.kp) : canScoreMatch(rs.did, rs.mid)) ? `<div class="row" style="margin-top:8px"><button class="go" ${rs.kp ? `data-act="kp-score" data-did="${esc(rs.did)}" data-key="${esc(rs.kp)}"` : `data-act="score" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}"`}>Open scoresheet</button></div>` : '';
-    return `<div class="card ring-card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${q.length ? '' : 'plain'}">${q.length} waiting</span></div>
+    const ev = curEvent() || {}, rdy = withActions && !ev.live && role() !== 'viewer' && !isPublicView() ? (ringIsReady(r.id) ? '<span class="chip ok mat-status">Ready</span>' : '<span class="chip warn mat-status">Not ready</span>') : '';
+    return `<div class="card ring-card stack" data-ring="${esc(r.id)}"><div class="row between"><h3>${esc(r.name)}</h3><div class="row" style="gap:6px">${rdy}<span class="chip ${q.length ? '' : 'plain'}">${q.length} waiting</span></div></div>
       <div>${now || '<div class="small muted">Nothing on the mat.</div>'}${openBtn}</div>
       ${withActions ? callPanelHTML(r) : calledHTML(r.id)}
       <div class="queue"><div class="label">Up next</div>${next.map(x => {
@@ -5319,7 +5336,7 @@ function matHTML() {
   const note = r === 'manager' ? `<div class="notice info">You manage ${mine.length ? mine.map(id => esc((S.d.rings[id] || {}).name || '')).join(', ') : 'no ring yet'}. You can score matches for divisions assigned to your ring${mine.length === 1 ? '' : 's'}.</div>`
     : r === 'viewer' ? `<div class="notice info">Live view. Scores update as ring managers record them.</div>` : '';
   return eventHeader(`<select id="mat-ring" data-change="ring" aria-label="Ring" style="max-width:200px">${opt('', 'All rings', sel)}${DC.rings.map(x => opt(x.id, x.name + (mine.includes(x.id) && r === 'manager' ? ' (yours)' : ''), sel)).join('')}</select>`)
-    + note + (role() !== 'viewer' && !(curEvent() || {}).live ? `<div class="grid2" style="margin-bottom:14px">${rings.map(ringReadyHTML).filter(Boolean).map(h => `<div class="card">${h}</div>`).join('')}</div>` : '') + ringBoardHTML(rings, true);
+    + note + (role() !== 'viewer' && !(curEvent() || {}).live ? `<div class="grid2" style="margin-bottom:14px">${rings.map(x => ringReadyHTML(x, true)).filter(Boolean).map(h => `<div class="card">${h}</div>`).join('')}</div>` : '') + ringBoardHTML(rings, true);
 }
 
 /* ---------- brackets ---------- */
@@ -7496,7 +7513,7 @@ function liveChecks() {
   add(used.length > 0 && !short.length, 'Each ring has a full judging panel', !used.length ? none : short.length ? short.map(r => `${r.name}: ${ringJudges(r.id).filter(j => j.checkedIn).length}/${ringNeed(r.id)}`).join(' · ') : 'Enough checked-in judges on every ring', 'judges', KT.judgeNeed(curEvent().level, curEvent().judgeMin) >= 3);
   const noMgr = used.filter(r => !(r.managerIds || []).length);
   add(used.length > 0 && !noMgr.length, 'Every ring has a ring manager', !used.length ? none : noMgr.length ? noMgr.map(r => r.name).join(', ') + ' without a manager' : 'All rings staffed', 'rings');
-  const notReady = used.filter(r => !(S.d.ringready[r.id] || {}).ready);
+  const notReady = used.filter(r => !ringIsReady(r.id));
   add(used.length > 0 && !notReady.length, 'Rings, managers and helpers ready', !used.length ? none : notReady.length ? notReady.map(r => r.name).join(', ') + ' not confirmed ready' : 'All rings confirmed ready', 'mat');
   return out;
 }
@@ -7538,15 +7555,20 @@ async function endLive() {
   await guard(() => S.store.update(P.event(ev.id), { live: false, endedAt: new Date().toISOString() }), 'Live ended');
 }
 /* ---------- ring readiness (ring manager or director) ---------- */
-function ringReadyHTML(r) {
+/** v1.40: a ring is ready only once its manager has ticked the whole checklist and tapped "Ring is ready" — not ready by default. */
+function ringIsReady(rid) { const rr = S.d.ringready[rid] || {}; return !!rr.ready && KT.ringReadyOk(rr.checks); }
+function ringReadyHTML(r, named) {
   const ev = curEvent(); if (!ev || ev.live || isPublicView()) return '';
   const can = isDirector() || (role() === 'manager' && myRingIds().includes(r.id)); if (!can) return '';
-  const rr = S.d.ringready[r.id] || {};
+  const rr = S.d.ringready[r.id] || {}, checks = rr.checks || {}, ready = ringIsReady(r.id);
+  const done = KT.ringChecksDone(checks), all = KT.RING_CHECKS.length;
   const nJ = ringJudges(r.id).filter(j => j.checkedIn).length, need = ringNeed(r.id);
-  return `<div class="ready-box ${rr.ready ? 'on' : ''}"><div class="row between"><b>Before the start</b>${rr.ready ? '<span class="chip ok">Ready</span>' : '<span class="chip warn">Not ready</span>'}</div>
+  return `<div class="ready-box ${ready ? 'on' : ''}" data-ring="${esc(r.id)}"><div class="row between"><b>${named ? `<span class="ready-ring">${esc(r.name)}</span> · ` : ''}Before the start</b>${ready ? '<span class="chip ok">Ready</span>' : '<span class="chip warn">Not ready</span>'}</div>
     <div class="tiny muted">Judges checked in ${nJ}/${need || '—'} · Manager ${(r.managerIds || []).length ? '✓' : '—'}</div>
+    <div class="ready-checks"><div class="row between"><span class="label">Ring manager checklist</span><span class="tiny muted">${done}/${all}</span></div>
+    ${KT.RING_CHECKS.map(c => `<label class="check-in"><input type="checkbox" data-change="ring-check" data-ring="${esc(r.id)}" data-k="${c.k}" ${checks[c.k] ? 'checked' : ''}> <span>${esc(c.label)}</span></label>`).join('')}</div>
     <label class="f"><span>Helpers (scorekeeper, timekeeper…)</span><input id="helpers-${esc(r.id)}" data-change="ring-helpers" data-ring="${esc(r.id)}" value="${esc(rr.helpers || '')}" placeholder="Names"></label>
-    <button class="sm ${rr.ready ? '' : 'go'}" data-act="ring-ready" data-ring="${esc(r.id)}">${rr.ready ? 'Mark not ready' : 'Ring is ready'}</button></div>`;
+    <button class="sm ${ready ? '' : 'go'}" data-act="ring-ready" data-ring="${esc(r.id)}" ${ready || done === all ? '' : 'disabled'}>${ready ? 'Mark not ready' : 'Ring is ready'}</button>${ready || done === all ? '' : `<span class="tiny muted">Tick all ${all} items to mark ${esc(r.name)} ready.</span>`}</div>`;
 }
 async function setRingReady(rid, patch) {
   const cur = S.d.ringready[rid] || {};
@@ -8426,7 +8448,10 @@ async function createDemo(kind) {
 const ACT = {
   home: () => { closeModal(); if (S.pub) return; openEvent(null); },
   'live-go': el => goLive(!!el.dataset.force), 'live-end': () => endLive(),
-  'ring-ready': el => setRingReady(el.dataset.ring, { ready: !(S.d.ringready[el.dataset.ring] || {}).ready }),
+  'ring-ready': el => { const rid = el.dataset.ring, rr = S.d.ringready[rid] || {};
+    if (ringIsReady(rid)) return setRingReady(rid, { ready: false });
+    if (!KT.ringReadyOk(rr.checks)) { toast('Tick every item on the checklist first.', true); return; }
+    setRingReady(rid, { ready: true }); },
   'judge-in': (el, e) => { if (e) e.stopPropagation(); const j = S.d.judges[el.dataset.id]; if (j) guard(() => S.store.update(P.doc(S.evId, 'judges', j.id), { checkedIn: !j.checkedIn })); },
   'share-on': () => shareOn(), 'share-off': () => shareOff(), 'share-copy': () => shareCopy(),
   'open-event': el => openEvent(el.dataset.id),
@@ -8667,6 +8692,8 @@ const CHANGE = {
   'evdir-add': el => { if (el.value) setEventDirector(el.dataset.ev, el.value, true); },
   'org-add': el => { if (el.value) setOrganizer(el.value, true); },
   'person-ring': el => { const v = el.value, id = el.dataset.id; if (!v) return; if (v === '__dir') setDirector(id, true); else setPersonRing(id, v === '__none' ? '' : v); },
+  'ring-check': el => { const rid = el.dataset.ring, rr = S.d.ringready[rid] || {}, checks = Object.assign({}, rr.checks, { [el.dataset.k]: el.checked });
+    setRingReady(rid, KT.ringReadyOk(checks) ? { checks } : { checks, ready: false }); },   // unticking an item makes the ring not ready again
   'ring-helpers': el => setRingReady(el.dataset.ring, { helpers: el.value.trim() }),
   'ring-addmgr': el => { if (el.value) setPersonRing(el.value, el.dataset.ring); },
   'inv-role': el => { const f = $('#inv-ring-f'); if (f) f.hidden = el.value !== 'manager'; },

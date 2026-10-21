@@ -456,6 +456,9 @@ ul.checks li.adv .ck { background: var(--warn-soft); color: var(--warn); }
 .ready-box { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px dashed var(--line-2); border-radius: 12px; }
 .ready-box.on { border-style: solid; border-color: color-mix(in srgb, var(--ok) 50%, transparent); background: color-mix(in srgb, var(--ok-soft) 40%, transparent); }
 .ready-box button { align-self: flex-start; }
+.ready-box .ready-ring { font-size: 1.05em; }
+.ready-checks { display: flex; flex-direction: column; gap: 0; }
+.ready-checks .check-in { min-height: 36px; padding: 4px 0; }
 button.chip.jin { cursor: pointer; min-height: 30px; }
 .ev-card.locked { opacity: .82; cursor: default; }
 .ev-card.locked h3 { color: var(--ink-2); }

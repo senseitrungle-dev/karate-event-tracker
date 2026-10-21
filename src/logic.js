@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.39.1';
+  const VERSION = '1.40.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -1287,6 +1287,19 @@ const KT = (function () {
   }
 
   function csvEscape(v) { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+  /** v1.40: ring manager's checklist before a ring (mat) can be marked ready. A ring is not ready until every item is ticked. */
+  const RING_CHECKS = [
+    { k: 'mat', label: 'Mat laid out, boundary and start lines marked, area clear' },
+    { k: 'judges', label: 'Judges seated with flags (Aka red / Shiro white)' },
+    { k: 'table', label: 'Scoreboard, timer and scoresheets working' },
+    { k: 'helpers', label: 'Scorekeeper and timekeeper at the table' },
+    { k: 'belts', label: 'Aka / Shiro belts at the ring' },
+    { k: 'medical', label: 'First aid knows where this ring is' },
+    { k: 'order', label: 'Running order and first call checked' },
+  ];
+  function ringChecksDone(checks) { const c = checks || {}; return RING_CHECKS.filter(x => c[x.k]).length; }
+  function ringReadyOk(checks) { return ringChecksDone(checks) === RING_CHECKS.length; }
+
   function toCSV(rows) { return rows.map(r => r.map(csvEscape).join(',')).join('\n'); }
 
   return {
@@ -1294,7 +1307,7 @@ const KT = (function () {
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, ageFromYear, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
     seedOrder, nextPow2, orderEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
-    kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS,
+    kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS, RING_CHECKS, ringChecksDone, ringReadyOk,
   };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = KT;
