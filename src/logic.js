@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.36.0';
+  const VERSION = '1.37.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -260,7 +260,9 @@ const KT = (function () {
   }
   function spanOf(dv) { const lo = dv.minAge == null || dv.minAge === '' ? 0 : +dv.minAge, hi = dv.maxAge == null || dv.maxAge === '' ? 120 : +dv.maxAge; return hi - lo; }
   /** Candidate divisions for a competitor in one event type, most specific first. */
-  function ageOf(c, asOf) { return c.dob ? ageOn(c.dob, asOf) : (c.age == null || c.age === '' ? null : +c.age); }
+  /** v1.37: international events keep only the year of birth → age on 31 December of the event year (WTKF birth-year rule) */
+  function ageFromYear(y, asOf) { const Y = +String(asOf || '').slice(0, 4); return +y > 1900 && Y ? Y - +y : null; }
+  function ageOf(c, asOf) { return c.dob ? ageOn(c.dob, asOf) : c.birthYear ? ageFromYear(c.birthYear, asOf) : (c.age == null || c.age === '' ? null : +c.age); }
   function candidateDivisions(comp, eventType, divisions, asOf) {
     const age = ageOf(comp, asOf);
     return divisions.filter(dv => dv.eventType === eventType && (dv.gender === comp.gender || dv.open) && fitsDivision(dv, [age], [comp.rank]))
@@ -309,8 +311,8 @@ const KT = (function () {
     const p = [];
     if (!c.firstName || !c.lastName) p.push('Full name');
     if (!c.gender || !['M', 'F'].includes(c.gender)) p.push('Gender');
-    if (!c.dob) p.push('Date of birth');
-    else { const a = ageOn(c.dob, asOf); if (a == null || a < 3 || a > 110) p.push('Valid date of birth'); }
+    if (!c.dob && !c.birthYear) p.push('Date of birth');
+    else { const a = c.dob ? ageOn(c.dob, asOf) : ageFromYear(c.birthYear, asOf); if (a == null || a < 3 || a > 110) p.push('Valid date of birth'); }
     if (!RANK_BY[c.rank]) p.push('Rank');
     if (!c.dojo) p.push('Dojo / club');
     if (!c.emergencyName || !c.emergencyPhone) p.push('Emergency contact');
@@ -1274,7 +1276,7 @@ const KT = (function () {
 
   return {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
-    ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
+    ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, ageFromYear, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
     seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS,

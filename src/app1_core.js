@@ -308,6 +308,14 @@ async function saveFile(filename, text) {
   if (S.downloads) {
     try { await S.downloads.save({ filename, data: text }); return; } catch (e) { if (e && e.code === 'declined') return; }
   }
+  // v1.37: ordinary browser (Vercel site / local file) — download the file directly
+  if (!(S.store && S.store.mode === 'cloud')) {
+    try {
+      const url = URL.createObjectURL(new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8' }));   // BOM: Excel opens accents correctly
+      const a = document.createElement('a'); a.href = url; a.download = filename.replace(/[\\/:*?"<>|]/g, '-'); document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000); toast(`Downloaded ${filename}`); return;
+    } catch (e) { /* fall back to the copy box */ }
+  }
   openModal(sheet('Copy export', `<p class="small muted">Downloads are not available here. Copy the text below into a file named ${esc(filename)}.</p><textarea id="export-text" rows="14" readonly>${esc(text)}</textarea>`,
     `<button data-act="copy-export">Copy</button><button class="primary" data-act="modal-close">Done</button>`));
 }

@@ -44,7 +44,7 @@ function compForm(id) {
       <label class="f req"><span>First name</span><input name="firstName" id="c-first" required value="${esc(c.firstName || '')}"></label>
       <label class="f req"><span>Last name</span><input name="lastName" id="c-last" required value="${esc(c.lastName || '')}"></label>
       <label class="f ${tour ? 'req' : ''}"><span>Gender</span><select name="gender" id="c-gender" ${tour ? 'required' : ''}>${opt('', 'Select…', c.gender)}${opt('M', 'Male', c.gender)}${opt('F', 'Female', c.gender)}</select></label>
-      <label class="f ${tour ? 'req' : ''}"><span>Date of birth · ${dobFmt()}</span><input type="text" inputmode="numeric" autocomplete="off" name="dobText" id="c-dob" ${tour ? 'required' : ''} value="${esc(dobShow(c.dob))}" placeholder="${dobFmt()}" data-input="dob-type"><span class="tiny muted" id="c-dob-out">${c.dob ? esc(dobRead(c.dob)) : 'Type the full year, e.g. ' + (dobOrderNow() === 'MDY' ? '07/27/2012' : '27/07/2012')}</span></label>
+      ${yobOnly() ? `<label class="f ${tour ? 'req' : ''}"><span>Year of birth</span><input type="text" inputmode="numeric" maxlength="4" autocomplete="off" name="yobText" id="c-yob" ${tour ? 'required' : ''} value="${esc(c.birthYear || (c.dob || '').slice(0, 4))}" placeholder="YYYY" data-input="yob-type"><span class="tiny muted" id="c-yob-out">${c.birthYear || c.dob ? esc(yobRead(c.birthYear || (c.dob || '').slice(0, 4))) : 'International event: only the year is kept (age on 31 Dec)'}</span></label>` : `<label class="f ${tour ? 'req' : ''}"><span>Date of birth · ${dobFmt()}</span><input type="text" inputmode="numeric" autocomplete="off" name="dobText" id="c-dob" ${tour ? 'required' : ''} value="${esc(dobShow(c.dob))}" placeholder="${dobFmt()}" data-input="dob-type"><span class="tiny muted" id="c-dob-out">${c.dob ? esc(dobRead(c.dob)) : 'Type the full year, e.g. ' + (dobOrderNow() === 'MDY' ? '07/27/2012' : '27/07/2012')}</span></label>`}
       <label class="f req"><span>Rank</span><select name="rank" id="c-rank" required>${rankOptions(c.rank)}</select></label>
       <label class="f req"><span>Dojo / club</span><input name="dojo" id="c-dojo" required value="${esc(c.dojo || '')}" list="dojo-list"><datalist id="dojo-list">${[...new Set(DC.comps.map(x => x.dojo).filter(Boolean))].map(d => `<option value="${esc(d)}">`).join('')}</datalist></label>
       <label class="f"><span>State / region</span><input name="state" id="c-state" value="${esc(c.state || '')}"></label>
@@ -67,8 +67,12 @@ function compForm(id) {
     <p id="c-miss" class="small" style="color:var(--warn)"></p></form>`,
     `${id ? '<button class="danger" data-act="comp-delete" style="margin-right:auto">Delete</button>' : ''}<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-comp">Save</button>`));
 }
-const PV_FIELDS = ['dob', 'email', 'phone', 'emergencyName', 'emergencyPhone', 'feeAmount', 'notes'];
+const PV_FIELDS = ['dob', 'birthYear', 'email', 'phone', 'emergencyName', 'emergencyPhone', 'feeAmount', 'notes'];
 /* v1.35: birth date typed as text (the browser date picker can't take a typed year on some phones) — same reading rules as the import */
+/* v1.37: International events keep only the year of birth (GDPR data minimisation; WTKF ages are by birth year) */
+function yobOnly(ev) { ev = ev || curEvent(); return !!ev && ev.level === 'International'; }
+function yearOf(txt) { const m = String(txt || '').match(/(?:^|\D)((?:19|20)\d\d)(?:\D|$)/); return m ? +m[1] : null; }
+function yobRead(y) { const a = KT.ageFromYear(y, DC.asOf); return `Born ${y}${a != null ? ` · age ${a} in ${String(DC.asOf).slice(0, 4)} (on 31 Dec)` : ''}`; }
 function dobOrderNow() { return dateOrder([], [], 'auto').order; }
 function dobFmt() { return dobOrderNow() === 'MDY' ? 'MM/DD/YYYY' : 'DD/MM/YYYY'; }
 function dobShow(iso) { if (!iso) return ''; const [y, m, d] = iso.split('-'); return dobOrderNow() === 'MDY' ? `${m}/${d}/${y}` : `${d}/${m}/${y}`; }
@@ -76,14 +80,17 @@ function dobRead(iso) { const a = KT.ageOn(iso, DC.asOf); return new Date(iso + 
 function dobParse(txt) { txt = String(txt || '').trim(); if (!txt) return ''; return importDate(txt.replace(/\s+/g, ''), dobOrderNow()); }
 async function saveComp(form) {
   const ev = curEvent(), id = form.dataset.id || uid(), v = fd(form);
+  if (v.yobText != null) { const t = String(v.yobText).trim(), y = /^\d{4}$/.test(t) ? +t : null; delete v.yobText;
+    if (t && !(y > 1900 && y <= new Date().getFullYear())) { toast(`“${t}” is not a year of birth — type 4 digits, e.g. 2011.`, true); return; }
+    v.birthYear = y ? String(y) : ''; v.dob = ''; }
   if (v.dobText != null) { const t = String(v.dobText).trim(); v.dob = dobParse(t); delete v.dobText; if (t && !v.dob) { toast(`“${t}” is not a date — type it as ${dobFmt()} (or YYYY-MM-DD).`, true); return; } }
   const tour = ev.kind === 'tournament';
-  if (!v.firstName || !v.lastName || !v.rank || (tour && (!v.gender || !v.dob))) { toast('Name, rank' + (tour ? ', gender and date of birth are' : ' are') + ' required.', true); return; }
+  if (!v.firstName || !v.lastName || !v.rank || (tour && (!v.gender || !(v.dob || v.birthYear)))) { toast('Name, rank' + (tour ? `, gender and ${yobOnly() ? 'year' : 'date'} of birth are` : ' are') + ' required.', true); return; }
   const divOverride = {};
   for (const k of Object.keys(v)) if (k.startsWith('ov_')) { if (v[k]) divOverride[k.slice(3)] = v[k]; delete v[k]; }
   const pub = { firstName: v.firstName, lastName: v.lastName, gender: v.gender, rank: v.rank, dojo: v.dojo, state: v.state, country: v.country,
     waiver: v.waiver, feePaid: v.feePaid, checkedIn: v.checkedIn, status: v.status || 'active', events: v.events || [], divOverride,
-    age: v.dob ? KT.ageOn(v.dob, DC.asOf) : null, updatedAt: new Date().toISOString() };
+    age: v.dob ? KT.ageOn(v.dob, DC.asOf) : v.birthYear ? KT.ageFromYear(v.birthYear, DC.asOf) : null, updatedAt: new Date().toISOString() };
   const old = DC.compBy[form.dataset.id];
   if (old && old.createdAt) pub.createdAt = old.createdAt; else pub.createdAt = new Date().toISOString();
   const pv = {}; PV_FIELDS.forEach(k => { pv[k] = v[k] || ''; });
@@ -192,7 +199,7 @@ function importRows(text) {
   const h = rows[hi].map(normH);
   const col = (...names) => h.findIndex(x => names.includes(x));
   const ix = { first: col(...FIRST), last: col(...LAST), name: col(...FULL), gender: col('gender', 'sex'),
-    dob: col('dob', 'dateofbirth', 'birthdate', 'birthday', 'born'), age: col('age'),
+    dob: col('dob', 'dateofbirth', 'birthdate', 'birthday', 'born'), age: col('age'), yob: col('yearofbirth', 'birthyear', 'yob', 'yearborn'),
     rank: col('rank', 'belt', 'grade', 'kyu', 'beltrank'), dojo: col('dojo', 'club', 'school', 'team'), state: col('state', 'region', 'province'), country: col('country', 'nation'), email: col('email'), phone: col('phone', 'mobile'),
     en: col('emergencyname', 'emergencycontact', 'emergency', 'emergencycontactname', 'parentname', 'parent', 'guardian'), ep: col('emergencyphone', 'emergencycontactphone', 'parentphone', 'guardianphone'), waiver: col('waiver', 'waiversigned'), paid: col('paid', 'feepaid'), events: col('events', 'event', 'divisions'),
     fee: h.findIndex(x => /^(participationfee|fee|entryfee)/.test(x)) };
@@ -203,6 +210,8 @@ function importRows(text) {
   const raw = rows[hi].map(x => String(x || '').trim());
   info.cols = Object.entries(LBL).filter(([k]) => ix[k] >= 0).map(([k, l]) => ({ label: l, header: raw[ix[k]] }));
   if (ix.age >= 0 && ix.dob < 0) info.cols.push({ label: 'Date of birth', header: raw[ix.age] });
+  if (ix.yob >= 0) info.cols.push({ label: 'Year of birth', header: raw[ix.yob] });
+  const yo = yobOnly(); info.yobOnly = yo;
   evCols.forEach(([i, e]) => info.cols.push({ label: KT.EVENT_TYPES[e].label, header: raw[i] }));
   const used = new Set([...Object.values(ix).filter(i => i >= 0), ...evCols.map(([i]) => i)]);
   info.ignored = raw.map((x, i) => (x && !used.has(i) && !/^(#|no\.?|nr|number)$/i.test(x) ? x : '')).filter(Boolean);
@@ -210,7 +219,7 @@ function importRows(text) {
   info.missingCols = [
     ix.first < 0 && ix.last < 0 && ix.name < 0 ? 'Name' : '',
     ix.first < 0 && ix.name >= 0 ? '' : ix.first < 0 ? 'First name' : '', ix.last < 0 && ix.name < 0 && ix.first >= 0 ? 'Last name' : '',
-    ix.gender < 0 && isT ? 'Gender' : '', ix.dob < 0 && ix.age < 0 && isT ? 'Date of birth' : '', ix.rank < 0 ? 'Rank' : '', ix.dojo < 0 && !info.federation ? 'Dojo / club' : '',
+    ix.gender < 0 && isT ? 'Gender' : '', ix.dob < 0 && ix.age < 0 && ix.yob < 0 && isT ? (yo ? 'Year of birth' : 'Date of birth') : '', ix.rank < 0 ? 'Rank' : '', ix.dojo < 0 && !info.federation ? 'Dojo / club' : '',
     ix.en < 0 || ix.ep < 0 ? 'Emergency contact' : '', ix.waiver < 0 ? 'Waiver' : '', isT && ix.events < 0 && !evCols.length ? 'Events' : ''].filter(Boolean);
   const recs = [], errors = [];
   const g = (r, i) => (i >= 0 ? (r[i] || '').trim() : '');
@@ -218,9 +227,12 @@ function importRows(text) {
   const body = rows.slice(hi + 1);
   const rawDate = r => g(r, ix.dob) || (ix.age >= 0 && splitDate(g(r, ix.age)) ? g(r, ix.age) : '');
   const dord = dateOrder(body.map(rawDate).filter(Boolean), [info.country, ...body.map(r => g(r, ix.country))], (($('#imp-dates') || {}).value) || 'auto');
-  if (body.some(r => rawDate(r))) info.dates = dord;     // only talk about date order when the file has dates
+  if (body.some(r => rawDate(r)) && !yobOnly()) info.dates = dord;     // only talk about date order when the file has dates (year-only events don't need it)
   const isTournament = curEvent().kind === 'tournament';
-  const seen = new Map(DC.comps.map(c => [[normH(c.firstName), normH(c.lastName), c.dob || ''].join('|'), c]));
+  const yrOf = c => String(c.birthYear || (c.dob || '').slice(0, 4) || '');
+  // year only (international): same name + same year + same country / dojo = same person
+  const whoKey = (f, l, c) => [normH(f), normH(l)].concat(yobOnly() ? [yrOf(c), normH(c.country || c.dojo)] : [c.dob || '']).join('|');
+  const seen = new Map(DC.comps.map(c => [whoKey(c.firstName, c.lastName, c), c]));
   for (let n = hi + 1; n < rows.length; n++) {
     const r = rows[n], lead = String(r[0] || '').trim();
     // next section of a federation sheet (JUDGES/COACHES, PHOTOGRAPHER, TOTAL FEES …) ends the athlete table
@@ -245,6 +257,11 @@ function importRows(text) {
     const miss = [], bad = (v, l) => (v ? `${l} (“${v}” not recognised)` : l);
     if (!rec.firstName) miss.push('First name'); if (!rec.lastName) miss.push('Last name');
     if (isTournament && !rec.gender) miss.push(bad(g(r, ix.gender), 'Gender'));
+    if (yobOnly()) {               // keep only the year; the day and month are never stored
+      const y = yearOf(g(r, ix.yob)) || yearOf(rawDate(r)) || yearOf(g(r, ix.age));
+      rec.birthYear = y ? String(y) : ''; rec.dob = '';
+      if (isTournament && !y) miss.push(rawDate(r) || g(r, ix.yob) ? `Year of birth (“${g(r, ix.yob) || rawDate(r)}” has no year)` : 'Year of birth');
+    } else
     if (isTournament && !rec.dob) miss.push(rawDate(r) ? `Date of birth (“${rawDate(r)}” is not a date as ${dord.order === 'MDY' ? 'month-day-year' : 'day-month-year'})` : 'Date of birth');
     if (!rec.rank) miss.push(bad(g(r, ix.rank), 'Rank'));
     if (!rec.dojo) miss.push('Dojo / club');
@@ -253,7 +270,7 @@ function importRows(text) {
     if (isTournament && !rec.events.length) miss.push('Events');
     rec.missing = miss; rec.row = n + 1;
     const who = `${rec.firstName} ${rec.lastName}`.trim();
-    const key = [normH(rec.firstName), normH(rec.lastName), rec.dob].join('|');
+    const key = whoKey(rec.firstName, rec.lastName, rec);
     const had = seen.get(key);
     if (had) {
       // same person; a name that lost its accents (“?”) is corrected from this file
@@ -273,15 +290,16 @@ function importPreviewHTML() {
   const warn = recs.some(r => r.warn) ? `<div class="notice warn" style="display:block">Some names contain “?” — the file lost its accented letters (e.g. Ł, Ń, Ę) when it was saved. In Excel use <b>File → Save As → CSV UTF-8</b> and import that file, or fix the names after importing.</div>` : '';
   const isT = curEvent().kind === 'tournament';
   const cell = (v, need) => v ? esc(v) : need ? '<span class="imp-miss">missing</span>' : '<span class="muted">—</span>';
-  const born = r => r.dob ? new Date(r.dob + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-  const tbl = recs.length ? `<div class="tw imp-wrap"><table class="imp-tbl"><thead><tr><th>#</th><th>Name</th><th>G</th><th>Born</th><th>Rank</th><th>Dojo / club</th><th>${info.country || recs.some(r => r.country) ? 'Country' : 'State / region'}</th>${isT ? '<th>Events</th>' : ''}<th>Emergency</th><th>Waiver</th><th>Needs later</th></tr></thead><tbody>${recs.map((r, i) => `<tr class="${r.warn ? 'imp-warn' : ''}${(r.missing || []).length ? ' imp-inc' : ''}"><td class="n">${i + 1}</td><td>${cell([r.lastName, r.firstName].filter(Boolean).join(', '), true)}${r.fixId ? ' <span class="chip ok">name fix</span>' : ''}</td><td>${r.gender ? (r.gender === 'F' ? 'W' : 'M') : cell('', isT)}</td><td class="mono" title="year-month-day">${cell(born(r), isT)}</td><td>${r.rank ? esc(KT.rankLabel(r.rank)) : cell('', true)}</td><td>${cell(r.dojo, true)}</td><td>${cell(r.country || r.state, false)}</td>${isT ? `<td>${r.events.length ? evs(r.events) : cell('', true)}</td>` : ''}<td>${r.emergencyName || r.emergencyPhone ? esc([r.emergencyName, r.emergencyPhone].filter(Boolean).join(' · ')) : cell('', true)}</td><td>${r.waiver ? '✓' : cell('', true)}</td><td class="imp-need">${(r.missing || []).map(esc).join(', ')}</td></tr>`).join('')}</tbody></table></div>` : '';
+  const born = r => r.birthYear ? r.birthYear : r.dob ? new Date(r.dob + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  const tbl = recs.length ? `<div class="tw imp-wrap"><table class="imp-tbl"><thead><tr><th>#</th><th>Name</th><th>G</th><th>${info.yobOnly ? 'Born (year)' : 'Born'}</th><th>Rank</th><th>Dojo / club</th><th>${info.country || recs.some(r => r.country) ? 'Country' : 'State / region'}</th>${isT ? '<th>Events</th>' : ''}<th>Emergency</th><th>Waiver</th><th>Needs later</th></tr></thead><tbody>${recs.map((r, i) => `<tr class="${r.warn ? 'imp-warn' : ''}${(r.missing || []).length ? ' imp-inc' : ''}"><td class="n">${i + 1}</td><td>${cell([r.lastName, r.firstName].filter(Boolean).join(', '), true)}${r.fixId ? ' <span class="chip ok">name fix</span>' : ''}</td><td>${r.gender ? (r.gender === 'F' ? 'W' : 'M') : cell('', isT)}</td><td class="mono" title="year-month-day">${cell(born(r), isT)}</td><td>${r.rank ? esc(KT.rankLabel(r.rank)) : cell('', true)}</td><td>${cell(r.dojo, true)}</td><td>${cell(r.country || r.state, false)}</td>${isT ? `<td>${r.events.length ? evs(r.events) : cell('', true)}</td>` : ''}<td>${r.emergencyName || r.emergencyPhone ? esc([r.emergencyName, r.emergencyPhone].filter(Boolean).join(' · ')) : cell('', true)}</td><td>${r.waiver ? '✓' : cell('', true)}</td><td class="imp-need">${(r.missing || []).map(esc).join(', ')}</td></tr>`).join('')}</tbody></table></div>` : '';
   const fixes = recs.filter(r => r.fixId), adds = recs.length - fixes.length;
   const dd = info && info.dates, dline = dd ? `<div class="notice ${dd.clash ? 'warn' : 'info'}" style="display:block">Birth dates read as <b>${dd.order === 'MDY' ? 'month-day-year (USA, 07/27/2012 = July 27)' : 'day-month-year (Europe, 27.07.2012 = 27 July)'}</b> — ${esc(dd.why)}. ${dd.clash ? 'Rows that don’t fit are listed below. ' : ''}Change it with “Birth dates are” above if this is wrong.</div>` : '';
   const nInc = recs.filter(r => !r.fixId && (r.missing || []).length).length;
   const colsBox = info && info.cols ? `<div class="imp-cols"><div><b>Columns found (${info.cols.length})</b><div class="pill-list">${info.cols.map(c => `<span class="chip ok" title="File heading: ${esc(c.header)}">${esc(c.label)}${normH(c.header) !== normH(c.label) ? ` <span class="tiny">← ${esc(c.header)}</span>` : ''}</span>`).join('') || '<span class="muted small">none</span>'}</div></div>
     ${info.missingCols.length ? `<div><b>Not in the file — enter later</b><div class="pill-list">${info.missingCols.map(c => `<span class="chip warn">${esc(c)}</span>`).join('')}</div></div>` : ''}
     ${info.ignored.length ? `<div><b>Not used</b> <span class="tiny muted">(not recognised)</span><div class="pill-list">${info.ignored.map(c => `<span class="chip plain">${esc(c)}</span>`).join('')}</div></div>` : ''}</div>` : '';
-  return `${head}${colsBox}${dline}${warn}<p><b>${plural(adds, 'competitor')} ready to import</b>${nInc ? ` — <span style="color:var(--warn)"><b>${nInc}</b> with details to enter later</span> (marked <span class="chip warn">Incomplete</span>; Competitors → filter “Missing information”)` : ''}.${fixes.length ? ` <b>${plural(fixes.length, 'name')} will be corrected</b> (${fixes.map(r => esc(r.was) + ' → ' + esc(r.firstName + ' ' + r.lastName)).join(', ')}).` : ''}${errors.length ? `<br><span class="small" style="color:var(--bad)">${errors.slice(0, 10).map(esc).join('<br>')}${errors.length > 10 ? '<br>…and ' + (errors.length - 10) + ' more' : ''}</span>` : ''}</p>${tbl}`;
+  const yline = info && info.yobOnly ? `<div class="notice info" style="display:block"><b>International event — year of birth only.</b> Ages count on 31 Dec (birth-year rule); the day and month in the file are not stored (data minimisation).</div>` : '';
+  return `${head}${colsBox}${yline}${dline}${warn}<p><b>${plural(adds, 'competitor')} ready to import</b>${nInc ? ` — <span style="color:var(--warn)"><b>${nInc}</b> with details to enter later</span> (marked <span class="chip warn">Incomplete</span>; Competitors → filter “Missing information”)` : ''}.${fixes.length ? ` <b>${plural(fixes.length, 'name')} will be corrected</b> (${fixes.map(r => esc(r.was) + ' → ' + esc(r.firstName + ' ' + r.lastName)).join(', ')}).` : ''}${errors.length ? `<br><span class="small" style="color:var(--bad)">${errors.slice(0, 10).map(esc).join('<br>')}${errors.length > 10 ? '<br>…and ' + (errors.length - 10) + ' more' : ''}</span>` : ''}</p>${tbl}`;
 }
 async function runImport() {
   const { recs, errors } = importRows($('#imp-text').value);
@@ -293,9 +311,9 @@ async function runImport() {
     if (r.fixId) { if (!(await guard(() => S.store.update(P.doc(S.evId, 'competitors', r.fixId), { firstName: r.firstName, lastName: r.lastName })))) break; done++; continue; }
     const id = uid();
     const pub = { firstName: r.firstName, lastName: r.lastName, gender: r.gender, rank: r.rank, dojo: r.dojo, state: r.state, country: r.country, waiver: r.waiver, feePaid: r.feePaid,
-      checkedIn: false, status: 'active', events: r.events, divOverride: {}, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : null, createdAt: new Date().toISOString(),
+      checkedIn: false, status: 'active', events: r.events, divOverride: {}, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : r.birthYear ? KT.ageFromYear(r.birthYear, DC.asOf) : null, createdAt: new Date().toISOString(),
       importId: batch.id, importName: batch.name, importAt: batch.at };     // v1.36: which import a competitor came from (bulk remove)
-    const ok = await guard(async () => { await S.store.set(P.doc(S.evId, 'competitors', id), pub); await S.store.set(P.pv(S.evId, id), { dob: r.dob, email: r.email, phone: r.phone, emergencyName: r.emergencyName, emergencyPhone: r.emergencyPhone, feeAmount: r.feeAmount || '', notes: '' }); return true; });
+    const ok = await guard(async () => { await S.store.set(P.doc(S.evId, 'competitors', id), pub); await S.store.set(P.pv(S.evId, id), { dob: r.dob || '', birthYear: r.birthYear || '', email: r.email, phone: r.phone, emergencyName: r.emergencyName, emergencyPhone: r.emergencyPhone, feeAmount: r.feeAmount || '', notes: '' }); return true; });
     if (!ok) break;
     done++; $('#imp-preview').textContent = `Imported ${done} of ${recs.length}…`;
   }
@@ -501,7 +519,7 @@ async function applyPreset(form) {
     const keep = new Set(list.map(key));
     for (const d of DC.divs) if (!keep.has(key(d)) && !S.d.brackets[d.id]) { await guard(() => S.store.del(P.doc(S.evId, 'divisions', d.id))); removed++; }
   }
-  if (v.settings && ev.ageAsOf !== pr.ageAsOf) for (const c of DC.comps) if (c.dob) await guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { age: KT.ageOn(c.dob, pr.ageAsOf) }));
+  if (v.settings && ev.ageAsOf !== pr.ageAsOf) for (const c of DC.comps) if (c.dob || c.birthYear) await guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { age: KT.ageOf(c, pr.ageAsOf) }));
   closeModal(); toast(`${pr.label}: ${plural(added, 'division')} added${updated ? `, ${updated} updated` : ''}${removed ? `, ${removed} removed` : ''}`);
 }
 /* ---------- v1.31: NCR kyu rules (local & regional tournaments) ---------- */
@@ -704,6 +722,15 @@ async function removeGroup(f) {
   let n = 0;
   for (const id of ids) { if (await guard(async () => { await S.store.del(P.doc(S.evId, 'competitors', id)); await S.store.del(P.pv(S.evId, id)); return true; })) n++; }
   closeModal(); S.ui.filter = 'all'; toast(`Removed ${plural(n, 'competitor')}${gl ? ' · ' + gl : ''}. You can import the corrected file now.`);
+}
+/** v1.37: strip day and month from birth dates already stored (international events) */
+async function keepYearOnly() {
+  const list = DC.comps.filter(c => c.dob);
+  if (!list.length) return;
+  if (!(await confirmBox(`Keep only the year of birth for ${plural(list.length, 'competitor')}? The day and month are deleted for good; ages stay the same (birth-year rule, 31 Dec).`, 'Keep year only'))) return;
+  let n = 0;
+  for (const c of list) if (await guard(async () => { await S.store.update(P.pv(S.evId, c.id), { dob: '', birthYear: c.dob.slice(0, 4) }); await S.store.update(P.doc(S.evId, 'competitors', c.id), { age: KT.ageFromYear(c.dob.slice(0, 4), DC.asOf) }); return true; })) n++;
+  toast(`${plural(n, 'birth date')} reduced to the year`);
 }
 function ringForm(id) {
   const r = id ? S.d.rings[id] : {};

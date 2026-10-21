@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.36.0 Requirements & Design
+# Karate Event Tracker · v1.37.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -553,3 +553,14 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - Confirm → deletes each registration and its private details in this event, takes them off teams (a team left empty is deleted); the list returns to "All" and the toast suggests importing the corrected file. Re-importing then adds them again (people still registered are skipped as before).
 - Rules unchanged (directors already delete competitors, private details and teams of their events).
 - Verify: test/rmgroup.js (29 imported and tagged with the file name; groups offered by import / federation / region / country; 29 listed; untick one → Remove 28; confirm; 28 and their private details deleted; corrected file re-imports 28; scored competitor locked and kept when removing a dojo; drawn-bracket note; teams cleaned, empty teams deleted); regression.
+
+## 62. v1.37.0 — International events keep only the year of birth (2026-10-20)
+- **Why**: EU GDPR Art. 5(1)(c) data minimisation (personal data "adequate, relevant and limited to what is necessary") and 5(1)(e) storage limitation; WTKF international ages are by birth year (age on 31 Dec, e.g. 31 Dec 2026), so day and month are not needed. Many entrants are minors (Art. 8 gives children's data particular protection). Not legal advice.
+- **Scope**: events with level **International** only. US national, regional and local events keep full dates (day/month order rules unchanged).
+- **Import**: the 4-digit year is taken from the date / "Age" column (any order or separator; even an impossible date like 31.02.2008 gives 2008) or from a new **Year of birth** column (Year of birth / Birth year / YOB / Year born); day and month are never stored; no date-order question; preview shows "International event — year of birth only" and "Born (year)". Duplicate check by name + year + country (or dojo), so two athletes with the same name and birth year from different countries are both kept.
+- **Storage / age**: private `birthYear` (dob empty); `KT.ageOf` → event year − birth year (`KT.ageFromYear`); public `age` field computed the same; validation accepts a year.
+- **Competitor card**: "Year of birth" (4 digits) with "Born 2011 · age 15 in 2026 (on 31 Dec)".
+- **Existing data**: Competitors tab shows "N competitors have a full date of birth stored … **Keep year only**" → deletes day and month (keeps the year), ages unchanged.
+- **Export**: `birth_year` column instead of `dob`.
+- **Also**: Export CSV on the Vercel site (and local file) now downloads the file directly (with a BOM so Excel shows accents) instead of showing a copy box; claude.ai keeps its download prompt.
+- Verify: test/yob.js (Keep year only on the international demo; import of dd.mm.yyyy / mm/dd/yyyy / impossible date / blank → 2012, 2010, 2008, missing; stored year only, age 14; card year field, age 15; export birth_year downloaded as a file; local event still full dates); worlds2026, fedimport, dates; regression.

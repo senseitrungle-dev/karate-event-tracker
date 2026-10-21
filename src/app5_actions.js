@@ -205,8 +205,9 @@ const ACT = {
   'imp-run': () => runImport(),
   'export-comps': () => {
     const dir = isDirector();
-    const rows = [['first_name', 'last_name', 'gender', 'dob', 'age', 'rank', 'dojo', 'state', 'country', 'email', 'phone', 'emergency_name', 'emergency_phone', 'waiver', 'paid', 'checked_in', 'status', 'events']];
-    for (const c of DC.comps) rows.push([c.firstName, c.lastName, c.gender, dir ? c.dob : '', KT.ageOf(c, DC.asOf), KT.rankLabel(c.rank), c.dojo, c.state, c.country, dir ? c.email : '', dir ? c.phone : '', dir ? c.emergencyName : '', dir ? c.emergencyPhone : '', c.waiver ? 'yes' : 'no', c.feePaid ? 'yes' : 'no', c.checkedIn ? 'yes' : 'no', c.status, (c.events || []).map(e => KT.EVENT_TYPES[e] ? KT.EVENT_TYPES[e].label : e).join('; ')]);
+    const yo = yobOnly();
+    const rows = [['first_name', 'last_name', 'gender', yo ? 'birth_year' : 'dob', 'age', 'rank', 'dojo', 'state', 'country', 'email', 'phone', 'emergency_name', 'emergency_phone', 'waiver', 'paid', 'checked_in', 'status', 'events']];
+    for (const c of DC.comps) rows.push([c.firstName, c.lastName, c.gender, dir ? (yo ? c.birthYear || (c.dob || '').slice(0, 4) : c.dob || '') : '', KT.ageOf(c, DC.asOf), KT.rankLabel(c.rank), c.dojo, c.state, c.country, dir ? c.email : '', dir ? c.phone : '', dir ? c.emergencyName : '', dir ? c.emergencyPhone : '', c.waiver ? 'yes' : 'no', c.feePaid ? 'yes' : 'no', c.checkedIn ? 'yes' : 'no', c.status, (c.events || []).map(e => KT.EVENT_TYPES[e] ? KT.EVENT_TYPES[e].label : e).join('; ')]);
     saveFile(`${curEvent().name} - competitors.csv`, KT.toCSV(rows));
   },
   'export-results': () => {
@@ -228,6 +229,7 @@ const ACT = {
   'div-ncr': () => ncrForm(),
   'div-combine': el => combineForm(el.dataset.id),
   'rm-group': () => removeGroupForm(),
+  'keep-year': () => keepYearOnly(),
   'rg-all': el => { $$('#f-rmgroup input[name="rm"]:not(:disabled)').forEach(i => { i.checked = el.dataset.v === '1'; }); rgCount(); },
   'ent-open': el => { const id = el.dataset.id; if (DC.compBy[id]) compForm(id); else if (DC.teamBy[id]) teamForm(id); },
   'kyu-groups': () => kyuGroupsForm(),
@@ -460,6 +462,7 @@ async function writeAttendance(sid, present) {
 }
 let searchT = null;
 const INPUT = {
+  'yob-type': el => { const out = $('#c-yob-out'); if (!out) return; const t = el.value.trim(); out.textContent = /^\d{4}$/.test(t) && +t > 1900 ? yobRead(t) : t ? 'Type 4 digits, e.g. 2011' : 'International event: only the year is kept (age on 31 Dec)'; },
   'dob-type': el => { const out = $('#c-dob-out'); if (!out) return; const t = el.value.trim(), iso = dobParse(t);
     out.textContent = !t ? `Type the full year, e.g. ${dobOrderNow() === 'MDY' ? '07/27/2012' : '27/07/2012'}` : iso ? '= ' + dobRead(iso) : /^\d{1,2}\D\d{1,2}\D\d{0,3}$/.test(t) ? 'Keep typing the year (4 digits)…' : `Not a date yet — ${dobFmt()}`;
     out.style.color = t && !iso && !/^\d{1,2}\D\d{1,2}\D\d{0,3}$/.test(t) ? 'var(--bad)' : ''; },
@@ -610,7 +613,7 @@ function wire() {
       if (!f.dataset.id) openEvent(id);
       else {
         const asOf = v.ageAsOf || v.startDate, oldAsOf = old.ageAsOf || old.startDate;
-        if (asOf !== oldAsOf) for (const c of DC.comps) if (c.dob) await guard(() => S.store.update(P.doc(id, 'competitors', c.id), { age: KT.ageOn(c.dob, asOf) }));
+        if (asOf !== oldAsOf) for (const c of DC.comps) if (c.dob || c.birthYear) await guard(() => S.store.update(P.doc(id, 'competitors', c.id), { age: KT.ageOf(c, asOf) }));
       }
     }
     else if (k === 'comp') saveComp(f);
