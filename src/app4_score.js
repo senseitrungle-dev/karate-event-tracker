@@ -305,7 +305,7 @@ function pushLive() {
   liveT = setTimeout(() => {
     const br = S.d.brackets[M.did]; const m = br && br.matches[M.mid]; const d = loadDraft(M.key); const out = evaluate(dv, d, m, br);
     const phase = out.done ? out.method : out.phase === 'kettei' ? 'Kettei-sen' : out.phase === 'hantei' ? 'Hantei' : '';
-    S.store.set(P.live(S.evId, 'ringstate', rid), { did: M.did, mid: M.mid, seg: m ? KT.segOf(br, m) : '', score: out.pts || null, phase, log: liveLog(d), at: new Date().toISOString(), by: S.myId || '' }).catch(e => console.warn(e));
+    S.store.set(P.live(S.evId, 'ringstate', rid), Object.assign({ did: M.did, mid: M.mid, seg: m ? KT.segOf(br, m) : '', score: out.pts || null, phase, log: liveLog(d), at: new Date().toISOString(), by: S.myId || '' }, keepCall(rid, { did: M.did, mid: M.mid }))).catch(e => console.warn(e));
   }, 350);
 }
 function matchRing(did, mid) { const dv = DC.divBy[did], br = S.d.brackets[did]; return br && br.matches[mid] ? KT.ringOf(dv, KT.segOf(br, br.matches[mid]), mid) : dv.ringId; }
@@ -337,7 +337,7 @@ async function saveResult() {
   if (!ok) return;
   dropDraft(M.key);
   const rid = matchRing(M.did, M.mid);
-  if (S.d.rings[rid]) S.store.set(P.live(S.evId, 'ringstate', rid), { did: '', mid: '', at: new Date().toISOString() }).catch(() => {});
+  if (S.d.rings[rid]) S.store.set(P.live(S.evId, 'ringstate', rid), Object.assign({ did: '', mid: '', at: new Date().toISOString() }, keepCall(rid, { did: M.did, mid: M.mid }))).catch(() => {});
   toast(`${entName(winnerId)} wins · ${out.method}`);
   closeModal();
 }
@@ -436,6 +436,7 @@ function kpPushLive(clear) {
   const d = loadDraft(M.dkey), { t, a, k } = kpEval();
   const n = (d.s || []).filter(x => x !== '' && x != null).length;
   const doc = clear ? { did: '', mid: '', at: new Date().toISOString() } : { did: M.did, kp: M.key, seg: M.seg, kata: d.kata || '', score: t ? ((t.total + (a ? a.total : 0)) / k).toFixed(3) : '', log: [entName(M.ctx.id) + ' · ' + M.ctx.label, d.kata ? 'Kata: ' + d.kata : '', `Scores entered ${n}/${(S.d.brackets[M.did] || {}).judges || 6}`].filter(Boolean), at: new Date().toISOString(), by: S.myId || '' };
+  Object.assign(doc, keepCall(M.rid, { did: M.did, kp: M.key }));
   S.store.set(P.live(S.evId, 'ringstate', M.rid), doc).catch(e => console.warn(e));
 }
 async function kpSave() {

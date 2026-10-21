@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.37.0';
+  const VERSION = '1.39.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -334,6 +334,11 @@ const KT = (function () {
     const rest = shuffle(entrants.filter(e => !e.seed), rnd || Math.random);
     return seeded.concat(rest);
   }
+  /** Kata performance order (v1.38): entrants without a rank (seed) go first in random order; ranked entrants follow from the lowest rank to the highest, so rank 1 performs last. */
+  function kataOrder(pl, rnd) {
+    const un = shuffle(pl.filter(e => !(+e.seed > 0)), rnd || Math.random);
+    return un.concat(pl.filter(e => +e.seed > 0).sort((x, y) => y.seed - x.seed));
+  }
   /** Separation group of an entrant: country (International), region (National) or dojo (Regional/Local). */
   const grp = e => (e && (e.group || e.dojo)) || '';
   /** Seed numbers used by more than one entrant: {seed: [ids]} (empty when every seed is unique). */
@@ -627,13 +632,14 @@ const KT = (function () {
       br.kataRule = division.eventType !== 'ENBU';           // WTKF Kata 2-2-B (Enbu may repeat choreography)
       br.application = division.eventType === 'TKATA';      // Synchronized kata final adds Application (Bunkai)
       // seeded competitors perform last in their pool (Kata 1-6-B)
-      const seedLast = pl => pl.filter(e => !e.seed).concat(pl.filter(e => e.seed).sort((x, y) => y.seed - x.seed));
+      // v1.38: performance order is the reverse of the ranking — unranked (unseeded) entrants first in random order, then ranked ones from the lowest rank to the highest (seed 1 performs last)
+      const seedLast = pl => kataOrder(pl, rnd);
       if (ordered.length <= KP_ADV) br.kpFinal = seedLast(ordered).map(e => e.id);
       else if (division.wtkfCharts) {          // Exhibit A: charts of up to 12, 1/2/4/6 charts, champions at the bottom
         br.wtkf = true; br.poolSize = 12; br.kpPools = {};
-        wtkfKataCharts(ordered, rnd).forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(shuffle(pl.filter(e => !e.seed || e.seed > 4), rnd).concat(pl.filter(e => e.seed >= 1 && e.seed <= 4))).map(e => e.id); });
+        wtkfKataCharts(ordered, rnd).forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(pl).map(e => e.id); });
       }
-      else { const pools = ordered.length <= 8 ? [ordered] : makePools(ordered, br.poolSize, Math.max(2, Math.ceil(ordered.length / br.poolSize)), rnd); br.kpPools = {}; pools.forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(pl).map(e => e.id); }); }
+      else { const pools = ordered.length <= 12 ? [ordered] : makePools(ordered, br.poolSize, Math.max(2, Math.ceil(ordered.length / br.poolSize)), rnd); br.kpPools = {}; pools.forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(pl).map(e => e.id); }); }
       return br;
     }
     if (ordered.length < 2) return br;
@@ -734,16 +740,18 @@ const KT = (function () {
     let pools = br.kpPools || null, n = 1, finalIds = br.kpFinal || null, semiRows = null;
     while (pools) {
       const names = Object.keys(pools);
-      const single = names.length === 1;
+      // v1.39: a single pool of 9–12 is an elimination round whose top 8 go to the semifinal; a single pool of ≤8 is the semifinal (top 4 → final)
+      const big = names.length === 1 && pools[names[0]].length > 8;
+      const single = names.length === 1 && !big, cut = big ? 8 : KP_ADV;
       const rd = { n, type: single ? 'semi' : 'pool', pools: {}, complete: true, needRp: [] };
       const adv = [];
       for (const P of names) {
         const rows = pools[P].map(id => kpRow(br, n, id, null));
-        const rk = kpRank(rows, KP_ADV, false);
+        const rk = kpRank(rows, cut, false);
         rd.pools[P] = { order: pools[P], rows: rk.rows, complete: rk.complete, needRp: rk.needRp, scoredAll: rk.scoredAll };
         rd.needRp.push(...rk.needRp.map(id => ({ id, pool: P })));
         if (!rk.complete) rd.complete = false;
-        rk.rows.slice(0, KP_ADV).forEach((r, i) => { if (r.hansoku) return; r.advance = rk.complete; adv.push({ id: r.id, place: i, total: r.total, pool: P, seq: pools[P].indexOf(r.id) }); });
+        rk.rows.slice(0, cut).forEach((r, i) => { if (r.hansoku) return; r.advance = rk.complete; adv.push({ id: r.id, place: i, total: r.total, pool: P, seq: pools[P].indexOf(r.id) }); });
       }
       rounds.push(rd);
       if (!rd.complete) return { rounds, final: null, complete: false };
@@ -751,9 +759,9 @@ const KT = (function () {
       // next round: re-pool advancers by placing (A1,B1,C1.. then A2,B2..) in snake order, <= 8 per pool
       adv.sort((a, b) => a.place - b.place || b.total - a.total);
       // continue with pools until only eight remain, then one final-elimination pool (Kata 1-6-A)
-      let np = adv.length <= 8 ? 1 : Math.max(2, Math.ceil(adv.length / (br.poolSize || KP_POOL)));
+      let np = big || adv.length <= 8 ? 1 : Math.max(2, Math.ceil(adv.length / (br.poolSize || KP_POOL)));
       let next;
-      if (br.wtkf && (np = adv.length <= 8 ? 1 : kataChartCount(adv.length)) > 1 && names.length % np === 0) {
+      if (!big && br.wtkf && (np = adv.length <= 8 ? 1 : kataChartCount(adv.length)) > 1 && names.length % np === 0) {
         // Exhibit A: neighbouring charts merge (1+2 | 3+4, or 1–3 | 4–6): top 4 of each → 8 or 12 → final elimination of 8 → final 4
         const per = names.length / np; next = Array.from({ length: np }, () => []);
         adv.forEach(a => next[Math.floor(names.indexOf(a.pool) / per)].push(a));
@@ -1056,7 +1064,14 @@ const KT = (function () {
   function readyMatches(br, res) {
     res = res || resolve(br);
     const order = { P: 0, W: 1, L: 1, PO: 2, B: 3, GF: 4 };
-    return Object.values(br.matches).filter(m => res[m.id].status === 'ready')
+    // v1.39: the 3rd-place match (bronze / repechage final 3rd-4th) always runs before the championship (1st & 2nd)
+    const all = Object.values(br.matches);
+    const top = (st, pool) => Math.max(...all.filter(x => x.stage === st && (x.pool || '') === (pool || '')).map(x => x.round));
+    const isTitle = m => m.stage === 'GF' || ((m.stage === 'PO' || (m.stage === 'W' && !(br.elimPools && m.pool))) && m.round === top(m.stage, m.pool));
+    const third = all.filter(m => m.stage === 'B').map(m => m.id);
+    if (br.format === 'DES' && !br.elimPools) { const l = lbFinal(br, ''); if (l) third.push(l); }
+    const hold = third.some(id => res[id] && (res[id].status === 'pending' || res[id].status === 'ready'));
+    return all.filter(m => res[m.id].status === 'ready' && !(hold && isTitle(m)))
       .sort((x, y) => (order[x.stage] - order[y.stage]) || (x.round - y.round) || String(x.pool || '').localeCompare(String(y.pool || '')) || (x.idx - y.idx) || (x.stage === 'L') - (y.stage === 'L'));
   }
   /** Can the result of this match be changed? Not if any downstream match that uses it already has a result. */
@@ -1278,7 +1293,7 @@ const KT = (function () {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, ageFromYear, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
-    seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
+    seedOrder, nextPow2, orderEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS,
   };
 })();

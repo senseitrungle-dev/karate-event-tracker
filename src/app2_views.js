@@ -430,6 +430,7 @@ function ringBoardHTML(rings, withActions) {
     const openBtn = withActions && now && (rs.kp ? canScoreKP(rs.did, rs.kp) : canScoreMatch(rs.did, rs.mid)) ? `<div class="row" style="margin-top:8px"><button class="go" ${rs.kp ? `data-act="kp-score" data-did="${esc(rs.did)}" data-key="${esc(rs.kp)}"` : `data-act="score" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}"`}>Open scoresheet</button></div>` : '';
     return `<div class="card ring-card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${q.length ? '' : 'plain'}">${q.length} waiting</span></div>
       <div>${now || '<div class="small muted">Nothing on the mat.</div>'}${openBtn}</div>
+      ${withActions ? callPanelHTML(r) : calledHTML(r.id)}
       <div class="queue"><div class="label">Up next</div>${next.map(x => {
         const can = withActions && (x.kp ? canScoreKP(x.did, x.kp.key) : canScoreMatch(x.did, x.m.id));
         if (x.kp) return `<div class="q" ${kpTapAttrs(x.did, x.kp.key)} style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id))}</span></span>
@@ -446,7 +447,8 @@ function matHTML() {
   const mine = myRingIds();
   const r = role();
   let rings = DC.rings;
-  const sel = S.ui.ring;
+  // v1.39: a ring manager with one ring lands on that ring
+  const sel = !S.ui.ringPicked && !S.ui.ring && r === 'manager' && mine.length === 1 ? mine[0] : S.ui.ring;
   if (sel) rings = rings.filter(x => x.id === sel);
   const note = r === 'manager' ? `<div class="notice info">You manage ${mine.length ? mine.map(id => esc((S.d.rings[id] || {}).name || '')).join(', ') : 'no ring yet'}. You can score matches for divisions assigned to your ring${mine.length === 1 ? '' : 's'}.</div>`
     : r === 'viewer' ? `<div class="notice info">Live view. Scores update as ring managers record them.</div>` : '';

@@ -680,3 +680,11 @@ button.chip.ent-chip { cursor: pointer; min-height: 32px; }
 .rg-list { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
 label.rg-row { padding: 4px 0; align-items: flex-start; }
 label.rg-row.locked { opacity: .75; }
+/* v1.38 ring call */
+.callbox { margin-top: 10px; padding: 10px 12px; border: 1.5px dashed var(--line); border-radius: 10px; }
+.callbox.called { border: 2px solid var(--aka, #c0392b); background: color-mix(in srgb, var(--aka, #c0392b) 6%, transparent); }
+.callbox .announce { font-size: .95rem; font-weight: 600; margin: 6px 0 8px; line-height: 1.35; overflow-wrap: anywhere; }
+.check-in { display: flex; gap: 8px; align-items: center; padding: 6px 0; min-height: 40px; overflow-wrap: anywhere; }
+.check-in input { width: 22px; height: 22px; flex: none; }
+.check-in .belt { display: inline-block; vertical-align: middle; margin-right: 4px; }
+.called-line { margin-top: 8px; overflow-wrap: anywhere; }

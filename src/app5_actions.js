@@ -347,6 +347,11 @@ const ACT = {
   'save-result': () => saveResult(),
   'kp-score': el => openKP(el.dataset.did, el.dataset.key),
   'kp-save': () => kpSave(),
+  'ring-call': el => ringCall(el.dataset.rid, el.dataset.i),
+  'ring-recall': el => ringRecall(el.dataset.rid),
+  'ring-start': el => ringStart(el.dataset.rid),
+  'ring-uncall': el => ringUncall(el.dataset.rid),
+  'ring-speak': el => speakCall(el.dataset.rid),
   'kp-call': () => { kpPushLive(false); toast('Called — shown as “now on the mat” for this ring'); },
   'kp-clear': async () => {
     const M = S.modal; if (!(await confirmBox(`Clear this score for ${entName(M.ctx.id)}?`, 'Clear score', true))) return;
@@ -384,7 +389,8 @@ const CHANGE = {
   filter: el => { S.ui.filter = el.value; render(); },
   divFilter: el => { S.ui.divFilter = el.value; render(); },
   'div-order': el => { const ev = curEvent(); if (!ev || !isDirector()) return; const o = Object.assign({}, ev.divOrder || {}, { [el.dataset.k]: el.value }); guard(() => S.store.update(P.event(ev.id), { divOrder: o }), 'Division order saved'); },
-  ring: el => { S.ui.ring = el.value; render(); },
+  ring: el => { S.ui.ring = el.value; S.ui.ringPicked = true; render(); },
+  'call-present': el => ringPresent(el.dataset.rid, el.dataset.k, el.checked),
   bracketDiv: el => { S.ui.bracketDiv = el.value; render(); },
   session: el => { S.ui.session = el.value; render(); },
   'ev-kind': el => { $$('.ev-t').forEach(x => { x.hidden = el.value !== 'tournament'; }); },

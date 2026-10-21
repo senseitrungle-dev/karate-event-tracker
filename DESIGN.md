@@ -564,3 +564,23 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Export**: `birth_year` column instead of `dob`.
 - **Also**: Export CSV on the Vercel site (and local file) now downloads the file directly (with a BOM so Excel shows accents) instead of showing a copy box; claude.ai keeps its download prompt.
 - Verify: test/yob.js (Keep year only on the international demo; import of dd.mm.yyyy / mm/dd/yyyy / impossible date / blank → 2012, 2010, 2008, missing; stored year only, age 14; card year field, age 15; export birth_year downloaded as a file; local event still full dates); worlds2026, fedimport, dates; regression.
+
+## §63 Kata performance order & ring call (v1.38.0)
+**Requirement.** Kata pools perform in the reverse of the ranking: entrants without a rank go first in random order, then ranked entrants from the lowest rank to the highest (rank 1 last). The order is set automatically when the division is drawn. The director assigns divisions / pools / rounds to rings (unchanged). The ring manager works the ring's queue: announce (call) the next match or performance, verify the competitors are at the ring and ready, then start it.
+
+**Design.**
+- `KT.kataOrder(list, rnd)` — unseeded shuffled, then seeded by descending seed. Used for KP finals (≤4), standard pools and WTKF charts (all seeds now, not only 1–4). The rank is the division seed. Later rounds keep the score rule (lowest score first).
+- Ring call stored in `live/<ev>/ringstate/<ring>.call = {did, mid|kp, n, present:{a,b}|{c}, at, by}` — no rule change (ring managers already write their ring state). Score pushes keep a call for a different item (`keepCall`).
+- Mat tab ring card: "📣 Call to <ring>" for the first queued item not on the mat → announcement text (ring, division, round/pool, Aka/Shiro or kata competitor with dojo, on deck) with "Read aloud" (speech synthesis), "Call again" (counts calls; after 3, Ki-ken hint), "Cancel call", one "present & ready" tick per competitor. "Start" unlocks when all are ticked and the mat is free; it puts the item on the mat and opens the scoresheet / score card.
+- Spectators see a "Called" line under the ring's "On the mat".
+- Queue "Score" buttons remain as an override (e.g. director out of order).
+
+**Verify.** logic.test: kataOrder, KP final / pools / WTKF charts order. test/ringcall.js: call, announce, on-deck, recall count, check-in gating, spectator line, start → on the mat, calling ahead while busy, cancel, phone width.
+
+## §64 Kata rounds ≤12, 3rd place before the final, ring manager default (v1.39.0)
+**Requirement.** Kata pool of 9–12: round 1 → top 8 to the semifinal → top 4 to the final. 5–8: round 1 → top 4 to the final. The final kata must differ from the previous round's kata. In every bracket the 3rd-place match runs before the championship (1st & 2nd). A ring manager should have one place to run their ring.
+**Design.**
+- `generateBracket` KP: ≤12 entrants → one first-round pool (above 12 the pool size setting still applies). `kpState`: a single pool of more than 8 is an elimination round with cut 8 whose advancers form the semifinal pool; a single pool of ≤8 is the semifinal (cut 4). Also for WTKF single charts. Kata change rule (`kpKataCheck`, WTKF Kata 2-2-B) already blocks a final kata equal to the semifinal kata (not for Enbu).
+- `readyMatches`: championship matches (grand final, playoff final, main bracket final — not pool finals of pooled brackets) are held out of the queue while a bronze match (stage B) or the DES repechage final (3rd/4th) is still pending or ready.
+- Mat tab: a ring manager with exactly one ring opens on that ring (until they pick another in the ring selector).
+**Verify.** logic.test: 9/10/12 → pool, semi(8), final(4); 5/8 → semi, final; WTKF 11; final kata check; SE bronze before final; DES repechage final before final.

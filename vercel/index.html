@@ -689,16 +689,24 @@ button.chip.ent-chip { cursor: pointer; min-height: 32px; }
 .rg-list { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
 label.rg-row { padding: 4px 0; align-items: flex-start; }
 label.rg-row.locked { opacity: .75; }
+/* v1.38 ring call */
+.callbox { margin-top: 10px; padding: 10px 12px; border: 1.5px dashed var(--line); border-radius: 10px; }
+.callbox.called { border: 2px solid var(--aka, #c0392b); background: color-mix(in srgb, var(--aka, #c0392b) 6%, transparent); }
+.callbox .announce { font-size: .95rem; font-weight: 600; margin: 6px 0 8px; line-height: 1.35; overflow-wrap: anywhere; }
+.check-in { display: flex; gap: 8px; align-items: center; padding: 6px 0; min-height: 40px; overflow-wrap: anywhere; }
+.check-in input { width: 22px; height: 22px; flex: none; }
+.check-in .belt { display: inline-block; vertical-align: middle; margin-right: 4px; }
+.called-line { margin-top: 8px; overflow-wrap: anywhere; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.37.0 */
+<script>/* Karate Event Tracker v1.39.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.37.0';
+  const VERSION = '1.39.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -1028,6 +1036,11 @@ const KT = (function () {
     const rest = shuffle(entrants.filter(e => !e.seed), rnd || Math.random);
     return seeded.concat(rest);
   }
+  /** Kata performance order (v1.38): entrants without a rank (seed) go first in random order; ranked entrants follow from the lowest rank to the highest, so rank 1 performs last. */
+  function kataOrder(pl, rnd) {
+    const un = shuffle(pl.filter(e => !(+e.seed > 0)), rnd || Math.random);
+    return un.concat(pl.filter(e => +e.seed > 0).sort((x, y) => y.seed - x.seed));
+  }
   /** Separation group of an entrant: country (International), region (National) or dojo (Regional/Local). */
   const grp = e => (e && (e.group || e.dojo)) || '';
   /** Seed numbers used by more than one entrant: {seed: [ids]} (empty when every seed is unique). */
@@ -1321,13 +1334,14 @@ const KT = (function () {
       br.kataRule = division.eventType !== 'ENBU';           // WTKF Kata 2-2-B (Enbu may repeat choreography)
       br.application = division.eventType === 'TKATA';      // Synchronized kata final adds Application (Bunkai)
       // seeded competitors perform last in their pool (Kata 1-6-B)
-      const seedLast = pl => pl.filter(e => !e.seed).concat(pl.filter(e => e.seed).sort((x, y) => y.seed - x.seed));
+      // v1.38: performance order is the reverse of the ranking — unranked (unseeded) entrants first in random order, then ranked ones from the lowest rank to the highest (seed 1 performs last)
+      const seedLast = pl => kataOrder(pl, rnd);
       if (ordered.length <= KP_ADV) br.kpFinal = seedLast(ordered).map(e => e.id);
       else if (division.wtkfCharts) {          // Exhibit A: charts of up to 12, 1/2/4/6 charts, champions at the bottom
         br.wtkf = true; br.poolSize = 12; br.kpPools = {};
-        wtkfKataCharts(ordered, rnd).forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(shuffle(pl.filter(e => !e.seed || e.seed > 4), rnd).concat(pl.filter(e => e.seed >= 1 && e.seed <= 4))).map(e => e.id); });
+        wtkfKataCharts(ordered, rnd).forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(pl).map(e => e.id); });
       }
-      else { const pools = ordered.length <= 8 ? [ordered] : makePools(ordered, br.poolSize, Math.max(2, Math.ceil(ordered.length / br.poolSize)), rnd); br.kpPools = {}; pools.forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(pl).map(e => e.id); }); }
+      else { const pools = ordered.length <= 12 ? [ordered] : makePools(ordered, br.poolSize, Math.max(2, Math.ceil(ordered.length / br.poolSize)), rnd); br.kpPools = {}; pools.forEach((pl, i) => { br.kpPools[POOL_NAMES[i]] = seedLast(pl).map(e => e.id); }); }
       return br;
     }
     if (ordered.length < 2) return br;
@@ -1428,16 +1442,18 @@ const KT = (function () {
     let pools = br.kpPools || null, n = 1, finalIds = br.kpFinal || null, semiRows = null;
     while (pools) {
       const names = Object.keys(pools);
-      const single = names.length === 1;
+      // v1.39: a single pool of 9–12 is an elimination round whose top 8 go to the semifinal; a single pool of ≤8 is the semifinal (top 4 → final)
+      const big = names.length === 1 && pools[names[0]].length > 8;
+      const single = names.length === 1 && !big, cut = big ? 8 : KP_ADV;
       const rd = { n, type: single ? 'semi' : 'pool', pools: {}, complete: true, needRp: [] };
       const adv = [];
       for (const P of names) {
         const rows = pools[P].map(id => kpRow(br, n, id, null));
-        const rk = kpRank(rows, KP_ADV, false);
+        const rk = kpRank(rows, cut, false);
         rd.pools[P] = { order: pools[P], rows: rk.rows, complete: rk.complete, needRp: rk.needRp, scoredAll: rk.scoredAll };
         rd.needRp.push(...rk.needRp.map(id => ({ id, pool: P })));
         if (!rk.complete) rd.complete = false;
-        rk.rows.slice(0, KP_ADV).forEach((r, i) => { if (r.hansoku) return; r.advance = rk.complete; adv.push({ id: r.id, place: i, total: r.total, pool: P, seq: pools[P].indexOf(r.id) }); });
+        rk.rows.slice(0, cut).forEach((r, i) => { if (r.hansoku) return; r.advance = rk.complete; adv.push({ id: r.id, place: i, total: r.total, pool: P, seq: pools[P].indexOf(r.id) }); });
       }
       rounds.push(rd);
       if (!rd.complete) return { rounds, final: null, complete: false };
@@ -1445,9 +1461,9 @@ const KT = (function () {
       // next round: re-pool advancers by placing (A1,B1,C1.. then A2,B2..) in snake order, <= 8 per pool
       adv.sort((a, b) => a.place - b.place || b.total - a.total);
       // continue with pools until only eight remain, then one final-elimination pool (Kata 1-6-A)
-      let np = adv.length <= 8 ? 1 : Math.max(2, Math.ceil(adv.length / (br.poolSize || KP_POOL)));
+      let np = big || adv.length <= 8 ? 1 : Math.max(2, Math.ceil(adv.length / (br.poolSize || KP_POOL)));
       let next;
-      if (br.wtkf && (np = adv.length <= 8 ? 1 : kataChartCount(adv.length)) > 1 && names.length % np === 0) {
+      if (!big && br.wtkf && (np = adv.length <= 8 ? 1 : kataChartCount(adv.length)) > 1 && names.length % np === 0) {
         // Exhibit A: neighbouring charts merge (1+2 | 3+4, or 1–3 | 4–6): top 4 of each → 8 or 12 → final elimination of 8 → final 4
         const per = names.length / np; next = Array.from({ length: np }, () => []);
         adv.forEach(a => next[Math.floor(names.indexOf(a.pool) / per)].push(a));
@@ -1750,7 +1766,14 @@ const KT = (function () {
   function readyMatches(br, res) {
     res = res || resolve(br);
     const order = { P: 0, W: 1, L: 1, PO: 2, B: 3, GF: 4 };
-    return Object.values(br.matches).filter(m => res[m.id].status === 'ready')
+    // v1.39: the 3rd-place match (bronze / repechage final 3rd-4th) always runs before the championship (1st & 2nd)
+    const all = Object.values(br.matches);
+    const top = (st, pool) => Math.max(...all.filter(x => x.stage === st && (x.pool || '') === (pool || '')).map(x => x.round));
+    const isTitle = m => m.stage === 'GF' || ((m.stage === 'PO' || (m.stage === 'W' && !(br.elimPools && m.pool))) && m.round === top(m.stage, m.pool));
+    const third = all.filter(m => m.stage === 'B').map(m => m.id);
+    if (br.format === 'DES' && !br.elimPools) { const l = lbFinal(br, ''); if (l) third.push(l); }
+    const hold = third.some(id => res[id] && (res[id].status === 'pending' || res[id].status === 'ready'));
+    return all.filter(m => res[m.id].status === 'ready' && !(hold && isTitle(m)))
       .sort((x, y) => (order[x.stage] - order[y.stage]) || (x.round - y.round) || String(x.pool || '').localeCompare(String(y.pool || '')) || (x.idx - y.idx) || (x.stage === 'L') - (y.stage === 'L'));
   }
   /** Can the result of this match be changed? Not if any downstream match that uses it already has a result. */
@@ -1972,7 +1995,7 @@ const KT = (function () {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, ageFromYear, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
-    seedOrder, nextPow2, orderEntrants, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
+    seedOrder, nextPow2, orderEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS,
   };
 })();
@@ -5274,6 +5297,7 @@ function ringBoardHTML(rings, withActions) {
     const openBtn = withActions && now && (rs.kp ? canScoreKP(rs.did, rs.kp) : canScoreMatch(rs.did, rs.mid)) ? `<div class="row" style="margin-top:8px"><button class="go" ${rs.kp ? `data-act="kp-score" data-did="${esc(rs.did)}" data-key="${esc(rs.kp)}"` : `data-act="score" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}"`}>Open scoresheet</button></div>` : '';
     return `<div class="card ring-card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${q.length ? '' : 'plain'}">${q.length} waiting</span></div>
       <div>${now || '<div class="small muted">Nothing on the mat.</div>'}${openBtn}</div>
+      ${withActions ? callPanelHTML(r) : calledHTML(r.id)}
       <div class="queue"><div class="label">Up next</div>${next.map(x => {
         const can = withActions && (x.kp ? canScoreKP(x.did, x.kp.key) : canScoreMatch(x.did, x.m.id));
         if (x.kp) return `<div class="q" ${kpTapAttrs(x.did, x.kp.key)} style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id))}</span></span>
@@ -5290,7 +5314,8 @@ function matHTML() {
   const mine = myRingIds();
   const r = role();
   let rings = DC.rings;
-  const sel = S.ui.ring;
+  // v1.39: a ring manager with one ring lands on that ring
+  const sel = !S.ui.ringPicked && !S.ui.ring && r === 'manager' && mine.length === 1 ? mine[0] : S.ui.ring;
   if (sel) rings = rings.filter(x => x.id === sel);
   const note = r === 'manager' ? `<div class="notice info">You manage ${mine.length ? mine.map(id => esc((S.d.rings[id] || {}).name || '')).join(', ') : 'no ring yet'}. You can score matches for divisions assigned to your ring${mine.length === 1 ? '' : 's'}.</div>`
     : r === 'viewer' ? `<div class="notice info">Live view. Scores update as ring managers record them.</div>` : '';
@@ -6616,7 +6641,7 @@ function pushLive() {
   liveT = setTimeout(() => {
     const br = S.d.brackets[M.did]; const m = br && br.matches[M.mid]; const d = loadDraft(M.key); const out = evaluate(dv, d, m, br);
     const phase = out.done ? out.method : out.phase === 'kettei' ? 'Kettei-sen' : out.phase === 'hantei' ? 'Hantei' : '';
-    S.store.set(P.live(S.evId, 'ringstate', rid), { did: M.did, mid: M.mid, seg: m ? KT.segOf(br, m) : '', score: out.pts || null, phase, log: liveLog(d), at: new Date().toISOString(), by: S.myId || '' }).catch(e => console.warn(e));
+    S.store.set(P.live(S.evId, 'ringstate', rid), Object.assign({ did: M.did, mid: M.mid, seg: m ? KT.segOf(br, m) : '', score: out.pts || null, phase, log: liveLog(d), at: new Date().toISOString(), by: S.myId || '' }, keepCall(rid, { did: M.did, mid: M.mid }))).catch(e => console.warn(e));
   }, 350);
 }
 function matchRing(did, mid) { const dv = DC.divBy[did], br = S.d.brackets[did]; return br && br.matches[mid] ? KT.ringOf(dv, KT.segOf(br, br.matches[mid]), mid) : dv.ringId; }
@@ -6648,7 +6673,7 @@ async function saveResult() {
   if (!ok) return;
   dropDraft(M.key);
   const rid = matchRing(M.did, M.mid);
-  if (S.d.rings[rid]) S.store.set(P.live(S.evId, 'ringstate', rid), { did: '', mid: '', at: new Date().toISOString() }).catch(() => {});
+  if (S.d.rings[rid]) S.store.set(P.live(S.evId, 'ringstate', rid), Object.assign({ did: '', mid: '', at: new Date().toISOString() }, keepCall(rid, { did: M.did, mid: M.mid }))).catch(() => {});
   toast(`${entName(winnerId)} wins · ${out.method}`);
   closeModal();
 }
@@ -6747,6 +6772,7 @@ function kpPushLive(clear) {
   const d = loadDraft(M.dkey), { t, a, k } = kpEval();
   const n = (d.s || []).filter(x => x !== '' && x != null).length;
   const doc = clear ? { did: '', mid: '', at: new Date().toISOString() } : { did: M.did, kp: M.key, seg: M.seg, kata: d.kata || '', score: t ? ((t.total + (a ? a.total : 0)) / k).toFixed(3) : '', log: [entName(M.ctx.id) + ' · ' + M.ctx.label, d.kata ? 'Kata: ' + d.kata : '', `Scores entered ${n}/${(S.d.brackets[M.did] || {}).judges || 6}`].filter(Boolean), at: new Date().toISOString(), by: S.myId || '' };
+  Object.assign(doc, keepCall(M.rid, { did: M.did, kp: M.key }));
   S.store.set(P.live(S.evId, 'ringstate', M.rid), doc).catch(e => console.warn(e));
 }
 async function kpSave() {
@@ -8117,6 +8143,112 @@ async function setAdmin(id, on) {
   const cur = (S.access && S.access.admins) || [];
   await guard(() => S.store.set('meta/access', Object.assign({}, S.access || {}, { admins: on ? [...new Set(cur.concat(id))] : cur.filter(x => x !== id) })));
 }
+/* ===== v1.38 ring call: the ring manager announces the next queued match / performance, checks the competitors in at the ring, then starts it ===== */
+/** Identity of a queue item: {did, mid} for a match, {did, kp} for a kata performance. */
+function qRef(x) { return x.kp ? { did: x.did, kp: x.kp.key } : { did: x.did, mid: x.m.id }; }
+function sameRef(a, b) { return !!a && !!b && a.did === b.did && (a.kp || '') === (b.kp || '') && (a.mid || '') === (b.mid || ''); }
+/** Item currently on the mat for a ring (being scored). */
+function onMatRef(rs) { return rs && rs.did ? (rs.kp ? { did: rs.did, kp: rs.kp } : rs.mid ? { did: rs.did, mid: rs.mid } : null) : null; }
+/** True while the item on the mat is still unfinished (still in the ring's queue). */
+function ringBusy(rid) { const on = onMatRef(S.d.ringstate[rid]); return !!on && ringQueue(rid).some(x => sameRef(qRef(x), on)); }
+/** The call to keep when a ring-state document is rewritten: kept only while it is for a different item than the one going on the mat. */
+function keepCall(rid, ref) {
+  const rs = S.d.ringstate[rid], c = rs && rs.call;
+  if (!c || (ref && sameRef(c, ref))) return {};
+  return { call: c };
+}
+/** Who has to be at the ring for an item: [{k, color, id}] — Aka/Shiro for a match, one competitor (or team) for a kata performance. */
+function callSides(x) {
+  if (x.kp) return [{ k: 'c', color: 'kata', id: x.kp.id }];
+  return [{ k: 'a', color: 'Aka', id: x.r.a }, { k: 'b', color: 'Shiro', id: x.r.b }];
+}
+function callLabel(x) {
+  const dv = DC.divBy[x.did], br = S.d.brackets[x.did];
+  return `${dv ? dv.name : ''} · ${x.kp ? x.kp.label : KT.matchLabel(x.m, br)}`;
+}
+const whoText = id => `${entName(id)}${entDojo(id) ? ' (' + entDojo(id) + ')' : ''}`;
+/** Plain announcement text: what is called, then who is on deck. */
+function announceText(rid, x, deck) {
+  const ring = (S.d.rings[rid] || {}).name || 'Ring';
+  const sides = callSides(x).map(s => (x.kp ? '' : s.color + ': ') + whoText(s.id)).join('. ');
+  let t = `${ring}, now calling: ${callLabel(x)}. ${sides}.`;
+  if (deck) t += ` On deck: ${callSides(deck).map(s => entName(s.id)).join(' and ')}.`;
+  return t;
+}
+/** Queue of a ring without the item already on the mat. */
+function callQueue(rid) {
+  const rs = S.d.ringstate[rid], on = onMatRef(rs);
+  return ringQueue(rid).filter(x => !sameRef(qRef(x), on));
+}
+function canRunRing(rid) { return !S.readOnly && (isDirector() || myRingIds().includes(rid)); }
+/** Call panel on a ring card (Mat tab). */
+function callPanelHTML(r) {
+  if (!canRunRing(r.id)) return '';
+  const rs = S.d.ringstate[r.id], q = callQueue(r.id);
+  if (!q.length) return '';
+  const c = rs && rs.call;
+  const ci = c ? q.findIndex(x => sameRef(qRef(x), c)) : -1;
+  const busy = ringBusy(r.id);
+  if (ci < 0) {
+    const x = q[0];
+    return `<div class="callbox" data-rid="${esc(r.id)}"><div class="label">Next to call</div>
+      <div class="small"><b>${esc(callSides(x).map(s => entName(s.id)).join(' vs '))}</b> <span class="muted">· ${esc(callLabel(x))}</span></div>
+      <div class="row" style="margin-top:6px"><button class="go" data-act="ring-call" data-rid="${esc(r.id)}" data-i="0">📣 Call to ${esc(r.name)}</button></div>
+      ${busy ? '<div class="tiny muted" style="margin-top:4px">You can call the next one while the current match finishes.</div>' : ''}</div>`;
+  }
+  const x = q[ci], deck = q[ci + 1] || null, sides = callSides(x), pres = c.present || {};
+  const allIn = sides.every(s => pres[s.k]);
+  return `<div class="callbox called" data-rid="${esc(r.id)}"><div class="row between"><span class="label">Called${c.n > 1 ? ' × ' + c.n : ''}</span><span class="chip ${allIn ? 'ok' : 'warn'}">${allIn ? 'All present' : 'Check in at the ring'}</span></div>
+    <p class="announce" id="announce-${esc(r.id)}">${esc(announceText(r.id, x, deck))}</p>
+    <div class="stack" style="gap:4px">${sides.map(s => `<label class="check-in"><input type="checkbox" data-change="call-present" data-rid="${esc(r.id)}" data-k="${s.k}" ${pres[s.k] ? 'checked' : ''}> <span>${x.kp ? '' : `<span class="belt ${s.k}"></span>`}<b>${esc(entName(s.id))}</b> <span class="muted small">${esc(entDojo(s.id))}</span> — present &amp; ready</span></label>`).join('')}</div>
+    <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="primary" data-act="ring-start" data-rid="${esc(r.id)}" ${allIn && !busy ? '' : 'disabled'}>Start — open ${x.kp ? 'score card' : 'scoresheet'}</button>
+      <button data-act="ring-recall" data-rid="${esc(r.id)}">Call again</button><button data-act="ring-speak" data-rid="${esc(r.id)}" title="Read the announcement aloud">🔊 Read aloud</button><button class="ghost" data-act="ring-uncall" data-rid="${esc(r.id)}">Cancel call</button></div>
+    ${busy ? '<div class="tiny muted" style="margin-top:4px">Finish the match on the mat first.</div>' : ''}
+    ${!allIn && c.n >= 3 ? `<div class="notice warn small" style="margin-top:6px">Called ${c.n} times. If a competitor does not report, record Ki-ken on the ${x.kp ? 'score card' : 'scoresheet'} or ask the director.</div>` : ''}</div>`;
+}
+/** Short public line for spectators: who has been called to the ring. */
+function calledHTML(rid) {
+  const rs = S.d.ringstate[rid], c = rs && rs.call; if (!c) return '';
+  const x = callQueue(rid).find(y => sameRef(qRef(y), c)); if (!x) return '';
+  return `<div class="called-line small"><span class="chip aka">Called</span> ${esc(callSides(x).map(s => entName(s.id)).join(' vs '))} <span class="muted">· ${esc(callLabel(x))}</span></div>`;
+}
+async function writeCall(rid, call) {
+  const rs = Object.assign({}, S.d.ringstate[rid] || { did: '', mid: '' });
+  if (call) rs.call = call; else delete rs.call;
+  rs.at = new Date().toISOString();
+  await guard(() => S.store.set(P.live(S.evId, 'ringstate', rid), rs));
+}
+function ringCall(rid, i) {
+  const x = callQueue(rid)[+i || 0]; if (!x) return;
+  const call = Object.assign(qRef(x), { n: 1, present: {}, at: new Date().toISOString(), by: S.myId || '' });
+  writeCall(rid, call).then(() => { toast('Called — check the competitors in when they reach the ring'); speakCall(rid); });
+}
+function ringRecall(rid) {
+  const c = (S.d.ringstate[rid] || {}).call; if (!c) return;
+  writeCall(rid, Object.assign({}, c, { n: (c.n || 1) + 1, at: new Date().toISOString() })).then(() => speakCall(rid));
+}
+function ringPresent(rid, k, on) {
+  const c = (S.d.ringstate[rid] || {}).call; if (!c) return;
+  writeCall(rid, Object.assign({}, c, { present: Object.assign({}, c.present, { [k]: !!on }) }));
+}
+function ringUncall(rid) { writeCall(rid, null); }
+async function ringStart(rid) {
+  const rs = S.d.ringstate[rid] || {}, c = rs.call; if (!c) return;
+  if (ringBusy(rid)) { toast('Finish the match on the mat first', true); return; }
+  const x = callQueue(rid).find(y => sameRef(qRef(y), c)); if (!x) { ringUncall(rid); return; }
+  if (!callSides(x).every(s => (c.present || {})[s.k])) { toast('Check every competitor in first', true); return; }
+  const br = S.d.brackets[x.did];
+  const doc = x.kp ? { did: x.did, kp: x.kp.key, seg: x.kp.seg || '', kata: '', score: '', log: [], at: new Date().toISOString(), by: S.myId || '' }
+    : { did: x.did, mid: x.m.id, seg: KT.segOf(br, x.m), score: null, phase: '', log: [], at: new Date().toISOString(), by: S.myId || '' };
+  const ok = await guard(() => S.store.set(P.live(S.evId, 'ringstate', rid), doc));
+  if (!ok) return;
+  if (x.kp) { if (canScoreKP(x.did, x.kp.key)) openKP(x.did, x.kp.key); }
+  else if (canScoreMatch(x.did, x.m.id)) openScore(x.did, x.m.id);
+}
+function speakCall(rid) {
+  const el = document.getElementById('announce-' + rid); const t = el ? el.textContent : '';
+  try { if (t && window.speechSynthesis && window.SpeechSynthesisUtterance && !navigator.webdriver) { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(t)); } } catch (e) { /* no speech on this device */ }
+}
 /* ===== actions, subscriptions, init ===== */
 function subscribeEvents() {
   watchBranding();
@@ -8466,6 +8598,11 @@ const ACT = {
   'save-result': () => saveResult(),
   'kp-score': el => openKP(el.dataset.did, el.dataset.key),
   'kp-save': () => kpSave(),
+  'ring-call': el => ringCall(el.dataset.rid, el.dataset.i),
+  'ring-recall': el => ringRecall(el.dataset.rid),
+  'ring-start': el => ringStart(el.dataset.rid),
+  'ring-uncall': el => ringUncall(el.dataset.rid),
+  'ring-speak': el => speakCall(el.dataset.rid),
   'kp-call': () => { kpPushLive(false); toast('Called — shown as “now on the mat” for this ring'); },
   'kp-clear': async () => {
     const M = S.modal; if (!(await confirmBox(`Clear this score for ${entName(M.ctx.id)}?`, 'Clear score', true))) return;
@@ -8503,7 +8640,8 @@ const CHANGE = {
   filter: el => { S.ui.filter = el.value; render(); },
   divFilter: el => { S.ui.divFilter = el.value; render(); },
   'div-order': el => { const ev = curEvent(); if (!ev || !isDirector()) return; const o = Object.assign({}, ev.divOrder || {}, { [el.dataset.k]: el.value }); guard(() => S.store.update(P.event(ev.id), { divOrder: o }), 'Division order saved'); },
-  ring: el => { S.ui.ring = el.value; render(); },
+  ring: el => { S.ui.ring = el.value; S.ui.ringPicked = true; render(); },
+  'call-present': el => ringPresent(el.dataset.rid, el.dataset.k, el.checked),
   bracketDiv: el => { S.ui.bracketDiv = el.value; render(); },
   session: el => { S.ui.session = el.value; render(); },
   'ev-kind': el => { $$('.ev-t').forEach(x => { x.hidden = el.value !== 'tournament'; }); },

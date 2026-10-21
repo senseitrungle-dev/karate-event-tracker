@@ -323,7 +323,7 @@ const kpStr = id => 9.7 - parseInt(id.slice(1)) * 0.2;
 for (const n of [1, 3, 4, 5, 8, 9, 16, 17, 24, 25, 32]) {
   t('KP n=' + n, () => {
     const br = KT.generateBracket({ id: 'x', format: 'KP', scoring: { judges: 6 } }, ents(n), rng(n));
-    if (n > 4) { const ps = Object.values(br.kpPools); assert.ok(ps.every(p => p.length <= 8)); assert.equal(ps.length, Math.ceil(n / 8)); }
+    if (n > 4) { const ps = Object.values(br.kpPools); assert.ok(ps.every(p => p.length <= (n <= 12 ? 12 : 8))); assert.equal(ps.length, n <= 12 ? 1 : Math.ceil(n / 8)); }
     kpPlayAll(br, kpStr);
     const pl = KT.placings(br);
     assert.ok(pl.complete, 'complete');
@@ -687,6 +687,72 @@ t('Kata averages shown to 3 decimals (v1.33.1)', () => {
   const r = KT.scoresEval(['7.5', '7.6', '7.6', '7.5', '7.7'], ['7.4', '7.5', '7.5', '7.6', '7.4'], 5);
   assert.equal(r.method, 'Score 7.567–7.467');           // (7.6+7.6+7.5)/3 vs (7.5+7.5+7.4)/3
   assert.equal(KT.scoreTotal(['8.1', '8.2', '8.2', '8.3', '8.0'], 5).avg, 8.167);
+});
+t('Kata order: unranked first at random, ranked lowest→highest, rank 1 last (v1.38)', () => {
+  const pl = [{ id: 'r1', seed: 1 }, { id: 'u1' }, { id: 'r3', seed: 3 }, { id: 'u2' }, { id: 'r2', seed: 2 }, { id: 'u3' }, { id: 'r7', seed: 7 }];
+  const o = KT.kataOrder(pl, rng(5)).map(e => e.id);
+  assert.deepEqual(o.slice(3), ['r7', 'r3', 'r2', 'r1']);
+  assert.deepEqual(o.slice(0, 3).sort(), ['u1', 'u2', 'u3']);
+  const seen = new Set(); for (let k = 1; k < 40; k++) seen.add(KT.kataOrder(pl, rng(k)).map(e => e.id).slice(0, 3).join());
+  assert.ok(seen.size > 1, 'unranked order is random');
+  // KP final (≤4), pools, and WTKF charts all follow it
+  const fin = KT.generateBracket({ id: 'd', format: 'KP' }, [{ id: 'a', seed: 1 }, { id: 'b' }, { id: 'c', seed: 2 }, { id: 'd' }], rng(3));
+  assert.deepEqual(fin.kpFinal.slice(2), ['c', 'a']);
+  const many = Array.from({ length: 10 }, (_, i) => ({ id: 'e' + i, seed: i < 6 ? i + 1 : 0, dojo: 'D' + i }));
+  const pools = KT.generateBracket({ id: 'd', format: 'KP' }, many, rng(4));
+  for (const ids of Object.values(pools.kpPools)) {
+    const sd = ids.map(id => many.find(e => e.id === id).seed);
+    const firstSeed = sd.findIndex(x => x > 0);
+    assert.ok(firstSeed < 0 || sd.slice(firstSeed).every((x, i, a) => x > 0 && (i === 0 || a[i - 1] > x)), 'pool ' + sd.join(','));
+  }
+  const w = KT.generateBracket({ id: 'd', format: 'KP', wtkfCharts: true }, Array.from({ length: 20 }, (_, i) => ({ id: 'w' + i, seed: i < 8 ? i + 1 : 0, dojo: 'D' + i })), rng(6));
+  for (const ids of Object.values(w.kpPools)) {
+    const sd = ids.map(id => (+id.slice(1) < 8 ? +id.slice(1) + 1 : 0));
+    const f = sd.findIndex(x => x > 0);
+    assert.ok(f < 0 || sd.slice(f).every((x, i, a) => x > 0 && (i === 0 || a[i - 1] > x)), 'chart ' + sd.join(','));
+  }
+});
+t('KP ≤12: round 1 → top 8 semifinal → top 4 final; 5–8: round 1 → top 4 final (v1.39)', () => {
+  for (const n of [9, 10, 12]) {
+    const br = KT.generateBracket({ id: 'x', format: 'KP', scoring: { judges: 6 } }, ents(n), rng(n));
+    assert.equal(Object.keys(br.kpPools).length, 1);
+    kpPlayAll(br, kpStr);
+    const st = KT.kpState(br);
+    assert.deepEqual(st.rounds.map(r => r.type), ['pool', 'semi'], 'n=' + n);
+    assert.equal(Object.values(st.rounds[1].pools)[0].rows.length, 8);
+    assert.equal(st.final.rows.length, 4); assert.equal(KT.placings(br).gold, 'c1');
+  }
+  for (const n of [5, 8]) {
+    const br = KT.generateBracket({ id: 'x', format: 'KP', scoring: { judges: 6 } }, ents(n), rng(n));
+    kpPlayAll(br, kpStr);
+    const st = KT.kpState(br);
+    assert.deepEqual(st.rounds.map(r => r.type), ['semi']); assert.equal(st.final.n, 2); assert.equal(st.final.rows.length, 4);
+  }
+  const w = KT.generateBracket({ id: 'x', format: 'KP', wtkfCharts: true, scoring: { judges: 6 } }, ents(11), rng(2));
+  kpPlayAll(w, kpStr); assert.deepEqual(KT.kpState(w).rounds.map(r => r.type), ['pool', 'semi']);
+  // final kata must differ from the semifinal kata
+  const br = KT.generateBracket({ id: 'x', eventType: 'IKATA', format: 'KP', scoring: { judges: 6 } }, ents(10), rng(3));
+  kpPlayAll(br, kpStr, { kata: p => p.round === 3 ? 'K3' : 'Jion' });
+  const st = KT.kpState(br), fid = st.final.order[0];
+  assert.equal(st.final.n, 3);
+  delete br.scores['R3_' + fid];
+  assert.ok(/different kata/.test(KT.kpKataCheck(br, 'R3_' + fid, 'jion')));
+  assert.equal(KT.kpKataCheck(br, 'R3_' + fid, 'Bassai'), '');
+});
+t('3rd-place match always before the championship (v1.39)', () => {
+  const ready = br => KT.readyMatches(br).map(m => m.id);
+  const play = (br, id) => { br.results[id] = { winnerId: KT.resolve(br)[id].a, method: 'x', pts: { a: 1, b: 0 } }; };
+  const se = KT.generateBracket({ id: 'x', format: 'SE', bronze: 'match' }, ents(8), rng(1));
+  for (const id of ['W1-0', 'W1-1', 'W1-2', 'W1-3', 'W2-0', 'W2-1']) play(se, id);
+  assert.deepEqual(ready(se), ['B']);
+  play(se, 'B'); assert.deepEqual(ready(se), ['W3-0']);
+  const des = KT.generateBracket({ id: 'x', format: 'DES' }, ents(8), rng(2));
+  for (let g = 0; g < 50; g++) { const r = KT.readyMatches(des); if (!r.length) break; const m = r[0];
+    const res = KT.resolve(des);
+    const isFinal = m.stage === 'W' && m.round === Math.max(...Object.values(des.matches).filter(x => x.stage === 'W').map(x => x.round));
+    if (isFinal) assert.ok(Object.values(des.matches).filter(x => x.stage === 'L').every(x => ['done', 'void', 'bye', 'skip'].includes(res[x.id].status)), 'repechage final first');
+    play(des, m.id); }
+  assert.ok(KT.placings(des).complete);
 });
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
