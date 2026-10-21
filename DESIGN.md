@@ -584,3 +584,9 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - `readyMatches`: championship matches (grand final, playoff final, main bracket final — not pool finals of pooled brackets) are held out of the queue while a bronze match (stage B) or the DES repechage final (3rd/4th) is still pending or ready.
 - Mat tab: a ring manager with exactly one ring opens on that ring (until they pick another in the ring selector).
 **Verify.** logic.test: 9/10/12 → pool, semi(8), final(4); 5/8 → semi, final; WTKF 11; final kata check; SE bronze before final; DES repechage final before final.
+
+## §65 Fix: events and people missing after v1.39 deploy (v1.39.1)
+- **Locate**: after v1.38–v1.39 was pushed, the Vercel site showed no events and no users.
+- **Diagnose**: commit 556ac2c replaced `vercel/firebase-config.js` with the example template (`window.KT_FIREBASE_CONFIG_EXAMPLE`, `YOUR_PROJECT`). With no `window.KT_FIREBASE_CONFIG` the app silently fell back to local mode (this browser's empty storage). The data in Firebase project `karate-event-webapp` was never touched.
+- **Fix**: `vercel/firebase-config.js` restored from v1.37. On a real web host (not a file or localhost / *.localhost / *.test) with the Firebase build loaded, a missing or placeholder config now shows the sign-in screen's "not connected to your Firebase project" notice (sign-in disabled) instead of local mode, saying the data is safe in Firebase. Release check `test/config.js` (now part of `npm test`) fails if the config file is not the real project.
+- **Verify**: test/config.js; test/hosted.js (vercel.app with example file / no file / placeholders → notice, no local mode; development host → local mode allowed); unit 133; signin, fb, e2e, ringcall, public, access, emailsignin, about.

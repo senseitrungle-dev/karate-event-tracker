@@ -654,6 +654,8 @@ async function init() {
   parsePublic(); loadMyReqs();
   wire();
   render();
+  // v1.39.1: the hosted (Vercel) build must never fall back to an empty local store because its Firebase config is missing or still the example.
+  if (window.firebase && fbConfigBad(window.KT_FIREBASE_CONFIG) && hostedSite()) { FB.needSignIn = true; FB.cfgMissing = true; S.store = { mode: 'firebase' }; render(); return; }
   if (window.KT_FIREBASE_CONFIG && window.firebase) {
     try { if (!(await initFirebase(window.KT_FIREBASE_CONFIG))) return; }
     catch (e) { console.error(e); S.store = LocalStore(); toast('Could not reach Firebase. Working in local mode.', true); }

@@ -699,14 +699,14 @@ label.rg-row.locked { opacity: .75; }
 .called-line { margin-top: 8px; overflow-wrap: anywhere; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.39.0 */
+<script>/* Karate Event Tracker v1.39.1 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.39.0';
+  const VERSION = '1.39.1';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -4815,6 +4815,8 @@ function fbAuthHelp(e, via) {
 function fbProvider() { const pr = new firebase.auth.GoogleAuthProvider(); if (pr.setCustomParameters) pr.setCustomParameters({ prompt: 'select_account' }); return pr; }
 async function fbSignIn() { try { await FB.auth.signInWithPopup(fbProvider()); location.reload(); } catch (e) { console.error(e); toast(fbAuthHelp(e, 'google'), true); } }
 /** True when firebase-config.js still has the example placeholders. */
+/** True on a real web host (not a local file or a development host), where local mode would hide the real database. */
+function hostedSite() { const h = location.hostname; return /^https?:$/.test(location.protocol) && !!h && !/^(localhost|127\.0\.0\.1|\[::1\])$|\.(localhost|test)$/.test(h); }
 function fbConfigBad(cfg) { return !cfg || !cfg.projectId || /YOUR_/.test(String(cfg.apiKey || '') + String(cfg.projectId)); }
 async function fbSignOut() { await FB.auth.signOut(); location.reload(); }
 async function fbClaimDirector() {
@@ -4847,7 +4849,7 @@ function fbSignInHTML() {
   const bad = fbConfigBad(window.KT_FIREBASE_CONFIG), dis = bad ? 'disabled' : '';
   return `<div class="card stack signin-card" style="margin:40px auto 0;max-width:460px"><div class="mark-lg" style="margin:0 auto"></div><h2 style="text-align:center">Sign in</h2>
     <p class="muted" style="text-align:center">For tournament directors and ring managers. What you can do depends on the role you were given.</p>
-    ${bad ? `<p class="notice bad small" id="cfg-bad">This site is not connected to your Firebase project yet: <b>vercel/firebase-config.js</b> still has the example values. Set <code>window.KT_FIREBASE_CONFIG</code> to your web app config (Firebase → Project settings → Your apps), commit and push.</p>` : ''}
+    ${bad ? `<p class="notice bad small" id="cfg-bad">This site is not connected to your Firebase project yet: <b>vercel/firebase-config.js</b> is missing or still has the example values, so no events or people can be shown (they are safe in Firebase). Set <code>window.KT_FIREBASE_CONFIG</code> to your web app config (Firebase → Project settings → Your apps), commit and push.</p>` : ''}
     <button class="primary" data-act="fb-signin" ${dis}>Sign in with Google</button>
     <p class="tiny muted" style="text-align:center;margin-top:-4px">Gmail and Google Workspace accounts</p>
     <div class="or-line"><span>or with any email</span></div>
@@ -8905,6 +8907,8 @@ async function init() {
   parsePublic(); loadMyReqs();
   wire();
   render();
+  // v1.39.1: the hosted (Vercel) build must never fall back to an empty local store because its Firebase config is missing or still the example.
+  if (window.firebase && fbConfigBad(window.KT_FIREBASE_CONFIG) && hostedSite()) { FB.needSignIn = true; FB.cfgMissing = true; S.store = { mode: 'firebase' }; render(); return; }
   if (window.KT_FIREBASE_CONFIG && window.firebase) {
     try { if (!(await initFirebase(window.KT_FIREBASE_CONFIG))) return; }
     catch (e) { console.error(e); S.store = LocalStore(); toast('Could not reach Firebase. Working in local mode.', true); }

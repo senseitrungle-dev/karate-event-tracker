@@ -162,6 +162,8 @@ function fbAuthHelp(e, via) {
 function fbProvider() { const pr = new firebase.auth.GoogleAuthProvider(); if (pr.setCustomParameters) pr.setCustomParameters({ prompt: 'select_account' }); return pr; }
 async function fbSignIn() { try { await FB.auth.signInWithPopup(fbProvider()); location.reload(); } catch (e) { console.error(e); toast(fbAuthHelp(e, 'google'), true); } }
 /** True when firebase-config.js still has the example placeholders. */
+/** True on a real web host (not a local file or a development host), where local mode would hide the real database. */
+function hostedSite() { const h = location.hostname; return /^https?:$/.test(location.protocol) && !!h && !/^(localhost|127\.0\.0\.1|\[::1\])$|\.(localhost|test)$/.test(h); }
 function fbConfigBad(cfg) { return !cfg || !cfg.projectId || /YOUR_/.test(String(cfg.apiKey || '') + String(cfg.projectId)); }
 async function fbSignOut() { await FB.auth.signOut(); location.reload(); }
 async function fbClaimDirector() {
@@ -194,7 +196,7 @@ function fbSignInHTML() {
   const bad = fbConfigBad(window.KT_FIREBASE_CONFIG), dis = bad ? 'disabled' : '';
   return `<div class="card stack signin-card" style="margin:40px auto 0;max-width:460px"><div class="mark-lg" style="margin:0 auto"></div><h2 style="text-align:center">Sign in</h2>
     <p class="muted" style="text-align:center">For tournament directors and ring managers. What you can do depends on the role you were given.</p>
-    ${bad ? `<p class="notice bad small" id="cfg-bad">This site is not connected to your Firebase project yet: <b>vercel/firebase-config.js</b> still has the example values. Set <code>window.KT_FIREBASE_CONFIG</code> to your web app config (Firebase → Project settings → Your apps), commit and push.</p>` : ''}
+    ${bad ? `<p class="notice bad small" id="cfg-bad">This site is not connected to your Firebase project yet: <b>vercel/firebase-config.js</b> is missing or still has the example values, so no events or people can be shown (they are safe in Firebase). Set <code>window.KT_FIREBASE_CONFIG</code> to your web app config (Firebase → Project settings → Your apps), commit and push.</p>` : ''}
     <button class="primary" data-act="fb-signin" ${dis}>Sign in with Google</button>
     <p class="tiny muted" style="text-align:center;margin-top:-4px">Gmail and Google Workspace accounts</p>
     <div class="or-line"><span>or with any email</span></div>
