@@ -691,3 +691,12 @@ label.rg-row.locked { opacity: .75; }
 .check-in input { width: 22px; height: 22px; flex: none; }
 .check-in .belt { display: inline-block; vertical-align: middle; margin-right: 4px; }
 .called-line { margin-top: 8px; overflow-wrap: anywhere; }
+/* v1.41: back to the match from the bracket; kata used + score beside the name */
+.back-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; margin-bottom: 12px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--panel); }
+.back-bar.end { margin: 12px 0 0; }
+.back-bar .small { min-width: 0; overflow-wrap: anywhere; }
+.sub-btn { margin-left: 4px; padding: 2px 8px; min-height: 0; vertical-align: baseline; }
+.kata-used { font-size: .74rem; font-style: italic; color: var(--ink-2); overflow-wrap: anywhere; }
+.kp-line { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-top: 2px; }
+.kp-line .kp-sc { font: 700 .85rem var(--f-mono); font-feature-settings: "tnum" 1; color: var(--ink); }
+table.kp tr.live td { background: color-mix(in srgb, var(--ai-soft) 60%, transparent); }
