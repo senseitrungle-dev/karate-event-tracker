@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.41.0';
+  const VERSION = '1.42.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -679,8 +679,8 @@ const KT = (function () {
      Pools of up to 8; every competitor performs once per round and is scored by N judges (0–10).
      With 5+ judges the highest and lowest score are dropped from the total.
      Top 4 of each pool advance; when a round has a single pool it is the semifinal and its top 4
-     reach the final. Final: must use a different kata than in the semifinal; semifinal total is
-     carried and added to the final total. Ties: add back the dropped scores (sum of all), then re-perform. */
+     reach the final. Final: must use a different kata than in the semifinal (final elimination round); semifinal total is
+     carried and added to the final total. v1.42: earlier rounds (and the semifinal) may repeat the previous round's kata. Ties: add back the dropped scores (sum of all), then re-perform. */
   function kpSheet(entry, judges) {
     if (!entry) return null;
     if (entry.hansoku) return { kata: entry.kata || '', total: 0, all: 0, avg: 0, hansoku: true };
@@ -892,11 +892,10 @@ const KT = (function () {
     const n = +m[1], id = m[2], S = br.scores || {};
     if (m[3]) { const tied = S[kpKey(n, id)]; return tied && norm(tied.kata) === norm(kata) ? `Kettei-sen needs a different kata than ${tied.kata}.` : ''; }
     const st = kpState(br);
-    const isFinal = st.final && st.final.n === n;
-    const rd = st.rounds.find(r => r.n === n);
-    if (!isFinal && !(rd && rd.type === 'semi')) return '';
+    // v1.42: only the final four must change kata from the final elimination round (semifinal), whose score is carried to the final
+    if (!(st.final && st.final.n === n && st.final.carried)) return '';
     const prev = S[kpKey(n - 1, id)];
-    if (prev && norm(prev.kata) === norm(kata)) return `${isFinal ? 'The final' : 'The semifinal'} needs a different kata than the previous round (${prev.kata}).`;
+    if (prev && norm(prev.kata) === norm(kata)) return `The final needs a different kata than the final elimination round (${prev.kata}).`;
     return '';
   }
   function kpProgress(br) {

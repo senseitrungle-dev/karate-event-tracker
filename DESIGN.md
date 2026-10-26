@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.41.0 Requirements & Design
+# Karate Event Tracker · v1.42.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -610,3 +610,11 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - Head-to-head kata (flags or scores; e.g. junior round robin, kyu): each side's kata can always be recorded. It is a list pick when the division has an allowed-kata list (NCR), otherwise free text with WTKF suggestions. It is stored in `result.detail.kata` for both methods. `bmHTML` shows the kata under the name and the score beside it (flags count; scores to 3 decimals).
 - Kata score pools (KP) table: the competitor cell shows "<kata> <score of this performance>" under the name (the separate Kata column is folded in). The Score column keeps the total. The performance on the mat is highlighted.
 **Verify.** test/bracketback.js (mat card → bracket → back; Brackets tab opened normally has no back bar; KP and head-to-head kata show kata + score; score card → bracket → back reopens it with the typed kata; kumite clock kept and paused; phone width). Unit 134; e2e set, ringcall, matnow, matready, v117, winner, timeup, wtkfcharts.
+
+## §68 Kata change rule only between the final elimination round and the final four (v1.42.0)
+**Requirement.** The kata in the final elimination round (the round before the final four, i.e. the semifinal of 8) must be different from the kata performed in the final four round, and its score is carried forward to the final. Otherwise a round's kata does not have to differ from the previous elimination round's.
+**Design.**
+- `kpKataCheck`: the only kata-change check (besides Kettei-sen, which still needs a different kata than the tied performance) is for the final round when it carries the semifinal score (`st.final.carried`). The final four performer's kata must differ from their final-elimination kata. The semifinal no longer has to differ from the round before it, and no earlier elimination round has to differ from its previous round. With 4 or fewer entrants there is a single final round and nothing to compare.
+- The carry is unchanged: final total = final elimination (semifinal) score + final score.
+- Texts: KP bracket description; the final score card names the final-elimination kata and the carried score; the semifinal score card says its score is carried to the final four and any kata may be used.
+**Verify.** logic.test (10 entrants: semifinal may repeat R1 kata, final may not repeat the semifinal kata, carry = semifinal score; 16 entrants (several pools → semifinal): same; 4 entrants: no check). e2e (semifinal same kata allowed, final same kata blocked), v15, v117, cloud, fb, wtkfcharts, worlds2026, bracketback and the rest of the e2e set.

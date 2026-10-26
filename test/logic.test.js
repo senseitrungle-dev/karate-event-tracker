@@ -738,6 +738,25 @@ t('KP ≤12: round 1 → top 8 semifinal → top 4 final; 5–8: round 1 → top
   delete br.scores['R3_' + fid];
   assert.ok(/different kata/.test(KT.kpKataCheck(br, 'R3_' + fid, 'jion')));
   assert.equal(KT.kpKataCheck(br, 'R3_' + fid, 'Bassai'), '');
+  // v1.42: the final elimination round (semifinal) may repeat the earlier round's kata; its score is carried to the final
+  const sid = st.rounds[1].pools.A.order[0];
+  assert.equal(st.rounds[1].type, 'semi');
+  assert.equal(KT.kpKataCheck(br, 'R2_' + sid, 'jion'), '');
+  const fr = st.final.rows.find(r => r.id === fid);
+  assert.equal(fr.carry, st.rounds[1].pools.A.rows.find(r => r.id === fid).own);
+  // several pools → semifinal: same kata allowed in the semifinal, not in the final
+  const big = KT.generateBracket({ id: 'x', eventType: 'IKATA', format: 'KP', scoring: { judges: 6 } }, ents(16), rng(4));
+  kpPlayAll(big, kpStr, { kata: p => p.round >= 3 ? 'K' + p.round : 'Jion' });
+  const bs = KT.kpState(big), semiN = bs.rounds.find(r => r.type === 'semi').n;
+  assert.equal(bs.final.n, semiN + 1); assert.ok(bs.final.carried);
+  const s1 = bs.rounds.find(r => r.type === 'semi').pools.A.order[0];
+  assert.equal(KT.kpKataCheck(big, 'R' + semiN + '_' + s1, 'jion'), '');
+  const f1 = bs.final.order[0]; const keep = big.scores['R' + bs.final.n + '_' + f1]; delete big.scores['R' + bs.final.n + '_' + f1];
+  assert.ok(/final elimination round/.test(KT.kpKataCheck(big, 'R' + bs.final.n + '_' + f1, big.scores['R' + semiN + '_' + f1].kata)));
+  big.scores['R' + bs.final.n + '_' + f1] = keep;
+  // 4 or fewer: a single final round, no previous kata to differ from
+  const four = KT.generateBracket({ id: 'x', eventType: 'IKATA', format: 'KP', scoring: { judges: 6 } }, ents(4), rng(5));
+  assert.equal(KT.kpKataCheck(four, 'R1_' + KT.kpState(four).final.order[0], 'Jion'), '');
 });
 t('3rd-place match always before the championship (v1.39)', () => {
   const ready = br => KT.readyMatches(br).map(m => m.id);

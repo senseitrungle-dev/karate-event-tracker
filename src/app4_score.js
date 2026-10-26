@@ -358,7 +358,8 @@ function kpContext(br, key) {
   if (isFinal && st.final.carried && carry == null) {
     const semi = st.rounds[st.rounds.length - 1]; const P = Object.keys(semi.pools)[0]; const r = semi.pools[P].rows.find(x => x.id === id); carry = r ? r.own : null;
   }
-  return { n, id, rp, label: label + (rp ? ' · Kettei-sen' : ''), isFinal, semiKata, carry };
+  const semi = !isFinal && (st.rounds.find(r => r.n === n) || {}).type === 'semi';   // final elimination round: its score carries to the final
+  return { n, id, rp, label: label + (rp ? ' · Kettei-sen' : ''), isFinal, semiKata, carry, semi };
 }
 function kpKept(br) { const J = br.judges || 6; return J >= 5 ? J - 2 : J; }
 const KATA_LIST = KT.WTKF_KATA.concat(['Heian Shodan', 'Heian Nidan', 'Heian Sandan', 'Heian Yondan', 'Heian Godan', 'Tekki Shodan', 'Tekki Nidan', 'Tekki Sandan']);
@@ -383,7 +384,7 @@ function openKP(did, key) {
   const body = `${officialsHTML(rid, 'kata', positions, d.officials, editable)}<div class="corner" style="background:var(--ai-soft);color:var(--ink)"><div class="label">${esc(ctx.label)}</div><div class="who">${esc(entName(ctx.id))}</div><div class="tiny muted">${esc(entDojo(ctx.id))}</div></div>
     <label class="f ${br.kataRule ? 'req' : ''}"><span>${kataLabel}</span><input id="kp-kata" data-input="kp-kata" value="${esc(d.kata || '')}" placeholder="${br.kataRule ? 'e.g. Bassai Dai' : ''}" ${dis} list="kata-list">
       <datalist id="kata-list">${br.kataRule ? KATA_LIST.map(k => `<option value="${k}">`).join('') : ''}</datalist></label>
-    ${ctx.rp ? `<p class="small">Kettei-sen: ${br.kataRule ? 'a different kata than the one that tied; ' : ''}this score only breaks the tie and is not added to the total.</p>` : ctx.isFinal && ctx.semiKata && br.kataRule ? `<p class="small">Semifinal kata: <b>${esc(ctx.semiKata)}</b> — the final needs a different kata.</p>` : ''}
+    ${ctx.rp ? `<p class="small">Kettei-sen: ${br.kataRule ? 'a different kata than the one that tied; ' : ''}this score only breaks the tie and is not added to the total.</p>` : ctx.isFinal && ctx.semiKata && br.kataRule ? `<p class="small">Final elimination (semifinal) kata: <b>${esc(ctx.semiKata)}</b> — the final needs a different kata. The semifinal score${ctx.carry != null ? ` (${(ctx.carry / kpKept(br)).toFixed(3)})` : ''} is carried forward and added to the final score.</p>` : ctx.semi && !ctx.rp ? `<p class="small">Final elimination round: this score is carried forward to the final four${br.kataRule ? ', who must then perform a different kata. Any kata may be used here, even the one from the previous round' : ''}.</p>` : ''}
     ${row('s', withApp ? 'Kata scores (0.0–10.0)' : `Judges’ scores (0.0–10.0)${J >= 5 ? ' · highest and lowest dropped, average of the rest' : ''}`)}
     ${withApp ? row('app', 'Application (Bunkai) scores') : ''}
     <label class="check"><input type="checkbox" id="kp-hansoku" data-change="kp-hansoku" ${d.hansoku ? 'checked' : ''} ${dis}> Han-soku (zero card — scored 0)</label>
