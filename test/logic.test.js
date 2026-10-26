@@ -758,6 +758,18 @@ t('KP ≤12: round 1 → top 8 semifinal → top 4 final; 5–8: round 1 → top
   const four = KT.generateBracket({ id: 'x', eventType: 'IKATA', format: 'KP', scoring: { judges: 6 } }, ents(4), rng(5));
   assert.equal(KT.kpKataCheck(four, 'R1_' + KT.kpState(four).final.order[0], 'Jion'), '');
 });
+t('kpPrevious: previous round kata and average (v1.43)', () => {
+  const br = KT.generateBracket({ id: 'x', eventType: 'IKATA', format: 'KP', scoring: { judges: 6 } }, ents(10), rng(3));
+  kpPlayAll(br, kpStr, { kata: p => 'K' + p.round });
+  const st = KT.kpState(br), fid = st.final.order[0];
+  const p = KT.kpPrevious(br, 'R3_' + fid);
+  const semi = st.rounds[1].pools.A.rows.find(r => r.id === fid);
+  assert.equal(p.n, 2); assert.equal(p.label, 'Semifinal'); assert.equal(p.kata, 'K2');
+  assert.equal(p.avg, Math.round(semi.own / 4 * 1000) / 1000);
+  assert.equal(KT.kpPrevious(br, 'R2_' + fid).label, 'Elimination round 1');
+  assert.equal(KT.kpPrevious(br, 'R1_' + fid), null);
+  assert.equal(KT.kpPrevious(br, 'R1_' + fid + '_rp').kata, 'K1');   // Kettei-sen: the tied performance
+});
 t('3rd-place match always before the championship (v1.39)', () => {
   const ready = br => KT.readyMatches(br).map(m => m.id);
   const play = (br, id) => { br.results[id] = { winnerId: KT.resolve(br)[id].a, method: 'x', pts: { a: 1, b: 0 } }; };

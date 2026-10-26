@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.42.0 Requirements & Design
+# Karate Event Tracker · v1.43.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -618,3 +618,11 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - The carry is unchanged: final total = final elimination (semifinal) score + final score.
 - Texts: KP bracket description; the final score card names the final-elimination kata and the carried score; the semifinal score card says its score is carried to the final four and any kata may be used.
 **Verify.** logic.test (10 entrants: semifinal may repeat R1 kata, final may not repeat the semifinal kata, carry = semifinal score; 16 entrants (several pools → semifinal): same; 4 entrants: no check). e2e (semifinal same kata allowed, final same kata blocked), v15, v117, cloud, fb, wtkfcharts, worlds2026, bracketback and the rest of the e2e set.
+
+## §69 Previous kata beside the competitor on the mat; kata bracket newest round first (v1.43.0)
+**Requirement.** On the mat card and the scoresheet, the competitor on the mat shows the kata they used in the previous round and its average score, next to their name. The kata bracket shows the current round first, then the previous rounds from the most recent to the earliest.
+**Design.**
+- `KT.kpPrevious(br, key)` → `{ n, label, kata, avg, hansoku }` for the competitor's previous performance: the previous round, or for a Kettei-sen the tied performance in the same round. `avg` is the kata average (kept scores / kept judges, 3 decimals). It returns null in the first round.
+- `prevKataHTML` / `kpPrevHTML` / `h2hPrevHTML` (app2_views): "Semifinal: *Bassai Dai* · 6.900" under the name, or Han-soku. It is shown on the mat card's "on the mat" item and on the kata score card's competitor block. For head-to-head kata, each side's latest finished match in the division (by result time) shows its kata and score (flags count, or scores to 3 decimals) on the mat card and the scoresheet corners.
+- `kpViewHTML`: the round sections are built in order, then output reversed, so the final (or the last round reached) comes first, marked "· current round" while unfinished.
+**Verify.** logic.test (kpPrevious: final → semifinal kata + avg, semifinal → elimination round 1, round 1 → none, Kettei-sen → tied performance). test/prevkata.js (5 entrants: bracket shows Final · current round then Semifinal; final score card and mat card show "Semifinal: Bassai Dai · 6.900"; first round: current round first, no previous line; phone width). e2e set, ringcall, matnow, matready, bracketback, v117, winner, timeup, wtkfcharts, worlds2026.
