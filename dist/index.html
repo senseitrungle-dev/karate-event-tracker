@@ -696,16 +696,25 @@ label.rg-row.locked { opacity: .75; }
 .check-in input { width: 22px; height: 22px; flex: none; }
 .check-in .belt { display: inline-block; vertical-align: middle; margin-right: 4px; }
 .called-line { margin-top: 8px; overflow-wrap: anywhere; }
+/* v1.41: back to the match from the bracket; kata used + score beside the name */
+.back-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; margin-bottom: 12px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--panel); }
+.back-bar.end { margin: 12px 0 0; }
+.back-bar .small { min-width: 0; overflow-wrap: anywhere; }
+.sub-btn { margin-left: 4px; padding: 2px 8px; min-height: 0; vertical-align: baseline; }
+.kata-used { font-size: .74rem; font-style: italic; color: var(--ink-2); overflow-wrap: anywhere; }
+.kp-line { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-top: 2px; }
+.kp-line .kp-sc { font: 700 .85rem var(--f-mono); font-feature-settings: "tnum" 1; color: var(--ink); }
+table.kp tr.live td { background: color-mix(in srgb, var(--ai-soft) 60%, transparent); }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.40.0 */
+<script>/* Karate Event Tracker v1.41.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.40.0';
+  const VERSION = '1.41.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -5308,7 +5317,11 @@ function ringBoardHTML(rings, withActions) {
     const now = nowHTML(rs);
     const isNow = x => rs && x.did === rs.did && (x.kp ? rs.kp === x.kp.key : x.m.id === rs.mid);
     const next = q.filter(x => !isNow(x)).slice(0, withActions ? 12 : 3);
-    const openBtn = withActions && now && (rs.kp ? canScoreKP(rs.did, rs.kp) : canScoreMatch(rs.did, rs.mid)) ? `<div class="row" style="margin-top:8px"><button class="go" ${rs.kp ? `data-act="kp-score" data-did="${esc(rs.did)}" data-key="${esc(rs.kp)}"` : `data-act="score" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}"`}>Open scoresheet</button></div>` : '';
+    const scoreBtn = withActions && now && (rs.kp ? canScoreKP(rs.did, rs.kp) : canScoreMatch(rs.did, rs.mid)) ? `<button class="go" ${rs.kp ? `data-act="kp-score" data-did="${esc(rs.did)}" data-key="${esc(rs.kp)}"` : `data-act="score" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}"`}>Open scoresheet</button>` : '';
+    // v1.41: the bracket of the division on the mat (or called / next up), with a way back to this ring
+    const curDid = [now && rs.did, rs && rs.call && rs.call.did, q[0] && q[0].did].find(x => x && S.d.brackets[x]);
+    const brBtn = withActions && curDid ? `<button class="sm" data-act="mat-bracket" data-did="${esc(curDid)}" data-ring="${esc(r.id)}" title="${esc(DC.divBy[curDid] ? DC.divBy[curDid].name : '')}">📋 View bracket</button>` : '';
+    const openBtn = scoreBtn || brBtn ? `<div class="row" style="margin-top:8px">${scoreBtn}${brBtn}</div>` : '';
     const ev = curEvent() || {}, rdy = withActions && !ev.live && role() !== 'viewer' && !isPublicView() ? (ringIsReady(r.id) ? '<span class="chip ok mat-status">Ready</span>' : '<span class="chip warn mat-status">Not ready</span>') : '';
     return `<div class="card ring-card stack" data-ring="${esc(r.id)}"><div class="row between"><h3>${esc(r.name)}</h3><div class="row" style="gap:6px">${rdy}<span class="chip ${q.length ? '' : 'plain'}">${q.length} waiting</span></div></div>
       <div>${now || '<div class="small muted">Nothing on the mat.</div>'}${openBtn}</div>
@@ -5350,10 +5363,15 @@ function bracketsHTML() {
   const dv = DC.divBy[did], br = S.d.brackets[did];
   const bs = bracketState(did);
   const dirActs = isDirector() ? `<button class="sm" data-act="div-edit" data-id="${esc(did)}">Division settings</button>${!bs.results ? `<button class="sm" data-act="draw" data-id="${esc(did)}">Redraw</button>` : ''}` : '';
-  return eventHeader() + `<div class="section-h">${picker}<div class="row">${dirActs}</div></div>
+  return eventHeader() + backBarHTML() + `<div class="section-h">${picker}<div class="row">${dirActs}</div></div>
     <div class="row small muted">${esc(KT.FORMATS[br.format])} · ${esc(scoringLabel(dv))} · ${plural((br.entrants || []).length, 'entrant')}${S.d.rings[dv.ringId] ? ' · ' + esc(S.d.rings[dv.ringId].name) : ''}</div>
     ${bs.changed && !bs.complete ? `<div class="notice warn">Entrants changed since this bracket was drawn.${isDirector() && !bs.results ? ' Redraw to include them.' : ' Results already exist; late changes need a manual decision.'}</div>` : ''}
-    ${podiumHTML(did)}${bracketViewHTML(did)}`;
+    ${podiumHTML(did)}${bracketViewHTML(did)}${S.ui.back ? backBarHTML().replace('class="back-bar"', 'class="back-bar end"') : ''}`;
+}
+/** v1.41: opened from a mat card or a scoresheet — one tap back to the match. */
+function backBarHTML() {
+  const b = S.ui.back; if (!b) return '';
+  return `<div class="back-bar"><button class="go" data-act="back-match">← Back to ${b.modal ? 'match' : esc(ringName(b.ring))}</button><span class="small muted">${esc(b.label || '')}</span></div>`;
 }
 function podiumHTML(did) {
   const pl = DC.pl[did]; if (!pl || !pl.gold) return pl && pl.tie ? `<div class="notice warn">Pool finished with a tie that the rules cannot break. ${isDirector() || canScoreDiv(did) ? `<button class="sm" data-act="tiebreak" data-did="${esc(did)}" data-pool="A">Set tiebreak order</button>` : 'Waiting for the director.'}</div>` : '';
@@ -5366,11 +5384,14 @@ function bmHTML(did, m, res, live) {
   const scorer = canScoreMatch(did, m.id) && (r.status === 'ready' || r.status === 'done');
   const canS = r.status === 'ready' || r.status === 'done' || r.status === 'pending';
   const res1 = r.result || {};
+  const kataDiv = kindOf(DC.divBy[did]) === 'kata', kUsed = ((res1.detail || {}).kata) || {};
+  const fmtSc = v => typeof v === 'number' && kataDiv && scoringOf(DC.divBy[did]).method === 'scores' ? v.toFixed(3) : v;   // kata scores: 3 decimals (v1.33.1); flags: a count
   const ln = (side) => {
     const id = r[side], hint = side === 'a' ? r.hintA : r.hintB;
     const cls = !id ? 'tbd' : r.status === 'done' ? (r.winner === id ? 'win' : 'lose') : r.status === 'bye' ? (r.winner === id ? 'adv' : 'lose') : '';
-    const sc = r.status === 'done' && res1.pts ? res1.pts[side] : '';
-    return `<div class="ln ${side} ${cls}"><span class="strip"></span><span style="min-width:0"><div class="name">${cls === 'win' ? '<span class="wmark" aria-label="Winner">✓</span>' : ''}${id ? esc(entName(id)) : r.status === 'bye' ? 'Bye' : esc(hint || 'TBD')}</div>${id ? `<div class="dojo">${esc(entDojo(id))}</div>` : ''}</span><span class="sc">${sc === '' || sc == null ? '' : esc(sc)}</span></div>`;
+    const sc = r.status === 'done' && res1.pts ? fmtSc(res1.pts[side]) : '';
+    const kt = kataDiv && id && kUsed[side] ? `<div class="kata-used">${esc(kUsed[side])}</div>` : '';
+    return `<div class="ln ${side} ${cls}"><span class="strip"></span><span style="min-width:0"><div class="name">${cls === 'win' ? '<span class="wmark" aria-label="Winner">✓</span>' : ''}${id ? esc(entName(id)) : r.status === 'bye' ? 'Bye' : esc(hint || 'TBD')}</div>${id ? `<div class="dojo">${esc(entDojo(id))}</div>` : ''}${kt}</span><span class="sc">${sc === '' || sc == null ? '' : esc(sc)}</span></div>`;
   };
   return `<div class="bm ${r.status === 'ready' ? 'ready' : ''} ${live ? 'live' : ''} ${canS ? 'click' : ''}" ${canS ? `data-act="${scorer && r.status === 'ready' ? 'score' : 'match'}" data-did="${esc(did)}" data-mid="${esc(m.id)}" tabindex="0" role="button"` : ''}>${ln('a')}${ln('b')}
     <div class="meta"><span>${esc(m.id)}${kindOf(DC.divBy[did]) === 'fukugo' ? ' · ' + (KT.fukugoPart(m, S.d.brackets[did]) === 'kitei' ? 'Ki-tei' : 'Kumite') : ''}</span><span>${r.status === 'done' ? esc(res1.method || '') : r.status === 'bye' ? 'Bye' : r.status === 'ready' ? (live ? '● Live' : scorer ? 'Tap to score' : 'Ready') : ''}</span></div></div>`;
@@ -5544,6 +5565,7 @@ function kpTableHTML(did, title, rows, order, opts) {
   const br = S.d.brackets[did], J = br.judges || 6, can = (rows[0] || order[0]) ? canScoreKP(did, (rows[0] || {}).key || '') : false, k = J >= 5 ? J - 2 : J;
   const f = x => (x / k).toFixed(3);
   const byId = Object.fromEntries(rows.map(r => [r.id, r]));
+  const onMat = key => Object.values(S.d.ringstate).some(x => x && x.did === did && x.kp === key);
   const seq = opts.byRank ? rows : order.map(id => byId[id]);
   const sc = (r) => {
     const e = (br.scores || {})[r.key]; if (!e) return '';
@@ -5551,11 +5573,12 @@ function kpTableHTML(did, title, rows, order, opts) {
     const v = e.s.map(Number), hi = Math.max(...v), lo = Math.min(...v); let dh = J >= 5, dl = J >= 5;
     return v.map(x => { let cls = ''; if (dh && x === hi) { cls = 'dropped'; dh = false; } else if (dl && x === lo) { cls = 'dropped'; dl = false; } return `<span class="js ${cls}">${x.toFixed(1)}</span>`; }).join('');
   };
-  return `<div class="card flush"><div class="card-h"><h3>${esc(title)}</h3>${opts.chip || ''}</div><div class="tw"><table class="kp"><thead><tr><th>#</th><th>${opts.byRank ? 'Place' : 'Order'}</th><th>Competitor</th><th>${br.kataRule ? 'Kata' : 'Notes'}</th><th>Judges</th>${opts.carry ? '<th class="n">Semifinal</th><th class="n">Final</th>' : ''}<th class="n">Score</th></tr></thead><tbody>
-    ${seq.map((r, i) => `<tr class="${can || isDirector() ? 'click' : ''} ${r.advance ? 'adv' : ''}" ${can || isDirector() ? `data-act="kp-score" data-did="${esc(did)}" data-key="${esc(r.key)}"` : ''}>
+  return `<div class="card flush"><div class="card-h"><h3>${esc(title)}</h3>${opts.chip || ''}</div><div class="tw"><table class="kp"><thead><tr><th>#</th><th>${opts.byRank ? 'Place' : 'Order'}</th><th>Competitor · ${br.kataRule ? 'kata' : 'notes'}</th><th>Judges</th>${opts.carry ? '<th class="n">Semifinal</th><th class="n">Final</th>' : ''}<th class="n">Score</th></tr></thead><tbody>
+    ${seq.map((r, i) => `<tr class="${can || isDirector() ? 'click' : ''} ${r.advance ? 'adv' : ''} ${onMat(r.key) ? 'live' : ''}" ${can || isDirector() ? `data-act="kp-score" data-did="${esc(did)}" data-key="${esc(r.key)}"` : ''}>
       <td class="num">${i + 1}</td><td class="num">${r.rank ? (opts.medals && r.rank <= 3 ? `<span class="medal ${['g', 's', 'b'][r.rank - 1]}">${r.rank}</span>` : r.rank) : '—'}${r.advance ? ' <span class="chip ok" title="Advances">▸</span>' : ''}</td>
-      <td>${can || isDirector() ? `<button type="button" class="kp-who" aria-label="Score ${esc(entName(r.id))}"><span class="name">${esc(entName(r.id))}</span><span class="dojo">${esc(entDojo(r.id))}</span></button>` : `<div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div>`}</td>
-      <td class="small">${esc(r.kata || '')}${r.appTotal != null ? `<div class="tiny muted">Kata ${f(r.kataOwn)} · Application ${f(r.appTotal)}</div>` : ''}${r.rpTotal != null ? `<div class="tiny muted">Kettei-sen ${f(r.rpTotal)}</div>` : ''}</td>
+      <td>${can || isDirector() ? `<button type="button" class="kp-who" aria-label="Score ${esc(entName(r.id))}"><span class="name">${esc(entName(r.id))}</span><span class="dojo">${esc(entDojo(r.id))}</span></button>` : `<div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div>`}
+        ${r.kata || r.sheet ? `<div class="kp-line">${r.kata ? `<span class="kata-used">${esc(r.kata)}</span>` : ''}${r.sheet ? `<b class="kp-sc">${esc(f(r.own))}</b>` : ''}</div>` : ''}
+        ${r.appTotal != null ? `<div class="tiny muted">Kata ${f(r.kataOwn)} · Application ${f(r.appTotal)}</div>` : ''}${r.rpTotal != null ? `<div class="tiny muted">Kettei-sen ${f(r.rpTotal)}</div>` : ''}</td>
       <td class="jcell">${sc(r)}</td>
       ${opts.carry ? `<td class="n">${r.sheet ? f(r.carry) : ''}</td><td class="n">${r.sheet ? f(r.own) : ''}</td>` : ''}
       <td class="n"><b>${r.sheet ? f(r.total) : ''}</b></td></tr>`).join('')}</tbody></table></div>
@@ -6440,7 +6463,7 @@ function evaluate(dv, d, m, br) {
   if (k === 'kata') {
     if (sc.method === 'scores') {
       const r = KT.scoresEval(d.sa || [], d.sb || [], sc.judges, d.tieSide);
-      return { done: r.done, winner: r.winner, method: r.method, pts: r.score, tie: r.tie, detail: { sa: d.sa, sb: d.sb } };
+      return { done: r.done, winner: r.winner, method: r.method, pts: r.score, tie: r.tie, detail: { sa: d.sa, sb: d.sb, kata: d.kata && (d.kata.a || d.kata.b) ? d.kata : undefined } };
     }
     const fl = d.flags || [];
     if (fl.filter(Boolean).length < sc.judges) return { done: false };
@@ -6566,9 +6589,14 @@ function ncrPanel(log, path, r, cfg) {
       <p class="tiny muted">${esc(kyuHelp(cfg))}</p>
       <button data-act="k-undo" data-p="${path}" ${log.length ? '' : 'disabled'}>Undo last</button>${logHTML(log)}</div>${corner('b')}</div>`;
 }
-/** Allowed kata for the division (NCR levels): shown on the head-to-head flags sheet, with an optional record of each side's kata */
+/** v1.41: "📋 Bracket" in a scoresheet's sub-title — the division's bracket, with "Back to match" there. */
+const SHEET_BRACKET = ' <button type="button" class="sm ghost sub-btn" data-act="sheet-bracket">📋 Bracket</button>';
+/** Allowed kata for the division (NCR levels): shown on the head-to-head flags sheet, with an optional record of each side's kata.
+    v1.41: without a list, each side's kata is typed (shown next to the name in the bracket). */
 function kataListHTML(dv, d, r) {
-  const L = dv.kataList || []; if (!L.length) return '';
+  const L = dv.kataList || [];
+  if (!L.length) { const k = d.kata || {}, inp = s => `<label class="f" style="min-width:180px"><span>${s === 'a' ? 'Aka' : 'Shiro'} kata · ${esc(entName(r[s]))}</span><input id="kata-${s}" data-change="kata-pick" data-s="${s}" value="${esc(k[s] || '')}" list="kata-h2h" placeholder="e.g. Bassai Dai" autocomplete="off"></label>`;
+    return `<div class="row" style="gap:8px;flex-wrap:wrap">${inp('a')}${inp('b')}</div><datalist id="kata-h2h">${KATA_LIST.map(x => `<option value="${esc(x)}">`).join('')}</datalist>`; }
   const k = d.kata || {}, sel = s => `<select data-change="kata-pick" data-s="${s}" aria-label="${s === 'a' ? 'Aka' : 'Shiro'} kata">${opt('', '— kata —', k[s] || '')}${L.map(x => opt(x, x, k[s] || '')).join('')}</select>`;
   return `<div class="notice info" style="display:block"><b>Allowed kata:</b> ${L.map(esc).join(' · ')}<div class="row" style="margin-top:6px;gap:8px;flex-wrap:wrap"><label class="f" style="min-width:180px"><span>Aka · ${esc(entName(r.a))}</span>${sel('a')}</label><label class="f" style="min-width:180px"><span>Shiro · ${esc(entName(r.b))}</span>${sel('b')}</label></div><span class="tiny">A competitor may repeat a kata or change it from round to round, within this list.</span></div>`;
 }
@@ -6604,7 +6632,7 @@ function renderScore(force) {
   M.sig = sig;
   const title = `${esc(KT.matchLabel(m, br))} · ${esc(mid)}`;
   const seg = KT.segOf(br, m), rid = KT.ringOf(dv, seg, mid);
-  const sub = esc(dv.name) + (seg ? ' · ' + esc(SEG_LABEL(seg)) : '') + (S.d.rings[rid] ? ' · ' + esc(S.d.rings[rid].name) : '');
+  const sub = esc(dv.name) + (seg ? ' · ' + esc(SEG_LABEL(seg)) : '') + (S.d.rings[rid] ? ' · ' + esc(S.d.rings[rid].name) : '') + SHEET_BRACKET;
   const positions = positionsFor(dv, m, br), canS = canScoreMatch(did, mid);
   const wSide = r.status === 'done' && r.winner ? (r.winner === r.a ? 'a' : 'b') : '';
   const hdr = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="corner a${cornerState(!!wSide, wSide, 'a')}">${wSide === 'a' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label" style="color:#fff;opacity:.8">Aka</div><div class="who">${esc(entName(r.a) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(r.a))}</div></div>
@@ -6625,7 +6653,7 @@ function renderScore(force) {
   const part = partOf(dv, m, br);
   const offs = officialsHTML(rid, k === 'fukugo' && part === 'kitei' ? 'kata' : k, positions, d.officials, true);
   let body = '';
-  if (k === 'kata') body = sc.method === 'scores' ? scoresPanel(d, sc, out) : kataListHTML(dv, d, r) + flagsPanel(d, sc, 'flags', 'Judges’ flags');
+  if (k === 'kata') body = kataListHTML(dv, d, r) + (sc.method === 'scores' ? scoresPanel(d, sc, out) : flagsPanel(d, sc, 'flags', 'Judges’ flags'));
   else if (k === 'kumite') body = kyuCfg(dv) ? ncrPanel(d.log || [], 'log', r, Object.assign({ label: dv.group }, kyuCfg(dv))) : kumitePanel(d.log || [], 'log', sc, r, { kogo, kettei: sc.ketteiTime > 0 });
   else if (k === 'teamkumite') body = teamPanel(d, sc, r, out, kogo);
   else if (k === 'fukugo') body = fukugoPanel(d, sc, r, out, part, kogo);
@@ -6741,7 +6769,7 @@ function openKP(did, key) {
   const ring = S.d.rings[rid];
   openModal(sheet(esc(entName(ctx.id)), recBlock + body,
     `${ring && editable ? `<button data-act="kp-call" style="margin-right:auto">Call to ${esc(ring.name)}</button>` : ''}${saved && editable ? '<button class="danger" data-act="kp-clear">Clear score</button>' : ''}<button data-act="modal-close">Close</button>${editable ? '<button class="primary" data-act="kp-save" id="kp-save">Save score</button>' : ''}`,
-    `${esc(dv.name)}${ring ? ' · ' + esc(ring.name) : ''}`));
+    `${esc(dv.name)}${ring ? ' · ' + esc(ring.name) : ''}${SHEET_BRACKET}`));
   kpPaint();
 }
 function kpEval() {
@@ -7065,7 +7093,7 @@ function renderMatch() {
   }
   if (isDirector() && r.status !== 'done') body += `<label class="f"><span>Run this match on</span><select id="mring-${esc(mid)}" data-change="match-ring" data-did="${esc(did)}" data-mid="${esc(mid)}">${DC.rings.map(x => opt(x.id, x.name + (x.id === KT.ringOf(dv, seg) ? ' (default)' : ''), rid)).join('')}</select></label>`;
   const foot = `${canS && r.status === 'ready' ? `<button class="go" data-act="score" data-did="${esc(did)}" data-mid="${esc(mid)}">Open scoresheet</button>` : ''}${canS && r.status === 'done' ? `<button data-act="score" data-did="${esc(did)}" data-mid="${esc(mid)}">Result options</button>` : ''}<button class="primary" data-act="modal-close">Close</button>`;
-  root.innerHTML = sheet(`${esc(KT.matchLabel(m, br))}`, body, foot, `${esc(dv.name)} · ${esc(mid)}`);
+  root.innerHTML = sheet(`${esc(KT.matchLabel(m, br))}`, body, foot, `${esc(dv.name)} · ${esc(mid)}${SHEET_BRACKET}`);
 }
 function timeAgo(iso) { if (!iso) return ''; const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000)); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
 
@@ -8443,6 +8471,12 @@ async function createDemo(kind) {
   toast(`${C.name.replace(' (demo)', '')} ready. Draw brackets from the Divisions tab.`);
 }
 
+/** v1.41: open a division's bracket and remember where to come back to (Mat tab ring, optionally a scoresheet). */
+function openBracketFrom(back, did) {
+  S.ui.back = Object.assign({ sel: S.ui.ring, picked: S.ui.ringPicked }, back);
+  if (S.modal) closeModal();
+  S.ui.bracketDiv = did; S.ui.tab = 'brackets'; render(); window.scrollTo(0, 0);
+}
 /* ---------- event wiring ---------- */
 const ACT = {
   home: () => { closeModal(); if (S.pub) return; openEvent(null); },
@@ -8455,7 +8489,7 @@ const ACT = {
   'share-on': () => shareOn(), 'share-off': () => shareOff(), 'share-copy': () => shareCopy(),
   'open-event': el => openEvent(el.dataset.id),
   'more-tabs': () => moreSheet(),
-  tab: (el, e) => { if (e) e.preventDefault(); if (el.dataset.close) closeModal(); S.ui.tab = el.dataset.v; if (el.dataset.filter) S.ui.filter = el.dataset.filter; window.scrollTo(0, 0); render(); },
+  tab: (el, e) => { if (e) e.preventDefault(); if (el.dataset.close) closeModal(); S.ui.back = null; S.ui.tab = el.dataset.v; if (el.dataset.filter) S.ui.filter = el.dataset.filter; window.scrollTo(0, 0); render(); },
   'modal-close': () => closeModal(),
   'modal-scrim': (el, e) => { if (e.target === el) closeModal(); },
   'confirm-yes': () => confirmDone(true), 'confirm-no': () => confirmDone(false),
@@ -8620,6 +8654,28 @@ const ACT = {
   'call-mat': () => { pushLive(); toast('Called — shown as “now on the mat” for this ring'); },
   'save-result': () => saveResult(),
   'kp-score': el => openKP(el.dataset.did, el.dataset.key),
+  // v1.41: bracket of the current division from a mat card or a scoresheet, then back to the match
+  'mat-bracket': el => { const dv = DC.divBy[el.dataset.did]; openBracketFrom({ ring: el.dataset.ring, label: dv ? dv.name : '' }, el.dataset.did); },
+  'sheet-bracket': () => {
+    const M = S.modal; if (!M || !M.did) return;
+    const br = S.d.brackets[M.did], dv = DC.divBy[M.did];
+    const rid = M.type === 'kp' ? M.rid : KT.ringOf(dv, KT.segOf(br, br.matches[M.mid]), M.mid);
+    const modal = M.type === 'kp' ? { type: 'kp', did: M.did, key: M.key } : { type: M.type, did: M.did, mid: M.mid };
+    let clock = null;
+    if (M.type === 'score') { const run = CLOCK.running; stopClock(); clock = { left: CLOCK.left, base: CLOCK.base, key: CLOCK.key, await: CLOCK.await, run }; }
+    openBracketFrom({ ring: rid, modal, clock, label: (dv ? dv.name : '') + (M.type === 'kp' ? ' · ' + entName((M.ctx || {}).id) : ' · ' + KT.matchLabel(br.matches[M.mid], br)) }, M.did);
+  },
+  'back-match': () => {
+    const b = S.ui.back; S.ui.back = null; if (!b) return;
+    S.ui.tab = 'mat'; S.ui.ring = b.sel; S.ui.ringPicked = b.picked; render();
+    const m = b.modal;
+    if (m && m.type === 'kp' && S.d.brackets[m.did]) openKP(m.did, m.key);
+    else if (m && m.type === 'score' && S.d.brackets[m.did]) {
+      openScore(m.did, m.mid);
+      if (b.clock) { Object.assign(CLOCK, { left: b.clock.left, base: b.clock.base, key: b.clock.key, await: b.clock.await }); paintClock(); if (b.clock.run) toast('Clock paused while the bracket was open — Start to resume.'); }
+    } else if (m && m.type === 'match' && S.d.brackets[m.did]) openMatch(m.did, m.mid);
+    else { const card = document.querySelector(`.ring-card[data-ring="${CSS.escape(b.ring || '')}"]`); if (card) card.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0); }
+  },
   'kp-save': () => kpSave(),
   'ring-call': el => ringCall(el.dataset.rid, el.dataset.i),
   'ring-recall': el => ringRecall(el.dataset.rid),

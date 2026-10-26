@@ -172,6 +172,12 @@ async function createDemo(kind) {
   toast(`${C.name.replace(' (demo)', '')} ready. Draw brackets from the Divisions tab.`);
 }
 
+/** v1.41: open a division's bracket and remember where to come back to (Mat tab ring, optionally a scoresheet). */
+function openBracketFrom(back, did) {
+  S.ui.back = Object.assign({ sel: S.ui.ring, picked: S.ui.ringPicked }, back);
+  if (S.modal) closeModal();
+  S.ui.bracketDiv = did; S.ui.tab = 'brackets'; render(); window.scrollTo(0, 0);
+}
 /* ---------- event wiring ---------- */
 const ACT = {
   home: () => { closeModal(); if (S.pub) return; openEvent(null); },
@@ -184,7 +190,7 @@ const ACT = {
   'share-on': () => shareOn(), 'share-off': () => shareOff(), 'share-copy': () => shareCopy(),
   'open-event': el => openEvent(el.dataset.id),
   'more-tabs': () => moreSheet(),
-  tab: (el, e) => { if (e) e.preventDefault(); if (el.dataset.close) closeModal(); S.ui.tab = el.dataset.v; if (el.dataset.filter) S.ui.filter = el.dataset.filter; window.scrollTo(0, 0); render(); },
+  tab: (el, e) => { if (e) e.preventDefault(); if (el.dataset.close) closeModal(); S.ui.back = null; S.ui.tab = el.dataset.v; if (el.dataset.filter) S.ui.filter = el.dataset.filter; window.scrollTo(0, 0); render(); },
   'modal-close': () => closeModal(),
   'modal-scrim': (el, e) => { if (e.target === el) closeModal(); },
   'confirm-yes': () => confirmDone(true), 'confirm-no': () => confirmDone(false),
@@ -349,6 +355,28 @@ const ACT = {
   'call-mat': () => { pushLive(); toast('Called — shown as “now on the mat” for this ring'); },
   'save-result': () => saveResult(),
   'kp-score': el => openKP(el.dataset.did, el.dataset.key),
+  // v1.41: bracket of the current division from a mat card or a scoresheet, then back to the match
+  'mat-bracket': el => { const dv = DC.divBy[el.dataset.did]; openBracketFrom({ ring: el.dataset.ring, label: dv ? dv.name : '' }, el.dataset.did); },
+  'sheet-bracket': () => {
+    const M = S.modal; if (!M || !M.did) return;
+    const br = S.d.brackets[M.did], dv = DC.divBy[M.did];
+    const rid = M.type === 'kp' ? M.rid : KT.ringOf(dv, KT.segOf(br, br.matches[M.mid]), M.mid);
+    const modal = M.type === 'kp' ? { type: 'kp', did: M.did, key: M.key } : { type: M.type, did: M.did, mid: M.mid };
+    let clock = null;
+    if (M.type === 'score') { const run = CLOCK.running; stopClock(); clock = { left: CLOCK.left, base: CLOCK.base, key: CLOCK.key, await: CLOCK.await, run }; }
+    openBracketFrom({ ring: rid, modal, clock, label: (dv ? dv.name : '') + (M.type === 'kp' ? ' · ' + entName((M.ctx || {}).id) : ' · ' + KT.matchLabel(br.matches[M.mid], br)) }, M.did);
+  },
+  'back-match': () => {
+    const b = S.ui.back; S.ui.back = null; if (!b) return;
+    S.ui.tab = 'mat'; S.ui.ring = b.sel; S.ui.ringPicked = b.picked; render();
+    const m = b.modal;
+    if (m && m.type === 'kp' && S.d.brackets[m.did]) openKP(m.did, m.key);
+    else if (m && m.type === 'score' && S.d.brackets[m.did]) {
+      openScore(m.did, m.mid);
+      if (b.clock) { Object.assign(CLOCK, { left: b.clock.left, base: b.clock.base, key: b.clock.key, await: b.clock.await }); paintClock(); if (b.clock.run) toast('Clock paused while the bracket was open — Start to resume.'); }
+    } else if (m && m.type === 'match' && S.d.brackets[m.did]) openMatch(m.did, m.mid);
+    else { const card = document.querySelector(`.ring-card[data-ring="${CSS.escape(b.ring || '')}"]`); if (card) card.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0); }
+  },
   'kp-save': () => kpSave(),
   'ring-call': el => ringCall(el.dataset.rid, el.dataset.i),
   'ring-recall': el => ringRecall(el.dataset.rid),

@@ -171,7 +171,7 @@ function renderMatch() {
   }
   if (isDirector() && r.status !== 'done') body += `<label class="f"><span>Run this match on</span><select id="mring-${esc(mid)}" data-change="match-ring" data-did="${esc(did)}" data-mid="${esc(mid)}">${DC.rings.map(x => opt(x.id, x.name + (x.id === KT.ringOf(dv, seg) ? ' (default)' : ''), rid)).join('')}</select></label>`;
   const foot = `${canS && r.status === 'ready' ? `<button class="go" data-act="score" data-did="${esc(did)}" data-mid="${esc(mid)}">Open scoresheet</button>` : ''}${canS && r.status === 'done' ? `<button data-act="score" data-did="${esc(did)}" data-mid="${esc(mid)}">Result options</button>` : ''}<button class="primary" data-act="modal-close">Close</button>`;
-  root.innerHTML = sheet(`${esc(KT.matchLabel(m, br))}`, body, foot, `${esc(dv.name)} · ${esc(mid)}`);
+  root.innerHTML = sheet(`${esc(KT.matchLabel(m, br))}`, body, foot, `${esc(dv.name)} · ${esc(mid)}${SHEET_BRACKET}`);
 }
 function timeAgo(iso) { if (!iso) return ''; const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000)); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
 

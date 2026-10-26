@@ -89,7 +89,7 @@ function evaluate(dv, d, m, br) {
   if (k === 'kata') {
     if (sc.method === 'scores') {
       const r = KT.scoresEval(d.sa || [], d.sb || [], sc.judges, d.tieSide);
-      return { done: r.done, winner: r.winner, method: r.method, pts: r.score, tie: r.tie, detail: { sa: d.sa, sb: d.sb } };
+      return { done: r.done, winner: r.winner, method: r.method, pts: r.score, tie: r.tie, detail: { sa: d.sa, sb: d.sb, kata: d.kata && (d.kata.a || d.kata.b) ? d.kata : undefined } };
     }
     const fl = d.flags || [];
     if (fl.filter(Boolean).length < sc.judges) return { done: false };
@@ -215,9 +215,14 @@ function ncrPanel(log, path, r, cfg) {
       <p class="tiny muted">${esc(kyuHelp(cfg))}</p>
       <button data-act="k-undo" data-p="${path}" ${log.length ? '' : 'disabled'}>Undo last</button>${logHTML(log)}</div>${corner('b')}</div>`;
 }
-/** Allowed kata for the division (NCR levels): shown on the head-to-head flags sheet, with an optional record of each side's kata */
+/** v1.41: "📋 Bracket" in a scoresheet's sub-title — the division's bracket, with "Back to match" there. */
+const SHEET_BRACKET = ' <button type="button" class="sm ghost sub-btn" data-act="sheet-bracket">📋 Bracket</button>';
+/** Allowed kata for the division (NCR levels): shown on the head-to-head flags sheet, with an optional record of each side's kata.
+    v1.41: without a list, each side's kata is typed (shown next to the name in the bracket). */
 function kataListHTML(dv, d, r) {
-  const L = dv.kataList || []; if (!L.length) return '';
+  const L = dv.kataList || [];
+  if (!L.length) { const k = d.kata || {}, inp = s => `<label class="f" style="min-width:180px"><span>${s === 'a' ? 'Aka' : 'Shiro'} kata · ${esc(entName(r[s]))}</span><input id="kata-${s}" data-change="kata-pick" data-s="${s}" value="${esc(k[s] || '')}" list="kata-h2h" placeholder="e.g. Bassai Dai" autocomplete="off"></label>`;
+    return `<div class="row" style="gap:8px;flex-wrap:wrap">${inp('a')}${inp('b')}</div><datalist id="kata-h2h">${KATA_LIST.map(x => `<option value="${esc(x)}">`).join('')}</datalist>`; }
   const k = d.kata || {}, sel = s => `<select data-change="kata-pick" data-s="${s}" aria-label="${s === 'a' ? 'Aka' : 'Shiro'} kata">${opt('', '— kata —', k[s] || '')}${L.map(x => opt(x, x, k[s] || '')).join('')}</select>`;
   return `<div class="notice info" style="display:block"><b>Allowed kata:</b> ${L.map(esc).join(' · ')}<div class="row" style="margin-top:6px;gap:8px;flex-wrap:wrap"><label class="f" style="min-width:180px"><span>Aka · ${esc(entName(r.a))}</span>${sel('a')}</label><label class="f" style="min-width:180px"><span>Shiro · ${esc(entName(r.b))}</span>${sel('b')}</label></div><span class="tiny">A competitor may repeat a kata or change it from round to round, within this list.</span></div>`;
 }
@@ -253,7 +258,7 @@ function renderScore(force) {
   M.sig = sig;
   const title = `${esc(KT.matchLabel(m, br))} · ${esc(mid)}`;
   const seg = KT.segOf(br, m), rid = KT.ringOf(dv, seg, mid);
-  const sub = esc(dv.name) + (seg ? ' · ' + esc(SEG_LABEL(seg)) : '') + (S.d.rings[rid] ? ' · ' + esc(S.d.rings[rid].name) : '');
+  const sub = esc(dv.name) + (seg ? ' · ' + esc(SEG_LABEL(seg)) : '') + (S.d.rings[rid] ? ' · ' + esc(S.d.rings[rid].name) : '') + SHEET_BRACKET;
   const positions = positionsFor(dv, m, br), canS = canScoreMatch(did, mid);
   const wSide = r.status === 'done' && r.winner ? (r.winner === r.a ? 'a' : 'b') : '';
   const hdr = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="corner a${cornerState(!!wSide, wSide, 'a')}">${wSide === 'a' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label" style="color:#fff;opacity:.8">Aka</div><div class="who">${esc(entName(r.a) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(r.a))}</div></div>
@@ -274,7 +279,7 @@ function renderScore(force) {
   const part = partOf(dv, m, br);
   const offs = officialsHTML(rid, k === 'fukugo' && part === 'kitei' ? 'kata' : k, positions, d.officials, true);
   let body = '';
-  if (k === 'kata') body = sc.method === 'scores' ? scoresPanel(d, sc, out) : kataListHTML(dv, d, r) + flagsPanel(d, sc, 'flags', 'Judges’ flags');
+  if (k === 'kata') body = kataListHTML(dv, d, r) + (sc.method === 'scores' ? scoresPanel(d, sc, out) : flagsPanel(d, sc, 'flags', 'Judges’ flags'));
   else if (k === 'kumite') body = kyuCfg(dv) ? ncrPanel(d.log || [], 'log', r, Object.assign({ label: dv.group }, kyuCfg(dv))) : kumitePanel(d.log || [], 'log', sc, r, { kogo, kettei: sc.ketteiTime > 0 });
   else if (k === 'teamkumite') body = teamPanel(d, sc, r, out, kogo);
   else if (k === 'fukugo') body = fukugoPanel(d, sc, r, out, part, kogo);
@@ -390,7 +395,7 @@ function openKP(did, key) {
   const ring = S.d.rings[rid];
   openModal(sheet(esc(entName(ctx.id)), recBlock + body,
     `${ring && editable ? `<button data-act="kp-call" style="margin-right:auto">Call to ${esc(ring.name)}</button>` : ''}${saved && editable ? '<button class="danger" data-act="kp-clear">Clear score</button>' : ''}<button data-act="modal-close">Close</button>${editable ? '<button class="primary" data-act="kp-save" id="kp-save">Save score</button>' : ''}`,
-    `${esc(dv.name)}${ring ? ' · ' + esc(ring.name) : ''}`));
+    `${esc(dv.name)}${ring ? ' · ' + esc(ring.name) : ''}${SHEET_BRACKET}`));
   kpPaint();
 }
 function kpEval() {

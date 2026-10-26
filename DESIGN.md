@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.40.0 Requirements & Design
+# Karate Event Tracker · v1.41.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -600,3 +600,13 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - Readiness card (`ringReadyHTML(r, named)`): on the Mat tab the heading is "<Ring name> · Before the start". It shows the checklist with an n/7 count. "Ring is ready" stays disabled until all items are ticked (with a hint). Unticking any item sets the ring back to Not ready.
 - Mat ring card: before going live, staff see a Ready / Not ready chip beside "N waiting".
 **Verify.** logic.test (ring checklist). test/matready.js (desktop and 390 px: ring name labels, Not ready default, checklist gating, tap → Ready on both cards, untick → Not ready, no horizontal scroll). golive.js updated to tick the checklist. e2e set, ringcall, matnow, emptychecks.
+
+## §67 Operations: bracket from the mat and back; kata bracket shows kata + score beside each name (v1.41.0)
+**Requirement.** From a mat card, open the bracket of the current division and come back to the match. In kata brackets, show each competitor's score for the match/performance next to their name, with the kata used.
+**Design.**
+- Mat ring card: "📋 View bracket" opens the bracket of the division on the mat (or else the called item's division, or else the first queued one). Scoresheets (head-to-head score sheet, kata score card, match view) get a "📋 Bracket" button in their sub-title.
+- `openBracketFrom(back, did)` keeps `S.ui.back = {ring, sel, picked, modal?, clock?, label}`. The Brackets page then shows "← Back to <ring>" or "← Back to match" at the top and the bottom. `back-match` returns to the Mat tab with the same ring filter. It reopens the same scoresheet when one was open (drafts are kept, so a typed kata or entered scores are still there) or scrolls to the ring card. Opening any tab normally clears it.
+- Kumite clock: leaving a scoresheet for the bracket pauses the bout clock. Coming back restores the time left (toast: "Clock paused… Start to resume"). Without this, reopening would reset the clock.
+- Head-to-head kata (flags or scores; e.g. junior round robin, kyu): each side's kata can always be recorded. It is a list pick when the division has an allowed-kata list (NCR), otherwise free text with WTKF suggestions. It is stored in `result.detail.kata` for both methods. `bmHTML` shows the kata under the name and the score beside it (flags count; scores to 3 decimals).
+- Kata score pools (KP) table: the competitor cell shows "<kata> <score of this performance>" under the name (the separate Kata column is folded in). The Score column keeps the total. The performance on the mat is highlighted.
+**Verify.** test/bracketback.js (mat card → bracket → back; Brackets tab opened normally has no back bar; KP and head-to-head kata show kata + score; score card → bracket → back reopens it with the typed kata; kumite clock kept and paused; phone width). Unit 134; e2e set, ringcall, matnow, matready, v117, winner, timeup, wtkfcharts.
