@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.42.0';
+  const VERSION = '1.43.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -898,6 +898,16 @@ const KT = (function () {
     if (prev && norm(prev.kata) === norm(kata)) return `The final needs a different kata than the final elimination round (${prev.kata}).`;
     return '';
   }
+  /** v1.43: the competitor's previous performance before this one — the previous round (for a Kettei-sen: the tied performance).
+      { n, label, kata, avg (score of that performance, 3 decimals), hansoku } or null. */
+  function kpPrevious(br, key) {
+    const m = /^R(\d+)_(.+?)(_rp)?$/.exec(key); if (!m) return null;
+    const n = m[3] ? +m[1] : +m[1] - 1, id = m[2]; if (n < 1) return null;
+    const J = br.judges || 6, sh = kpSheet((br.scores || {})[kpKey(n, id)], J); if (!sh) return null;
+    const rd = kpState(br).rounds.find(r => r.n === n);
+    const label = rd ? kpRoundName(rd) : n === (br.kpPools ? 0 : 1) ? 'Final' : 'Round ' + n;
+    return { n, label, kata: sh.kata || '', hansoku: !!sh.hansoku, avg: sh.hansoku ? 0 : Math.round((sh.kataTotal != null ? sh.kataTotal : sh.total) / (J >= 5 ? J - 2 : J) * 1000) / 1000 };
+  }
   function kpProgress(br) {
     const st = kpState(br); let done = 0, total = 0;
     for (const rd of st.rounds) for (const P in rd.pools) { total += rd.pools[P].rows.length; done += rd.pools[P].rows.filter(r => r.sheet).length; }
@@ -1305,7 +1315,7 @@ const KT = (function () {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, ageFromYear, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
-    seedOrder, nextPow2, orderEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
+    seedOrder, nextPow2, orderEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, kpPrevious, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS, RING_CHECKS, ringChecksDone, ringReadyOk,
   };
 })();

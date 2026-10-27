@@ -700,3 +700,7 @@ label.rg-row.locked { opacity: .75; }
 .kp-line { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-top: 2px; }
 .kp-line .kp-sc { font: 700 .85rem var(--f-mono); font-feature-settings: "tnum" 1; color: var(--ink); }
 table.kp tr.live td { background: color-mix(in srgb, var(--ai-soft) 60%, transparent); }
+/* v1.43: previous round kata + average beside the competitor on the mat / scoresheet */
+.prev-kata { font-size: .78rem; margin-top: 2px; overflow-wrap: anywhere; }
+.prev-kata b { font-feature-settings: "tnum" 1; }
+.corner.a .prev-kata, .corner.a .prev-kata .muted { color: #fff; opacity: .92; }

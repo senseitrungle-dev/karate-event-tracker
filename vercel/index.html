@@ -709,16 +709,20 @@ label.rg-row.locked { opacity: .75; }
 .kp-line { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-top: 2px; }
 .kp-line .kp-sc { font: 700 .85rem var(--f-mono); font-feature-settings: "tnum" 1; color: var(--ink); }
 table.kp tr.live td { background: color-mix(in srgb, var(--ai-soft) 60%, transparent); }
+/* v1.43: previous round kata + average beside the competitor on the mat / scoresheet */
+.prev-kata { font-size: .78rem; margin-top: 2px; overflow-wrap: anywhere; }
+.prev-kata b { font-feature-settings: "tnum" 1; }
+.corner.a .prev-kata, .corner.a .prev-kata .muted { color: #fff; opacity: .92; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.42.0 */
+<script>/* Karate Event Tracker v1.43.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.42.0';
+  const VERSION = '1.43.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -1612,6 +1616,16 @@ const KT = (function () {
     if (prev && norm(prev.kata) === norm(kata)) return `The final needs a different kata than the final elimination round (${prev.kata}).`;
     return '';
   }
+  /** v1.43: the competitor's previous performance before this one — the previous round (for a Kettei-sen: the tied performance).
+      { n, label, kata, avg (score of that performance, 3 decimals), hansoku } or null. */
+  function kpPrevious(br, key) {
+    const m = /^R(\d+)_(.+?)(_rp)?$/.exec(key); if (!m) return null;
+    const n = m[3] ? +m[1] : +m[1] - 1, id = m[2]; if (n < 1) return null;
+    const J = br.judges || 6, sh = kpSheet((br.scores || {})[kpKey(n, id)], J); if (!sh) return null;
+    const rd = kpState(br).rounds.find(r => r.n === n);
+    const label = rd ? kpRoundName(rd) : n === (br.kpPools ? 0 : 1) ? 'Final' : 'Round ' + n;
+    return { n, label, kata: sh.kata || '', hansoku: !!sh.hansoku, avg: sh.hansoku ? 0 : Math.round((sh.kataTotal != null ? sh.kataTotal : sh.total) / (J >= 5 ? J - 2 : J) * 1000) / 1000 };
+  }
   function kpProgress(br) {
     const st = kpState(br); let done = 0, total = 0;
     for (const rd of st.rounds) for (const P in rd.pools) { total += rd.pools[P].rows.length; done += rd.pools[P].rows.filter(r => r.sheet).length; }
@@ -2019,7 +2033,7 @@ const KT = (function () {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, ageFromYear, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
-    seedOrder, nextPow2, orderEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
+    seedOrder, nextPow2, orderEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, kpPrevious, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS, RING_CHECKS, ringChecksDone, ringReadyOk,
   };
 })();
@@ -5295,6 +5309,23 @@ function ringQueue(rid) {
 }
 /** Tapping a kata competitor (on the mat / up next): scorers get that competitor's score card, everyone else the division's bracket. */
 function kpTapAttrs(did, key) { return (canScoreKP(did, key) ? `data-act="kp-score" data-did="${esc(did)}" data-key="${esc(key)}"` : `data-act="view-bracket" data-id="${esc(did)}"`) + ' role="button" tabindex="0"'; }
+/** v1.43: a competitor's previous kata and its average score, shown beside their name on the mat card and scoresheet. */
+function prevKataHTML(p) {
+  if (!p) return '';
+  return `<div class="prev-kata"><span class="muted">${esc(p.label)}:</span> ${p.hansoku ? '<span class="chip bad">Han-soku</span>' : `<i>${esc(p.kata || '—')}</i> · <b class="num">${esc(p.avg)}</b>`}</div>`;
+}
+function kpPrevHTML(did, key) { const br = S.d.brackets[did], pv = br && br.format === 'KP' ? KT.kpPrevious(br, key) : null; return pv ? prevKataHTML(Object.assign({}, pv, { avg: pv.avg.toFixed(3) })) : ''; }
+/** Head-to-head kata: the competitor's latest finished match in this division before this one (kata + score). */
+function h2hPrevHTML(did, mid, id) {
+  const dv = DC.divBy[did], br = S.d.brackets[did]; if (!id || !dv || !br || kindOf(dv) !== 'kata') return '';
+  const res = DC.res[did] || {};
+  const last = Object.keys(res).filter(k => k !== mid && res[k].status === 'done' && (res[k].a === id || res[k].b === id) && res[k].result)
+    .sort((x, y) => String(res[y].result.at || '').localeCompare(String(res[x].result.at || '')))[0];
+  if (!last) return '';
+  const r = res[last], side = r.a === id ? 'a' : 'b', rr = r.result, pts = (rr.pts || {})[side], kata = ((rr.detail || {}).kata || {})[side];
+  const sc = typeof pts === 'number' ? (scoringOf(dv).method === 'scores' ? pts.toFixed(3) : pts + ' flag' + (pts === 1 ? '' : 's')) : '';
+  return prevKataHTML({ label: KT.matchLabel(br.matches[last], br), kata, avg: sc });
+}
 function nowHTML(rs) {
   if (!rs || !rs.did || !S.d.brackets[rs.did]) return '';
   const dv = DC.divBy[rs.did], br = S.d.brackets[rs.did];
@@ -5302,15 +5333,15 @@ function nowHTML(rs) {
     const q = br.format === 'KP' ? KT.kpQueue(br).find(x => x.key === rs.kp) : null;
     if (!q) return '';
     return `<div class="label">${esc(dv ? dv.name : '')} · ${esc(q.label)}</div>
-      <div class="now" ${kpTapAttrs(rs.did, rs.kp)} style="grid-template-columns:1fr auto;cursor:pointer"><div class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span style="min-width:0"><div class="name">${esc(entName(q.id))}</div><div class="dojo">${esc(entDojo(q.id))}${rs.kata ? ' · ' + esc(rs.kata) : ''}</div></span></div>
+      <div class="now" ${kpTapAttrs(rs.did, rs.kp)} style="grid-template-columns:1fr auto;cursor:pointer"><div class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span style="min-width:0"><div class="name">${esc(entName(q.id))}</div><div class="dojo">${esc(entDojo(q.id))}${rs.kata ? ' · ' + esc(rs.kata) : ''}</div>${kpPrevHTML(rs.did, rs.kp)}</span></div>
       <div class="sc num">${rs.score != null && rs.score !== '' ? esc(rs.score) : ''}</div></div>`;
   }
   const res = (DC.res[rs.did] || {})[rs.mid];
   if (!res || res.status !== 'ready') return '';
   return `<div class="label">${esc(dv ? dv.name : '')} · ${esc(KT.matchLabel(br.matches[rs.mid], br))}</div>
-    <div class="now" data-act="match" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}" role="button" tabindex="0" style="cursor:pointer"><div class="side"><span class="belt a"></span><span style="min-width:0"><div class="name">${esc(entName(res.a))}</div><div class="dojo">${esc(entDojo(res.a))}</div></span></div>
+    <div class="now" data-act="match" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}" role="button" tabindex="0" style="cursor:pointer"><div class="side"><span class="belt a"></span><span style="min-width:0"><div class="name">${esc(entName(res.a))}</div><div class="dojo">${esc(entDojo(res.a))}</div>${h2hPrevHTML(rs.did, rs.mid, res.a)}</span></div>
     <div class="sc num">${rs.score ? `${esc(rs.score.a)}–${esc(rs.score.b)}` : 'vs'}</div>
-    <div class="side" style="justify-content:flex-end;text-align:right"><span style="min-width:0"><div class="name">${esc(entName(res.b))}</div><div class="dojo">${esc(entDojo(res.b))}</div></span><span class="belt b"></span></div></div>
+    <div class="side" style="justify-content:flex-end;text-align:right"><span style="min-width:0"><div class="name">${esc(entName(res.b))}</div><div class="dojo">${esc(entDojo(res.b))}</div>${h2hPrevHTML(rs.did, rs.mid, res.b)}</span><span class="belt b"></span></div></div>
     ${rs.phase ? `<div class="phase">${esc(rs.phase)}</div>` : ''}`;
 }
 function ringBoardHTML(rings, withActions) {
@@ -5591,21 +5622,24 @@ function kpViewHTML(did) {
   const br = S.d.brackets[did], st = KT.kpState(br);
   let h = `<p class="small muted">WTKF kata system · pools of up to ${br.poolSize || 8} · ${br.judges || 6} judges score 0–10${(br.judges || 6) >= 5 ? ', highest and lowest dropped, average of the rest' : ''} · top 4 of each pool advance until 8 remain · the final 8 is the semifinal (final elimination round); its top 4 perform in the final${br.kataRule ? ' with a different kata than in the semifinal (earlier rounds may repeat a kata)' : ''}${br.application ? ' · final adds Application (Bunkai)' : ''} · the semifinal score is carried forward: final placing = semifinal + final score · ties: all six scores added back, then Kettei-sen.</p>`;
   if (roundsRingLine(did)) h += `<div class="row" style="justify-content:flex-end;margin-bottom:8px">${roundsRingLine(did)}</div>`;
+  // v1.43: the current round first, then the previous rounds from the most recent to the earliest
+  const secs = [];
   for (const rd of st.rounds) {
-    h += `<div class="stage-h label">${esc(KT.kpRoundName(rd))}</div><div class="stack">`;
+    let h = `<div class="stage-h label">${esc(KT.kpRoundName(rd))}${rd === st.rounds[st.rounds.length - 1] && !st.final ? ' · current round' : ''}</div><div class="stack">`;
     for (const P of Object.keys(rd.pools)) {
       const p = rd.pools[P];
       const chip = (p.rows[0] ? segRingChip(did, KT.kpSegOfKey(br, p.rows[0].key)) : '') + (p.complete ? '<span class="chip ok">Complete</span>' : `<span class="chip plain">${p.rows.filter(r => r.sheet).length}/${p.rows.length} scored</span>`);
       h += kpTableHTML(did, `${Object.keys(rd.pools).length > 1 ? (br.wtkf ? (rd.n === 1 ? 'Chart ' : 'Group ') + (KT.POOL_NAMES.indexOf(P) + 1) : 'Pool ' + P) : br.wtkf && rd.type === 'semi' ? 'Final elimination' : KT.kpRoundName(rd)}`, p.rows, p.order, { byRank: p.scoredAll, chip, needRp: p.needRp });
     }
     h += '</div>';
+    secs.push(h);
   }
   if (st.final) {
     const f = st.final;
-    h += `<div class="stage-h label">Final</div>` + kpTableHTML(did, 'Final', f.rows, f.order, { byRank: f.rows.every(r => r.sheet), carry: f.carried, medals: f.complete,
-      chip: segRingChip(did, 'F') + (f.complete ? '<span class="chip ok">Complete</span>' : `<span class="chip plain">${f.rows.filter(r => r.sheet).length}/${f.rows.length} scored</span>`), needRp: f.needRp });
+    secs.push(`<div class="stage-h label">Final${f.complete ? '' : ' · current round'}</div>` + kpTableHTML(did, 'Final', f.rows, f.order, { byRank: f.rows.every(r => r.sheet), carry: f.carried, medals: f.complete,
+      chip: segRingChip(did, 'F') + (f.complete ? '<span class="chip ok">Complete</span>' : `<span class="chip plain">${f.rows.filter(r => r.sheet).length}/${f.rows.length} scored</span>`), needRp: f.needRp }));
   }
-  return h;
+  return h + secs.reverse().join('');
 }
 
 function statBtn(tab, label, inner) {
@@ -6638,8 +6672,8 @@ function renderScore(force) {
   const sub = esc(dv.name) + (seg ? ' · ' + esc(SEG_LABEL(seg)) : '') + (S.d.rings[rid] ? ' · ' + esc(S.d.rings[rid].name) : '') + SHEET_BRACKET;
   const positions = positionsFor(dv, m, br), canS = canScoreMatch(did, mid);
   const wSide = r.status === 'done' && r.winner ? (r.winner === r.a ? 'a' : 'b') : '';
-  const hdr = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="corner a${cornerState(!!wSide, wSide, 'a')}">${wSide === 'a' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label" style="color:#fff;opacity:.8">Aka</div><div class="who">${esc(entName(r.a) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(r.a))}</div></div>
-    <div class="corner b${cornerState(!!wSide, wSide, 'b')}">${wSide === 'b' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label">Shiro</div><div class="who">${esc(entName(r.b) || 'TBD')}</div><div class="tiny muted">${esc(entDojo(r.b))}</div></div></div>`;
+  const hdr = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="corner a${cornerState(!!wSide, wSide, 'a')}">${wSide === 'a' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label" style="color:#fff;opacity:.8">Aka</div><div class="who">${esc(entName(r.a) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(r.a))}</div>${h2hPrevHTML(did, mid, r.a)}</div>
+    <div class="corner b${cornerState(!!wSide, wSide, 'b')}">${wSide === 'b' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label">Shiro</div><div class="who">${esc(entName(r.b) || 'TBD')}</div><div class="tiny muted">${esc(entDojo(r.b))}</div>${h2hPrevHTML(did, mid, r.b)}</div></div>`;
   if (r.status === 'done') {
     const can = canS && KT.canEdit(br, mid, DC.res[did]);
     root.innerHTML = sheet(title, `${hdr}${winBanner(wSide, entName(r.winner), (r.result || {}).method, r.result && r.result.pts)}
@@ -6758,7 +6792,7 @@ function openKP(did, key) {
   const dis = editable ? '' : 'disabled';
   const row = (field, label) => `<div><div class="label" style="margin-bottom:6px">${label}</div><div class="kprow" style="--j:${J}">${Array.from({ length: J }, (_, i) => `<label class="f"><span style="text-align:center">${i === 0 ? 'Shu-shin' : 'J' + (i + 1)}<span class="tiny jn" data-jn="${i}">${esc(posName(d.officials, i))}</span></span><input id="kp-${field}${i}" data-input="kp-j" data-f="${field}" data-i="${i}" inputmode="decimal" value="${esc((d[field] || [])[i] ?? '')}" ${dis} aria-label="${label} judge ${i + 1}"></label>`).join('')}</div></div>`;
   const kataLabel = br.kataRule ? 'Kata performed' : 'Choreography (optional)';
-  const body = `${officialsHTML(rid, 'kata', positions, d.officials, editable)}<div class="corner" style="background:var(--ai-soft);color:var(--ink)"><div class="label">${esc(ctx.label)}</div><div class="who">${esc(entName(ctx.id))}</div><div class="tiny muted">${esc(entDojo(ctx.id))}</div></div>
+  const body = `${officialsHTML(rid, 'kata', positions, d.officials, editable)}<div class="corner" style="background:var(--ai-soft);color:var(--ink)"><div class="label">${esc(ctx.label)}</div><div class="who">${esc(entName(ctx.id))}</div><div class="tiny muted">${esc(entDojo(ctx.id))}</div>${kpPrevHTML(did, key)}</div>
     <label class="f ${br.kataRule ? 'req' : ''}"><span>${kataLabel}</span><input id="kp-kata" data-input="kp-kata" value="${esc(d.kata || '')}" placeholder="${br.kataRule ? 'e.g. Bassai Dai' : ''}" ${dis} list="kata-list">
       <datalist id="kata-list">${br.kataRule ? KATA_LIST.map(k => `<option value="${k}">`).join('') : ''}</datalist></label>
     ${ctx.rp ? `<p class="small">Kettei-sen: ${br.kataRule ? 'a different kata than the one that tied; ' : ''}this score only breaks the tie and is not added to the total.</p>` : ctx.isFinal && ctx.semiKata && br.kataRule ? `<p class="small">Final elimination (semifinal) kata: <b>${esc(ctx.semiKata)}</b> — the final needs a different kata. The semifinal score${ctx.carry != null ? ` (${(ctx.carry / kpKept(br)).toFixed(3)})` : ''} is carried forward and added to the final score.</p>` : ctx.semi && !ctx.rp ? `<p class="small">Final elimination round: this score is carried forward to the final four${br.kataRule ? ', who must then perform a different kata. Any kata may be used here, even the one from the previous round' : ''}.</p>` : ''}
