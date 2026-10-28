@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.43.0';
+  const VERSION = '1.44.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -333,6 +333,17 @@ const KT = (function () {
     const seeded = entrants.filter(e => e.seed).sort((a, b) => a.seed - b.seed);
     const rest = shuffle(entrants.filter(e => !e.seed), rnd || Math.random);
     return seeded.concat(rest);
+  }
+  /** v1.44: list order of a division's entrants. list: [{id, last, first, group}];
+      mode 'name' (last, first A→Z) · 'name-desc' (Z→A) · 'club' / 'region' / 'country' (by group A→Z, no group last, then name A→Z). */
+  const ENT_SORTS = { name: 'Last, first name A→Z', 'name-desc': 'Last, first name Z→A', club: 'Club / dojo', region: 'Region', country: 'Country' };
+  function sortEntrants(list, mode) {
+    const cmp = (x, y) => String(x || '').localeCompare(String(y || ''), undefined, { sensitivity: 'base' });
+    const byName = (a, b) => cmp(a.last, b.last) || cmp(a.first, b.first) || cmp(a.id, b.id);
+    const out = list.slice();
+    if (mode === 'name-desc') return out.sort((a, b) => byName(b, a));
+    if (mode === 'club' || mode === 'region' || mode === 'country') return out.sort((a, b) => (!a.group - !b.group) || cmp(a.group, b.group) || byName(a, b));
+    return out.sort(byName);
   }
   /** Kata performance order (v1.38): entrants without a rank (seed) go first in random order; ranked entrants follow from the lowest rank to the highest, so rank 1 performs last. */
   function kataOrder(pl, rnd) {
@@ -1315,7 +1326,7 @@ const KT = (function () {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, ageFromYear, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
-    seedOrder, nextPow2, orderEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, kpPrevious, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
+    seedOrder, nextPow2, orderEntrants, ENT_SORTS, sortEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, kpPrevious, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS, RING_CHECKS, ringChecksDone, ringReadyOk,
   };
 })();

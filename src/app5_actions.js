@@ -448,6 +448,8 @@ const CHANGE = {
   'evdir-add': el => { if (el.value) setEventDirector(el.dataset.ev, el.value, true); },
   'org-add': el => { if (el.value) setOrganizer(el.value, true); },
   'person-ring': el => { const v = el.value, id = el.dataset.id; if (!v) return; if (v === '__dir') setDirector(id, true); else setPersonRing(id, v === '__none' ? '' : v); },
+  'ent-sort': el => { S.ui.entSort = el.value; try { localStorage.setItem('kt-entsort', el.value); } catch (e) { /* ignore */ }
+    if (el.id === 'd-entsort') reorderEntRows(el.value); else if (S.modal && S.modal.refresh) S.modal.refresh(); },
   'ring-check': el => { const rid = el.dataset.ring, rr = S.d.ringready[rid] || {}, checks = Object.assign({}, rr.checks, { [el.dataset.k]: el.checked });
     setRingReady(rid, KT.ringReadyOk(checks) ? { checks } : { checks, ready: false }); },   // unticking an item makes the ring not ready again
   'ring-helpers': el => setRingReady(el.dataset.ring, { helpers: el.value.trim() }),

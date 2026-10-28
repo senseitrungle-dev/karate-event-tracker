@@ -704,3 +704,7 @@ table.kp tr.live td { background: color-mix(in srgb, var(--ai-soft) 60%, transpa
 .prev-kata { font-size: .78rem; margin-top: 2px; overflow-wrap: anywhere; }
 .prev-kata b { font-feature-settings: "tnum" 1; }
 .corner.a .prev-kata, .corner.a .prev-kata .muted { color: #fff; opacity: .92; }
+/* v1.44: entrant list order in division settings */
+.ent-sort { max-width: 280px; margin-bottom: 8px; }
+.ent-grp { margin-top: 6px; padding-bottom: 2px; border-bottom: 1px solid var(--line); }
+.ent-list .ent-grp:first-child { margin-top: 0; }
