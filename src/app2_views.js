@@ -249,13 +249,16 @@ function teamsHTML() {
     return `<div class="card flush"><div class="card-h"><div><h3>${esc(T.label)}</h3><div class="small muted">${T.size[0] === T.size[1] ? T.size[0] : T.size[0] + '–' + T.size[1]} members · ${T.genders.map(g => KT.GENDERS[g]).join(' / ')}</div></div>
       <div class="row" style="gap:6px">${sortSel}<button class="sm" data-act="team-new" data-et="${et}">New team</button></div></div>
       ${need.length ? `<div class="notice info" style="margin:10px 16px 0">${plural(need.length, 'competitor')} entered ${esc(T.short)} without a team: ${need.slice(0, 6).map(c => esc(c.firstName + ' ' + c.lastName)).join(', ')}${need.length > 6 ? '…' : ''}</div>` : ''}
-      <div class="tw"><table><tbody>${list.map(t => {
+      <div class="team-list">${list.map(t => {
         const mem = (t.memberIds || []).map(id => DC.compBy[id]).filter(Boolean);
-        const dv = divOf(t), head = mode === 'division' && dv !== lastDiv ? `<tr class="grp-row"><td colspan="3">${dv ? esc(dv.name) : 'No division'} · ${list.filter(x => divOf(x) === dv).length}</td></tr>` : ''; lastDiv = dv;
-        return head + `<tr class="click" data-act="team-edit" data-id="${esc(t.id)}"><td><div class="name">${esc(t.name)}</div><div class="dojo">${esc(t.dojo || '')}</div></td>
-        <td class="small">${mem.map(m => esc(m.firstName + ' ' + m.lastName)).join(', ') || '<span class="muted">No members</span>'}</td>
-        <td>${unplaced.has(t.id) ? '<span class="chip bad">No division</span>' : placed[t.id] ? `<span class="small">${esc(DC.divBy[placed[t.id]].name)}</span>` : ''}${t.status === 'withdrawn' ? ' <span class="chip bad">Withdrawn</span>' : ''}</td></tr>`;
-      }).join('') || `<tr><td class="muted">No teams yet.</td></tr>`}</tbody></table></div></div>`;
+        const dv = divOf(t), head = mode === 'division' && dv !== lastDiv ? `<div class="team-grp">${dv ? esc(dv.name) : 'No division'} · ${list.filter(x => divOf(x) === dv).length}</div>` : ''; lastDiv = dv;
+        // v1.47: one stacked row per team (name, club, members, division) — fits a phone's width
+        return head + `<div class="team-row click" data-act="team-edit" data-id="${esc(t.id)}" role="button" tabindex="0">
+          <div class="team-top"><span class="name">${esc(t.name)}</span><span class="team-chips">${unplaced.has(t.id) ? '<span class="chip bad">No division</span>' : ''}${t.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : ''}<span class="team-go" aria-hidden="true">›</span></span></div>
+          ${t.dojo ? `<div class="dojo">${esc(t.dojo)}</div>` : ''}
+          <div class="small team-mem">${mem.map(m => esc(m.firstName + ' ' + m.lastName)).join(' · ') || '<span class="muted">No members</span>'}</div>
+          ${mode === 'name' && dv ? `<div class="tiny muted">${esc(dv.name)}</div>` : ''}</div>`;
+      }).join('') || `<div class="small muted" style="padding:12px 16px">No teams yet.</div>`}</div></div>`;
   }).join('');
   return eventHeader() + (types.length ? `<div class="stack">${secs}</div>` : `<div class="card empty"><p>This tournament offers no team events. Turn them on in Event settings.</p></div>`);
 }
