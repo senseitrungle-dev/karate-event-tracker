@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.43.0 Requirements & Design
+# Karate Event Tracker · v1.44.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -626,3 +626,13 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - `prevKataHTML` / `kpPrevHTML` / `h2hPrevHTML` (app2_views): "Semifinal: *Bassai Dai* · 6.900" under the name, or Han-soku. It is shown on the mat card's "on the mat" item and on the kata score card's competitor block. For head-to-head kata, each side's latest finished match in the division (by result time) shows its kata and score (flags count, or scores to 3 decimals) on the mat card and the scoresheet corners.
 - `kpViewHTML`: the round sections are built in order, then output reversed, so the final (or the last round reached) comes first, marked "· current round" while unfinished.
 **Verify.** logic.test (kpPrevious: final → semifinal kata + avg, semifinal → elimination round 1, round 1 → none, Kettei-sen → tied performance). test/prevkata.js (5 entrants: bracket shows Final · current round then Semifinal; final score card and mat card show "Semifinal: Bassai Dai · 6.900"; first round: current round first, no previous line; phone width). e2e set, ringcall, matnow, matready, bracketback, v117, winner, timeup, wtkfcharts, worlds2026.
+
+## §70 Division settings: list entrants by name A→Z / Z→A, or by club / region / country (v1.44.0)
+**Requirement.** In division settings, the entrants can be listed by last, first name ascending or descending, or grouped by club, region or country.
+**Design.**
+- `KT.ENT_SORTS` / `KT.sortEntrants(list, mode)`: modes `name` (last, first A→Z, case-insensitive; the default), `name-desc` (Z→A), and `club` / `region` / `country` (group A→Z, entrants with no group last, then name A→Z). Teams sort by team name.
+- `sortedEntrants` (app1_core) maps an entrant to its club (dojo), region (state) or country through `entGroupLabel` with the matching level. The choice is `S.ui.entSort`, remembered on this device (localStorage `kt-entsort`, read in try/catch).
+- Division settings form: a "Sort entrants" select above Entrants & seeds; group modes add a heading per club / region / country ("No club" etc. for blanks). Changing it re-orders the rows in place (`reorderEntRows`), so seeds typed but not yet saved stay with their entrant. The select has no `name`, so it is not saved with the division.
+- Division panel: the same select; entrant chips follow the order (with group headings). Changing it there re-renders the panel.
+- Test fix: golive.js ticks the ring checklist one item at a time and waits for each tick (re-render race).
+**Verify.** logic.test (sortEntrants). test/entsort.js (national demo, desktop and 390 px: A→Z default, Z→A, typed seed kept when re-ordering, club and region headings in order, country, panel follows the choice and re-renders, no horizontal scroll). e2e set, combine, divorder, rmgroup, worlds2026, fedimport, touchselect.

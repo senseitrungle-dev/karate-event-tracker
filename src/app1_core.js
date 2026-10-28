@@ -206,6 +206,21 @@ function entGroup(id, level) {
   const ds = [...new Set((t.memberIds || []).map(m => DC.compBy[m] && (DC.compBy[m][f] || '').trim().toLowerCase()).filter(Boolean))];
   return ds.length === 1 ? ds[0] : '';
 }
+/** v1.44: a division's entrants in the chosen list order (S.ui.entSort), with the group used for headings. */
+const ENT_SORT_LEVEL = { club: 'Local', region: 'National', country: 'International' };
+function entSortMode() {
+  if (S.ui.entSort === undefined) { try { S.ui.entSort = localStorage.getItem('kt-entsort') || ''; } catch (e) { S.ui.entSort = ''; } }   // remembered on this device
+  return KT.ENT_SORTS[S.ui.entSort] ? S.ui.entSort : 'name';
+}
+function sortedEntrants(ids, mode) {
+  mode = mode || entSortMode();
+  const lv = ENT_SORT_LEVEL[mode];
+  return KT.sortEntrants(ids.map(id => { const c = DC.compBy[id], t = DC.teamBy[id];
+    return { id, last: c ? c.lastName : t ? t.name : '', first: c ? c.firstName : '', group: lv ? entGroupLabel(id, lv) : '' }; }), mode);
+}
+function entSortSelect(id) {
+  return `<label class="f ent-sort"><span>Sort entrants</span><select id="${id}" data-change="ent-sort">${Object.entries(KT.ENT_SORTS).map(([k, l]) => opt(k, l, entSortMode())).join('')}</select></label>`;
+}
 /** Display name of an entrant's separation group (country / region / dojo), as typed. */
 function entGroupLabel(id, level) {
   level = level || ((curEvent() || {}).level);

@@ -400,11 +400,25 @@ function divForm(id) {
       <label class="f"><span>Kettei-sen (seconds, 0 = none)</span><input type="number" name="ketteiTime" id="d-kt" min="0" max="180" step="10" value="${esc(sc.ketteiTime)}"></label>` : ''}
       ${k === 'teamkumite' ? `<label class="f"><span>Rounds per team match</span><select name="bouts" id="d-bouts">${opt('3', '3 (WTKF)', sc.bouts)}${opt('5', '5', sc.bouts)}</select></label>` : ''}
     </div></fieldset>
-    ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${smallDivHTML(id)}${ents.length ? `<div class="stack" style="gap:6px">${ents.map(e => `<div class="row between small"><span style="min-width:0"><button type="button" class="ghost ent-link" data-act="ent-open" data-id="${esc(e)}" title="Open — change division, details"><b>${esc(entName(e))}</b> ›</button> <span class="muted">${esc(entDojo(e))}</span></span>
+    ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${smallDivHTML(id)}${ents.length ? `${entSortSelect('d-entsort')}<div class="stack ent-list" id="d-ents" style="gap:6px">${entRowsSorted(ents).map(({ id: e, head }) => `${head}<div class="row between small ent-row" data-id="${esc(e)}"><span style="min-width:0"><button type="button" class="ghost ent-link" data-act="ent-open" data-id="${esc(e)}" title="Open — change division, details"><b>${esc(entName(e))}</b> ›</button> <span class="muted">${esc(entDojo(e))}</span></span>
       <input type="number" min="1" max="64" name="seed_${esc(e)}" id="seed-${esc(e)}" data-input="seed" value="${esc((d.seeds || {})[e] || '')}" placeholder="Seed" style="width:86px" aria-label="Seed"></div>`).join('')}</div>
       <p class="notice bad small" id="seed-msg" hidden style="margin-top:6px"></p>
       <p class="tiny muted" style="margin-top:6px">Each seed number can be given to one entrant only. ${d.chart !== 'standard' && (d.chart === 'wtkf' || ['International', 'National'].includes(ev.level)) ? 'WTKF charts: seeds 1–4 = last championship’s 1st–4th (kumite: 1st A-1, 2nd B-1, 3rd B-2, 4th A-2 with byes first; kata: at the bottom of their chart).' : ''} Seeded entrants are kept apart in the draw; the others are placed at random, with entrants from the same ${esc(sepLabel())} put in different pools and bracket halves wherever possible.</p>` : '<p class="small muted">No entrants match this division yet.</p>'}</fieldset>` : ''}</form>`,
     `${id ? `<button class="danger" data-act="div-delete" style="margin-right:auto">Delete</button>${bs.drawn ? `<button class="danger" data-act="bracket-clear">Clear bracket</button>` : ''}` : ''}<button data-act="modal-close">Cancel</button>${id && ents.length ? `<button data-act="draw" data-id="${esc(id)}" ${bs.results ? 'disabled' : ''}>${bs.drawn ? 'Save & redraw' : 'Save & draw'}</button>` : ''}<button class="primary" type="submit" form="f-div">Save</button>`));
+}
+/** v1.44: entrant rows of the division form in list order; group headings (club / region / country) before each group. */
+function entRowsSorted(ids, mode) {
+  mode = mode || entSortMode();
+  let last = null;
+  return sortedEntrants(ids, mode).map(x => { const g = ENT_SORT_LEVEL[mode] ? (x.group || 'No ' + (mode === 'club' ? 'club' : mode)) : null;
+    const head = g !== null && g !== last ? `<div class="ent-grp label">${esc(g)}</div>` : ''; last = g; return { id: x.id, head }; });
+}
+/** Re-order the rows in place (typed seeds stay as they are). */
+function reorderEntRows(mode) {
+  const box = $('#d-ents'); if (!box) return;
+  const rows = Object.fromEntries($$('.ent-row', box).map(r => [r.dataset.id, r]));
+  $$('.ent-grp', box).forEach(h => h.remove());
+  for (const { id, head } of entRowsSorted(Object.keys(rows), mode)) { if (head) box.insertAdjacentHTML('beforeend', head); box.appendChild(rows[id]); }
 }
 /** What the draw keeps apart, by event level. */
 function sepLabel(level) { level = level || (curEvent() || {}).level; return level === 'International' ? 'country' : level === 'National' ? 'region' : 'dojo'; }

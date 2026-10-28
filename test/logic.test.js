@@ -770,6 +770,17 @@ t('kpPrevious: previous round kata and average (v1.43)', () => {
   assert.equal(KT.kpPrevious(br, 'R1_' + fid), null);
   assert.equal(KT.kpPrevious(br, 'R1_' + fid + '_rp').kata, 'K1');   // Kettei-sen: the tied performance
 });
+t('sortEntrants: name A→Z / Z→A, by club / region / country (v1.44)', () => {
+  const L = [{ id: '1', last: 'Sato', first: 'Ken', group: 'Japan' }, { id: '2', last: 'ashby', first: 'Zoe', group: 'Canada' },
+    { id: '3', last: 'Ashby', first: 'Ada', group: '' }, { id: '4', last: 'Moreau', first: 'Luc', group: 'canada' }];
+  const ids = m => KT.sortEntrants(L, m).map(e => e.id).join('');
+  assert.equal(ids('name'), '3241');
+  assert.equal(ids('name-desc'), '1423');
+  assert.equal(ids('country'), '2413');   // Canada (Ashby, Moreau), Japan, then no country
+  assert.equal(ids('club'), '2413');
+  assert.equal(ids(undefined), '3241');
+  assert.equal(L[0].id, '1');             // input not changed
+});
 t('3rd-place match always before the championship (v1.39)', () => {
   const ready = br => KT.readyMatches(br).map(m => m.id);
   const play = (br, id) => { br.results[id] = { winnerId: KT.resolve(br)[id].a, method: 'x', pts: { a: 1, b: 0 } }; };
