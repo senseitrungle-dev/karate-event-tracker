@@ -400,7 +400,7 @@ function divForm(id) {
       <label class="f"><span>Kettei-sen (seconds, 0 = none)</span><input type="number" name="ketteiTime" id="d-kt" min="0" max="180" step="10" value="${esc(sc.ketteiTime)}"></label>` : ''}
       ${k === 'teamkumite' ? `<label class="f"><span>Rounds per team match</span><select name="bouts" id="d-bouts">${opt('3', '3 (WTKF)', sc.bouts)}${opt('5', '5', sc.bouts)}</select></label>` : ''}
     </div></fieldset>
-    ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${smallDivHTML(id)}${ents.length ? `${entSortSelect('d-entsort')}<div class="stack ent-list" id="d-ents" style="gap:6px">${entRowsSorted(ents).map(({ id: e, head }) => `${head}<div class="row between small ent-row" data-id="${esc(e)}"><span style="min-width:0"><button type="button" class="ghost ent-link" data-act="ent-open" data-id="${esc(e)}" title="Open — change division, details"><b>${esc(entName(e))}</b> ›</button> <span class="muted">${esc(entDojo(e))}</span></span>
+    ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${smallDivHTML(id)}${ents.length ? `${entSortSelect('d-entsort')}<div class="stack ent-list" id="d-ents" style="gap:6px">${entRowsSorted(ents).map(({ id: e, head }) => `${head}<div class="row between small ent-row" data-id="${esc(e)}"><span style="min-width:0"><button type="button" class="ghost ent-link" data-act="ent-open" data-id="${esc(e)}" title="Open — change division, details"><b>${esc(entName(e, id))}</b> ›</button> <span class="muted">${esc(entDojo(e))}</span></span>
       <input type="number" min="1" max="64" name="seed_${esc(e)}" id="seed-${esc(e)}" data-input="seed" value="${esc((d.seeds || {})[e] || '')}" placeholder="Seed" style="width:86px" aria-label="Seed"></div>`).join('')}</div>
       <p class="notice bad small" id="seed-msg" hidden style="margin-top:6px"></p>
       <p class="tiny muted" style="margin-top:6px">Each seed number can be given to one entrant only. ${d.chart !== 'standard' && (d.chart === 'wtkf' || ['International', 'National'].includes(ev.level)) ? 'WTKF charts: seeds 1–4 = last championship’s 1st–4th (kumite: 1st A-1, 2nd B-1, 3rd B-2, 4th A-2 with byes first; kata: at the bottom of their chart).' : ''} Seeded entrants are kept apart in the draw; the others are placed at random, with entrants from the same ${esc(sepLabel())} put in different pools and bracket halves wherever possible.</p>` : '<p class="small muted">No entrants match this division yet.</p>'}</fieldset>` : ''}</form>`,
@@ -651,7 +651,7 @@ function combineForm(did) {
   const lbl = x => `${x.name} · ${plural(divEntrants(x.id).length, 'entrant')}${S.d.brackets[x.id] ? ' · drawn' : ''}`;
   openModal(sheet(`Combine · ${esc(d.name)}`, `<form id="f-combine" data-form="combine" data-id="${esc(did)}" class="stack">
     <p class="small">${plural(ents.length, team ? 'team' : 'entrant')} here — at least ${MIN_DIV} are needed. Move ${ents.length === 1 ? 'it' : 'them'} into another ${esc(KT.EVENT_TYPES[d.eventType].label)} division:</p>
-    <div class="pill-list">${ents.map(e => `<span class="chip plain">${esc(entName(e))}</span>`).join('')}</div>
+    <div class="pill-list">${ents.map(e => `<span class="chip plain">${esc(entName(e, did))}</span>`).join('')}</div>
     <label class="f"><span>Combine into</span><select name="target" id="cmb-target" data-change="combine-target">${tg.map(x => opt(x.id, lbl(x), tg[0].id)).join('')}</select></label>
     <p class="small" id="cmb-out"></p>
     <label class="check"><input type="checkbox" name="removeOld" checked> Delete “${esc(d.name)}” once it is empty</label>
@@ -770,7 +770,7 @@ function tiebreakForm(did, P) {
   S.tbOrder = st.rows.map(r => r.id);
   S.modal = { type: 'tb', did, P, refresh: null };
   const draw = () => `<p class="small muted">Set the final order for Pool ${esc(P)} (for example after a deciding bout or a referee panel decision).</p>
-    <div class="stack" style="gap:6px">${S.tbOrder.map((id, i) => `<div class="row between"><span><b class="num">${i + 1}.</b> ${esc(entName(id))} <span class="muted small">${esc(entDojo(id))}</span></span>
+    <div class="stack" style="gap:6px">${S.tbOrder.map((id, i) => `<div class="row between"><span><b class="num">${i + 1}.</b> ${esc(entName(id, did))} <span class="muted small">${esc(entDojo(id))}</span></span>
     <span class="row" style="gap:4px"><button class="sm" data-act="tb-move" data-i="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Up">↑</button><button class="sm" data-act="tb-move" data-i="${i}" data-dir="1" ${i === S.tbOrder.length - 1 ? 'disabled' : ''} aria-label="Down">↓</button></span></div>`).join('')}</div>`;
   S.tbDraw = draw;
   openModal(sheet(`Tiebreak · Pool ${esc(P)}`, `<div id="tb-body">${draw()}</div>`, `<button data-act="modal-close">Cancel</button><button class="primary" data-act="tb-save">Save order</button>`));

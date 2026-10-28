@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.44.0';
+  const VERSION = '1.45.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -634,7 +634,7 @@ const KT = (function () {
     rnd = rnd || Math.random;
     const format = division.format || 'SE';
     const ordered = orderEntrants(entrants, rnd);
-    const br = { divisionId: division.id, format, entrants: ordered.map(e => e.id), bronze: division.bronze || 'two',
+    const br = { divisionId: division.id, format, entrants: ordered.map(e => e.id), seeds: Object.fromEntries(entrants.filter(e => +e.seed > 0).map(e => [e.id, +e.seed])), bronze: division.bronze || 'two',
       reset: division.reset !== false, matches: {}, results: {}, pools: null, tiebreak: {}, createdAt: new Date().toISOString(), version: VERSION };
     if (format === 'KP') {
       br.judges = +((division.scoring || {}).judges) || 6;

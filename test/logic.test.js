@@ -781,6 +781,14 @@ t('sortEntrants: name A→Z / Z→A, by club / region / country (v1.44)', () => 
   assert.equal(ids(undefined), '3241');
   assert.equal(L[0].id, '1');             // input not changed
 });
+t('drawn bracket keeps the seeds it was drawn with (v1.45)', () => {
+  const e = ents(6); e[0].seed = 2; e[3].seed = 1;
+  const br = KT.generateBracket({ id: 'x', format: 'SE' }, e, rng(1));
+  assert.deepEqual(br.seeds, { [e[0].id]: 2, [e[3].id]: 1 });
+  const kp = KT.generateBracket({ id: 'y', format: 'KP', eventType: 'IKATA' }, e, rng(2));
+  assert.equal(kp.seeds[e[3].id], 1);
+  assert.deepEqual(KT.generateBracket({ id: 'z', format: 'RR' }, ents(4), rng(3)).seeds, {});
+});
 t('3rd-place match always before the championship (v1.39)', () => {
   const ready = br => KT.readyMatches(br).map(m => m.id);
   const play = (br, id) => { br.results[id] = { winnerId: KT.resolve(br)[id].a, method: 'x', pts: { a: 1, b: 0 } }; };

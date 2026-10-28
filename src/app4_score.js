@@ -77,6 +77,8 @@ function kyuCfg(dv) {
   return null;
 }
 const ncrLevel = dv => !!kyuCfg(dv);   // kept for older call sites
+/** v1.45: division of the open scoresheet (names show the rank mark " *N"). */
+function mDid() { return (S.modal && S.modal.did) || ''; }
 function partOf(dv, m, br) { return kindOf(dv) === 'fukugo' ? KT.fukugoPart(m, br) : null; }
 function evaluate(dv, d, m, br) {
   const k = kindOf(dv), sc = scoringOf(dv), kogo = kumiteStyle(dv) === 'kogo';
@@ -137,7 +139,7 @@ function kumitePanel(log, path, sc, r, opts) {
   const waitStart = !ev.done && ev.phase !== 'hantei' && !CLOCK.running && CLOCK.await && clockLeft() > 0;
   const corner = (s) => {
     const st = ev.st[s];
-    const name = s === 'a' ? entName(r.a) : entName(r.b);
+    const name = s === 'a' ? entName(r.a, mDid()) : entName(r.b, mDid());
     const dis = ev.done || CLOCK.running ? 'disabled' : '';
     const b = (t, l, cls) => `<button class="${cls || ''}" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="${t}" ${dis}${t === 'tento' ? ' title="Fall: Ten-to penalty match (no points). After time has expired: 1 point to the opponent."' : ''}>${l}</button>`;
     return `<div class="corner ${s}${cornerState(ev.done, ev.winner, s)}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${ev.done && ev.winner === s ? WIN_CHIP : ''}</div>
@@ -164,7 +166,7 @@ function kumitePanel(log, path, sc, r, opts) {
 function kogoPanel(log, path, r, opts) {
   const ev = KT.kogoEval(log, opts);
   const corner = (s) => {
-    const name = s === 'a' ? entName(r.a) : entName(r.b);
+    const name = s === 'a' ? entName(r.a, mDid()) : entName(r.b, mDid());
     const dis = ev.done ? 'disabled' : '';
     const off = !ev.done && ev.phase !== 'hantei' && ev.offense === s;
     const live = !ev.done && ev.phase !== 'hantei';
@@ -199,7 +201,7 @@ function ncrPanel(log, path, r, cfg) {
   const level = cfg.decide === 'points' ? 3 : cfg.ncr === 1 ? 1 : 2;   // which buttons: 1 = Han-soku only, 2 = warning + Han-soku, 3 = points
   const ev = KT.kyuEval(log, cfg), live = !ev.done && ev.phase === 'regular';
   const corner = s => {
-    const name = s === 'a' ? entName(r.a) : entName(r.b), off = live && ev.offense === s;
+    const name = s === 'a' ? entName(r.a, mDid()) : entName(r.b, mDid()), off = live && ev.offense === s;
     const b = (t, l, cls, extra) => `<button class="${cls || ''}" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="${t}" ${ev.done ? 'disabled' : ''} ${extra || ''}>${l}</button>`;
     const btns = level === 3
       ? `${b('waza', 'Waza-ari', '', live ? '' : 'disabled')}${b('saki', 'Saki', 'pen', live && off ? 'disabled title="Saki is a defender’s penalty"' : '')}${b('chui', 'Chui (contact)', 'pen')}${b('hansoku', 'Han-soku', 'pen')}`
@@ -221,10 +223,10 @@ const SHEET_BRACKET = ' <button type="button" class="sm ghost sub-btn" data-act=
     v1.41: without a list, each side's kata is typed (shown next to the name in the bracket). */
 function kataListHTML(dv, d, r) {
   const L = dv.kataList || [];
-  if (!L.length) { const k = d.kata || {}, inp = s => `<label class="f" style="min-width:180px"><span>${s === 'a' ? 'Aka' : 'Shiro'} kata · ${esc(entName(r[s]))}</span><input id="kata-${s}" data-change="kata-pick" data-s="${s}" value="${esc(k[s] || '')}" list="kata-h2h" placeholder="e.g. Bassai Dai" autocomplete="off"></label>`;
+  if (!L.length) { const k = d.kata || {}, inp = s => `<label class="f" style="min-width:180px"><span>${s === 'a' ? 'Aka' : 'Shiro'} kata · ${esc(entName(r[s], mDid()))}</span><input id="kata-${s}" data-change="kata-pick" data-s="${s}" value="${esc(k[s] || '')}" list="kata-h2h" placeholder="e.g. Bassai Dai" autocomplete="off"></label>`;
     return `<div class="row" style="gap:8px;flex-wrap:wrap">${inp('a')}${inp('b')}</div><datalist id="kata-h2h">${KATA_LIST.map(x => `<option value="${esc(x)}">`).join('')}</datalist>`; }
   const k = d.kata || {}, sel = s => `<select data-change="kata-pick" data-s="${s}" aria-label="${s === 'a' ? 'Aka' : 'Shiro'} kata">${opt('', '— kata —', k[s] || '')}${L.map(x => opt(x, x, k[s] || '')).join('')}</select>`;
-  return `<div class="notice info" style="display:block"><b>Allowed kata:</b> ${L.map(esc).join(' · ')}<div class="row" style="margin-top:6px;gap:8px;flex-wrap:wrap"><label class="f" style="min-width:180px"><span>Aka · ${esc(entName(r.a))}</span>${sel('a')}</label><label class="f" style="min-width:180px"><span>Shiro · ${esc(entName(r.b))}</span>${sel('b')}</label></div><span class="tiny">A competitor may repeat a kata or change it from round to round, within this list.</span></div>`;
+  return `<div class="notice info" style="display:block"><b>Allowed kata:</b> ${L.map(esc).join(' · ')}<div class="row" style="margin-top:6px;gap:8px;flex-wrap:wrap"><label class="f" style="min-width:180px"><span>Aka · ${esc(entName(r.a, mDid()))}</span>${sel('a')}</label><label class="f" style="min-width:180px"><span>Shiro · ${esc(entName(r.b, mDid()))}</span>${sel('b')}</label></div><span class="tiny">A competitor may repeat a kata or change it from round to round, within this list.</span></div>`;
 }
 function teamPanel(d, sc, r, out, kogo) {
   const ta = DC.teamBy[r.a] || {}, tb = DC.teamBy[r.b] || {};
@@ -240,7 +242,7 @@ function teamPanel(d, sc, r, out, kogo) {
     <p class="tiny muted">WTKF: every round is fought; the higher team total wins (Ippon 10). Han-soku or Ki-ken of any member decides the whole team match. Tie → Kettei-sen by Representative.</p>
     <div class="row">${tabs}</div>
     <div class="bout"><div class="bout-h"><b>${isD ? 'Kettei-sen by Representative' : `Round ${idx + 1}`}</b><div class="row">${sel(ta, 'a', isD ? 'd' : idx, b.ma)}${sel(tb, 'b', isD ? 'd' : idx, b.mb)}</div></div>
-    ${kumitePanel(b.log || [], path, sc, r, { kogo: kogo && !isD, allowDraw: !isD, ketteiOnly: isD, names: { a: b.ma ? nm(ta, b.ma) : entName(r.a), b: b.mb ? nm(tb, b.mb) : entName(r.b) } })}</div></div>`;
+    ${kumitePanel(b.log || [], path, sc, r, { kogo: kogo && !isD, allowDraw: !isD, ketteiOnly: isD, names: { a: b.ma ? nm(ta, b.ma) : entName(r.a, mDid()), b: b.mb ? nm(tb, b.mb) : entName(r.b, mDid()) } })}</div></div>`;
 }
 function fukugoPanel(d, sc, r, out, part, kogo) {
   if (part === 'kitei') return `<p class="small muted">Ki-tei round: both competitors perform the designated kata together; five judges each choose a winner (no tie).</p>${flagsPanel(d, { judges: 5 }, 'flags', 'Ki-tei · judges’ flags')}`;
@@ -261,11 +263,11 @@ function renderScore(force) {
   const sub = esc(dv.name) + (seg ? ' · ' + esc(SEG_LABEL(seg)) : '') + (S.d.rings[rid] ? ' · ' + esc(S.d.rings[rid].name) : '') + SHEET_BRACKET;
   const positions = positionsFor(dv, m, br), canS = canScoreMatch(did, mid);
   const wSide = r.status === 'done' && r.winner ? (r.winner === r.a ? 'a' : 'b') : '';
-  const hdr = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="corner a${cornerState(!!wSide, wSide, 'a')}">${wSide === 'a' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label" style="color:#fff;opacity:.8">Aka</div><div class="who">${esc(entName(r.a) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(r.a))}</div>${h2hPrevHTML(did, mid, r.a)}</div>
-    <div class="corner b${cornerState(!!wSide, wSide, 'b')}">${wSide === 'b' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label">Shiro</div><div class="who">${esc(entName(r.b) || 'TBD')}</div><div class="tiny muted">${esc(entDojo(r.b))}</div>${h2hPrevHTML(did, mid, r.b)}</div></div>`;
+  const hdr = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="corner a${cornerState(!!wSide, wSide, 'a')}">${wSide === 'a' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label" style="color:#fff;opacity:.8">Aka</div><div class="who">${esc(entName(r.a, mDid()) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(r.a))}</div>${h2hPrevHTML(did, mid, r.a)}</div>
+    <div class="corner b${cornerState(!!wSide, wSide, 'b')}">${wSide === 'b' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label">Shiro</div><div class="who">${esc(entName(r.b, mDid()) || 'TBD')}</div><div class="tiny muted">${esc(entDojo(r.b))}</div>${h2hPrevHTML(did, mid, r.b)}</div></div>`;
   if (r.status === 'done') {
     const can = canS && KT.canEdit(br, mid, DC.res[did]);
-    root.innerHTML = sheet(title, `${hdr}${winBanner(wSide, entName(r.winner), (r.result || {}).method, r.result && r.result.pts)}
+    root.innerHTML = sheet(title, `${hdr}${winBanner(wSide, entName(r.winner, mDid()), (r.result || {}).method, r.result && r.result.pts)}
       ${canScoreDiv(did) ? recordHTML(dv, br, m, r) : officialsRec((r.result || {}).officials, positions)}
       ${!can && canS ? '<p class="small muted">This result can no longer be changed because a later match that depends on it has been scored. Undo that match first.</p>' : ''}`,
       `${can ? '<button class="danger" data-act="undo-result">Undo result</button>' : ''}<button class="primary" data-act="modal-close">Close</button>`, sub);
@@ -284,7 +286,7 @@ function renderScore(force) {
   else if (k === 'teamkumite') body = teamPanel(d, sc, r, out, kogo);
   else if (k === 'fukugo') body = fukugoPanel(d, sc, r, out, part, kogo);
   const kiken = `<div class="row small"><span class="muted">Withdrawal / no-show:</span><button class="sm ${d.kiken === 'a' ? 'danger' : ''}" data-act="kiken" data-s="a">Aka kiken</button><button class="sm ${d.kiken === 'b' ? 'danger' : ''}" data-act="kiken" data-s="b">Shiro kiken</button></div>`;
-  const banner = out.done ? winBanner(out.winner, entName(out.winner === 'a' ? r.a : r.b), out.method, out.pts) : '';
+  const banner = out.done ? winBanner(out.winner, entName(out.winner === 'a' ? r.a : r.b, mDid()), out.method, out.pts) : '';
   const ring = S.d.rings[rid];
   const offNote = out.done && offErr ? `<p class="small" style="color:var(--bad)">${esc(offErr)}</p>` : '';
   const openEl = document.activeElement && document.activeElement.id; const wasOpen = !!root.querySelector('details.officials[open]');
@@ -343,7 +345,7 @@ async function saveResult() {
   dropDraft(M.key);
   const rid = matchRing(M.did, M.mid);
   if (S.d.rings[rid]) S.store.set(P.live(S.evId, 'ringstate', rid), Object.assign({ did: '', mid: '', at: new Date().toISOString() }, keepCall(rid, { did: M.did, mid: M.mid }))).catch(() => {});
-  toast(`${entName(winnerId)} wins · ${out.method}`);
+  toast(`${entName(winnerId, mDid())} wins · ${out.method}`);
   closeModal();
 }
 
@@ -381,7 +383,7 @@ function openKP(did, key) {
   const dis = editable ? '' : 'disabled';
   const row = (field, label) => `<div><div class="label" style="margin-bottom:6px">${label}</div><div class="kprow" style="--j:${J}">${Array.from({ length: J }, (_, i) => `<label class="f"><span style="text-align:center">${i === 0 ? 'Shu-shin' : 'J' + (i + 1)}<span class="tiny jn" data-jn="${i}">${esc(posName(d.officials, i))}</span></span><input id="kp-${field}${i}" data-input="kp-j" data-f="${field}" data-i="${i}" inputmode="decimal" value="${esc((d[field] || [])[i] ?? '')}" ${dis} aria-label="${label} judge ${i + 1}"></label>`).join('')}</div></div>`;
   const kataLabel = br.kataRule ? 'Kata performed' : 'Choreography (optional)';
-  const body = `${officialsHTML(rid, 'kata', positions, d.officials, editable)}<div class="corner" style="background:var(--ai-soft);color:var(--ink)"><div class="label">${esc(ctx.label)}</div><div class="who">${esc(entName(ctx.id))}</div><div class="tiny muted">${esc(entDojo(ctx.id))}</div>${kpPrevHTML(did, key)}</div>
+  const body = `${officialsHTML(rid, 'kata', positions, d.officials, editable)}<div class="corner" style="background:var(--ai-soft);color:var(--ink)"><div class="label">${esc(ctx.label)}</div><div class="who">${esc(entName(ctx.id, did))}</div><div class="tiny muted">${esc(entDojo(ctx.id))}</div>${kpPrevHTML(did, key)}</div>
     <label class="f ${br.kataRule ? 'req' : ''}"><span>${kataLabel}</span><input id="kp-kata" data-input="kp-kata" value="${esc(d.kata || '')}" placeholder="${br.kataRule ? 'e.g. Bassai Dai' : ''}" ${dis} list="kata-list">
       <datalist id="kata-list">${br.kataRule ? KATA_LIST.map(k => `<option value="${k}">`).join('') : ''}</datalist></label>
     ${ctx.rp ? `<p class="small">Kettei-sen: ${br.kataRule ? 'a different kata than the one that tied; ' : ''}this score only breaks the tie and is not added to the total.</p>` : ctx.isFinal && ctx.semiKata && br.kataRule ? `<p class="small">Final elimination (semifinal) kata: <b>${esc(ctx.semiKata)}</b> — the final needs a different kata. The semifinal score${ctx.carry != null ? ` (${(ctx.carry / kpKept(br)).toFixed(3)})` : ''} is carried forward and added to the final score.</p>` : ctx.semi && !ctx.rp ? `<p class="small">Final elimination round: this score is carried forward to the final four${br.kataRule ? ', who must then perform a different kata. Any kata may be used here, even the one from the previous round' : ''}.</p>` : ''}
@@ -394,7 +396,7 @@ function openKP(did, key) {
     ${saved.hansoku ? '<p class="small"><b>Han-soku</b> (zero card) — scored 0.</p>' : `<p class="small">Kata: <b>${esc(saved.kata || '—')}</b></p>${kpRecTable(saved.s, J, withApp || saved.app ? 'Kata' : 'Score')}${saved.app ? kpRecTable(saved.app, J, 'Application') : ''}`}
     ${officialsRec(saved.officials, positions)}${recordedBy(saved)}</div></details>` : '';
   const ring = S.d.rings[rid];
-  openModal(sheet(esc(entName(ctx.id)), recBlock + body,
+  openModal(sheet(esc(entName(ctx.id, did)), recBlock + body,
     `${ring && editable ? `<button data-act="kp-call" style="margin-right:auto">Call to ${esc(ring.name)}</button>` : ''}${saved && editable ? '<button class="danger" data-act="kp-clear">Clear score</button>' : ''}<button data-act="modal-close">Close</button>${editable ? '<button class="primary" data-act="kp-save" id="kp-save">Save score</button>' : ''}`,
     `${esc(dv.name)}${ring ? ' · ' + esc(ring.name) : ''}${SHEET_BRACKET}`));
   kpPaint();
@@ -441,7 +443,7 @@ function kpPushLive(clear) {
   const M = S.modal; const dv = DC.divBy[M.did]; if (!dv || !S.d.rings[M.rid] || S.readOnly) return;
   const d = loadDraft(M.dkey), { t, a, k } = kpEval();
   const n = (d.s || []).filter(x => x !== '' && x != null).length;
-  const doc = clear ? { did: '', mid: '', at: new Date().toISOString() } : { did: M.did, kp: M.key, seg: M.seg, kata: d.kata || '', score: t ? ((t.total + (a ? a.total : 0)) / k).toFixed(3) : '', log: [entName(M.ctx.id) + ' · ' + M.ctx.label, d.kata ? 'Kata: ' + d.kata : '', `Scores entered ${n}/${(S.d.brackets[M.did] || {}).judges || 6}`].filter(Boolean), at: new Date().toISOString(), by: S.myId || '' };
+  const doc = clear ? { did: '', mid: '', at: new Date().toISOString() } : { did: M.did, kp: M.key, seg: M.seg, kata: d.kata || '', score: t ? ((t.total + (a ? a.total : 0)) / k).toFixed(3) : '', log: [entName(M.ctx.id, M.did) + ' · ' + M.ctx.label, d.kata ? 'Kata: ' + d.kata : '', `Scores entered ${n}/${(S.d.brackets[M.did] || {}).judges || 6}`].filter(Boolean), at: new Date().toISOString(), by: S.myId || '' };
   Object.assign(doc, keepCall(M.rid, { did: M.did, kp: M.key }));
   S.store.set(P.live(S.evId, 'ringstate', M.rid), doc).catch(e => console.warn(e));
 }
@@ -456,7 +458,7 @@ async function kpSave() {
   const saved = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { scores: { [M.key]: rec } }));
   if (!saved) return;
   kpPushLive(true); dropDraft(M.dkey);
-  toast(`${entName(M.ctx.id)} · ${d.hansoku ? 'Han-soku' : ((ev.t.total + (ev.a ? ev.a.total : 0)) / kpKept(br)).toFixed(3)}`);
+  toast(`${entName(M.ctx.id, M.did)} · ${d.hansoku ? 'Han-soku' : ((ev.t.total + (ev.a ? ev.a.total : 0)) / kpKept(br)).toFixed(3)}`);
   closeModal();
 }
 
@@ -506,7 +508,7 @@ function logRecHTML(log, kogo, names, o) {
 }
 function recordHTML(dv, br, m, r) {
   const rec = r.result || {}, d = rec.detail || {}, k = kindOf(dv), sc = scoringOf(dv), kogo = kumiteStyle(dv) === 'kogo';
-  const names = { a: entName(r.a), b: entName(r.b) };
+  const names = { a: entName(r.a, mDid()), b: entName(r.b, mDid()) };
   let body = '';
   if (/^Ki-ken/.test(rec.method || '')) body = '<p class="small">Decided by Ki-ken (withdrawal / no-show).</p>';
   else if (k === 'kata') body = (d.flags ? flagsRecHTML(d.flags, 'Judges’ flags') : d.sa ? scoresRecHTML(d.sa, d.sb, sc.judges) : '') + (d.kata && (d.kata.a || d.kata.b) ? `<p class="small">Kata — Aka: <b>${esc(d.kata.a || '—')}</b> · Shiro: <b>${esc(d.kata.b || '—')}</b></p>` : '');

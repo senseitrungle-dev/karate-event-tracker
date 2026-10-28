@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.44.0 Requirements & Design
+# Karate Event Tracker · v1.45.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -636,3 +636,13 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - Division panel: the same select; entrant chips follow the order (with group headings). Changing it there re-renders the panel.
 - Test fix: golive.js ticks the ring checklist one item at a time and waits for each tick (re-render race).
 **Verify.** logic.test (sortEntrants). test/entsort.js (national demo, desktop and 390 px: A→Z default, Z→A, typed seed kept when re-ordering, club and region headings in order, country, panel follows the choice and re-renders, no horizontal scroll). e2e set, combine, divorder, rmgroup, worlds2026, fedimport, touchselect.
+
+## §71 Rank mark "*N" after a ranked entrant's name in a drawn division (v1.45.0)
+**Requirement.** When a contestant's name is displayed for a drawn division, put an * and their rank number next to the name, everywhere it is displayed.
+**Design.**
+- Rank = the division seed (as in §63). `generateBracket` now stores the seeds the bracket was drawn with (`br.seeds = {id: n}`). Brackets drawn before v1.45 fall back to the division's current seeds.
+- `entSeed(id, did)` / `entName(id, did)` (app1_core): with a drawn division, a seeded entrant's name becomes "Last, First *N" (teams: "Team name *N"). Without a division, or before the draw, the name is plain.
+- Every name shown for a division passes it: bracket boxes, pools and standings, kata pool tables, podium and Results, mat card (on the mat, up next, call panel, spectators' "Called" line, announcement text), scoresheets and score cards (corners, kata fields, winner banners, toasts, match view), division panel and settings, combine form, tiebreak order, and Follow status lines ("vs …", "lost to …"). The scoresheet panels take it from the open sheet (`mDid()`).
+- "Read aloud" speaks "*2" as ", rank 2".
+- Not marked: lists without a division (Competitors, Teams, attendance, Follow search) and the results CSV export (data, not display).
+**Verify.** logic.test (bracket stores seeds; KP; none). test/rankmark.js (junior kata round robin: no mark before the draw; after the draw the bracket shows "*1" / "*2" only on the ranked names; scoresheet; mat card on the mat; division panel; settings list; Competitors tab unmarked; a drawn division without seeds unmarked). Full e2e set and the other browser tests.

@@ -159,11 +159,11 @@ function renderMatch() {
   const m = br.matches[mid], r = DC.res[did][mid], seg = KT.segOf(br, m), rid = KT.ringOf(dv, seg, mid);
   const live = r.status === 'done' ? null : liveFor(did, mid), rs = live ? live[1] : null;   // a finished match shows its result, not a stale live board
   const wSide = r.status === 'done' && r.winner ? (r.winner === r.a ? 'a' : 'b') : '';
-  const side = s => { const id = r[s]; return `<div class="corner ${s}${cornerState(!!wSide, wSide, s)}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${wSide === s ? WIN_CHIP : ''}</div><div class="who">${id ? esc(entName(id)) : esc((s === 'a' ? r.hintA : r.hintB) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(id))}</div>
+  const side = s => { const id = r[s]; return `<div class="corner ${s}${cornerState(!!wSide, wSide, s)}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${wSide === s ? WIN_CHIP : ''}</div><div class="who">${id ? esc(entName(id, did)) : esc((s === 'a' ? r.hintA : r.hintB) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(id))}</div>
     ${rs && rs.score ? `<div class="big">${esc(rs.score[s])}</div>` : r.status === 'done' && r.result && r.result.pts ? `<div class="big">${esc(r.result.pts[s])}</div>` : ''}</div>`; };
   const status = r.status === 'done' ? `<span class="chip ok">Final · ${esc((r.result || {}).method || '')}</span>` : rs ? '<span class="chip aka">● Live on the mat</span>' : r.status === 'ready' ? '<span class="chip">Ready</span>' : r.status === 'bye' ? '<span class="chip plain">Bye</span>' : '<span class="chip plain">Waiting for earlier matches</span>';
   const canS = canScoreMatch(did, mid);
-  let body = `${wSide ? winBanner(wSide, entName(r.winner), (r.result || {}).method, r.result && r.result.pts) : ''}<div class="row between">${status}<span class="small muted">${esc(ringName(rid))}${seg ? ' · ' + esc(SEG_LABEL(seg)) : ''}</span></div>
+  let body = `${wSide ? winBanner(wSide, entName(r.winner, did), (r.result || {}).method, r.result && r.result.pts) : ''}<div class="row between">${status}<span class="small muted">${esc(ringName(rid))}${seg ? ' · ' + esc(SEG_LABEL(seg)) : ''}</span></div>
     <div class="board" style="grid-template-columns:1fr 1fr">${side('a')}${side('b')}</div>`;
   if (rs) body += `<div class="card live-card"><div class="row between"><b>${esc(rs.phase || 'In progress')}</b><span class="tiny muted">updated ${esc(timeAgo(rs.at))}</span></div>${(rs.log || []).length ? `<ol class="live-log">${rs.log.slice().reverse().map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : '<p class="small muted">Waiting for the first score.</p>'}</div>`;
   if (r.status === 'done') {
@@ -193,7 +193,7 @@ function renderDivPanel() {
   const body = `<div class="row small muted">${esc(KT.FORMATS[dv.format] || dv.format)} · ${esc(scoringLabel(dv))}</div>
     <div class="row">${!bs.drawn ? (n >= 1 ? '<span class="chip plain">Not drawn</span>' : '<span class="chip plain">Empty</span>') : bs.complete ? '<span class="chip ok">Finished</span>' : `<span class="chip">${bs.fought}/${bs.playable} ${bs.kp ? 'performances' : 'matches'}</span>`}</div>
     ${smallDivHTML(dv.id)}
-    ${n ? `<div class="card flush"><div class="card-h"><h3>Entrants (${n})</h3><span class="tiny muted">Tap a name to open the card — e.g. to move to another division</span></div><div style="padding:10px 14px 0;max-width:280px">${entSortSelect('dp-entsort')}</div><div class="pill-list" style="padding:10px 14px">${entRowsSorted(divEntrants(dv.id)).map(({ id: e, head }) => `${head ? head.replace('class="ent-grp label"', 'class="ent-grp label" style="flex-basis:100%"') : ''}<button class="chip plain ent-chip" data-act="ent-open" data-id="${esc(e)}">${esc(entName(e))}${ENT_SORT_LEVEL[entSortMode()] ? '' : entDojo(e) ? ` <span class="muted">· ${esc(entDojo(e))}</span>` : ''}</button>`).join('')}</div></div>` : ''}
+    ${n ? `<div class="card flush"><div class="card-h"><h3>Entrants (${n})</h3><span class="tiny muted">Tap a name to open the card — e.g. to move to another division</span></div><div style="padding:10px 14px 0;max-width:280px">${entSortSelect('dp-entsort')}</div><div class="pill-list" style="padding:10px 14px">${entRowsSorted(divEntrants(dv.id)).map(({ id: e, head }) => `${head ? head.replace('class="ent-grp label"', 'class="ent-grp label" style="flex-basis:100%"') : ''}<button class="chip plain ent-chip" data-act="ent-open" data-id="${esc(e)}">${esc(entName(e, dv.id))}${ENT_SORT_LEVEL[entSortMode()] ? '' : entDojo(e) ? ` <span class="muted">· ${esc(entDojo(e))}</span>` : ''}</button>`).join('')}</div></div>` : ''}
     <div class="card flush"><div class="card-h"><h3>Rings &amp; judges</h3><span class="tiny muted">Pools and rounds use the judges of the ring they run on</span></div><div class="seg-list">${rows}</div></div>
     ${!segs.length ? '<p class="tiny muted">Pools, semifinal and final can be placed on their own rings once the division is drawn.</p>' : ''}`;
   root.innerHTML = sheet(esc(dv.name), body, `<button data-act="div-edit" data-id="${esc(dv.id)}">Settings</button>${bs.drawn ? `<button data-act="view-bracket" data-id="${esc(dv.id)}">Bracket</button>` : n ? `<button class="primary" data-act="draw" data-id="${esc(dv.id)}">Draw</button>` : ''}<button class="primary" data-act="modal-close">Done</button>`);
@@ -230,9 +230,9 @@ function entrantStatus(did, id) {
   for (const m of ready) {
     const r = res[m.id], opp = r.a === id ? r.b : r.a, rid = KT.ringOf(dv, KT.segOf(br, m), m.id);
     const live = liveFor(did, m.id);
-    if (live) return { text: `On the mat now · ${ringName(rid)} · vs ${entName(opp)}`, cls: 'aka', did, mid: m.id };
+    if (live) return { text: `On the mat now · ${ringName(rid)} · vs ${entName(opp, did)}`, cls: 'aka', did, mid: m.id };
     const rq = ringQueue(rid), pos = rq.findIndex(x => x.m && x.m.id === m.id && x.did === did);
-    return { text: `${KT.matchLabel(m, br)} vs ${entName(opp)} · ${ringName(rid)}${pos >= 0 ? ` · ${pos === 0 ? 'next up' : pos + ' ahead'}` : ''}`, cls: '', did, mid: m.id };
+    return { text: `${KT.matchLabel(m, br)} vs ${entName(opp, did)} · ${ringName(rid)}${pos >= 0 ? ` · ${pos === 0 ? 'next up' : pos + ' ahead'}` : ''}`, cls: '', did, mid: m.id };
   }
   const pending = ms.some(m => res[m.id] && res[m.id].status === 'pending' && (res[m.id].a === id || res[m.id].b === id));
   const done = ms.filter(m => res[m.id] && res[m.id].status === 'done' && (res[m.id].a === id || res[m.id].b === id));
@@ -240,7 +240,7 @@ function entrantStatus(did, id) {
   if (!done.length) return { text: 'Waiting', cls: 'plain' };
   const last = done[done.length - 1], lr = res[last.id];
   if (lr.winner === id) return { text: 'Advanced · waiting for next round', cls: 'plain', did, mid: last.id };
-  return { text: place ? 'Placed (finishing)' : `Out · lost ${KT.matchLabel(last, br)} to ${entName(lr.winner)}`, cls: 'plain', did, mid: last.id };
+  return { text: place ? 'Placed (finishing)' : `Out · lost ${KT.matchLabel(last, br)} to ${entName(lr.winner, did)}`, cls: 'plain', did, mid: last.id };
 }
 function entriesOf(c) {
   const out = [];

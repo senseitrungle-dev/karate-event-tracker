@@ -364,7 +364,7 @@ const ACT = {
     const modal = M.type === 'kp' ? { type: 'kp', did: M.did, key: M.key } : { type: M.type, did: M.did, mid: M.mid };
     let clock = null;
     if (M.type === 'score') { const run = CLOCK.running; stopClock(); clock = { left: CLOCK.left, base: CLOCK.base, key: CLOCK.key, await: CLOCK.await, run }; }
-    openBracketFrom({ ring: rid, modal, clock, label: (dv ? dv.name : '') + (M.type === 'kp' ? ' · ' + entName((M.ctx || {}).id) : ' · ' + KT.matchLabel(br.matches[M.mid], br)) }, M.did);
+    openBracketFrom({ ring: rid, modal, clock, label: (dv ? dv.name : '') + (M.type === 'kp' ? ' · ' + entName((M.ctx || {}).id, M.did) : ' · ' + KT.matchLabel(br.matches[M.mid], br)) }, M.did);
   },
   'back-match': () => {
     const b = S.ui.back; S.ui.back = null; if (!b) return;
@@ -385,7 +385,7 @@ const ACT = {
   'ring-speak': el => speakCall(el.dataset.rid),
   'kp-call': () => { kpPushLive(false); toast('Called — shown as “now on the mat” for this ring'); },
   'kp-clear': async () => {
-    const M = S.modal; if (!(await confirmBox(`Clear this score for ${entName(M.ctx.id)}?`, 'Clear score', true))) return;
+    const M = S.modal; if (!(await confirmBox(`Clear this score for ${entName(M.ctx.id, M.did)}?`, 'Clear score', true))) return;
     const ok = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { scores: { [M.key]: null } }), 'Score cleared'); if (ok) { dropDraft(M.dkey); closeModal(); }
   },
   match: el => { if (el.closest('.modal') && S.modal && S.modal.type === 'match') return; openMatch(el.dataset.did, el.dataset.mid); },
