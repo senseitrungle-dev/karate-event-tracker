@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.45.0 Requirements & Design
+# Karate Event Tracker · v1.46.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -646,3 +646,16 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - "Read aloud" speaks "*2" as ", rank 2".
 - Not marked: lists without a division (Competitors, Teams, attendance, Follow search) and the results CSV export (data, not display).
 **Verify.** logic.test (bracket stores seeds; KP; none). test/rankmark.js (junior kata round robin: no mark before the draw; after the draw the bracket shows "*1" / "*2" only on the ranked names; scoresheet; mat card on the mat; division panel; settings list; Competitors tab unmarked; a drawn division without seeds unmarked). Full e2e set and the other browser tests.
+
+## §72 Teams by division; duplicate an event; each person's view kept on their own device (v1.46.0)
+**Requirement.** Teams tab: sort teams by division. An option to duplicate an event with all its settings, competitors, judges, divisions, etc. Each user's current view and sorting, per card, is their own, so changing it never changes the view of another concurrent user.
+**Design.**
+- **Teams:** each team-event card has "By division" (default) / "By team name A→Z". By division groups the teams under a heading per division, in the Divisions-tab order (`divSortCmp`), with "No division" last, then by name.
+- **Per-user view:** `VIEW_KEYS` (tab, filter, divFilter, ring, ringPicked, bracketDiv, session, divOrder, teamSort) are saved on every render to localStorage `kt-view-<event>` (in try/catch) and restored by `openEvent`. Nothing about the view is written to the shared data.
+  - The Divisions-tab order (groups, age groups, kyu ranks) used to be saved on the event document, so one director's choice re-sorted everyone's list. It is now `S.ui.divOrder`, available to every role. An order saved by an older version is only the starting point.
+  - The kata entrants sort (§70) was already per device.
+- **Duplicate event** (Event settings → "Duplicate…", for people who can create events): name (default "<name> (copy)"), start and end date, "Keep check-in, payment and waiver status" (off: competitors start not checked in, unpaid, no waiver; judges not checked in), and "Also copy the drawn brackets and results" (off).
+  - Copied with the same document ids, so every link still holds (division ring, team members, seeds, ring managers): the event settings, rings, divisions, competitors with their private details (`pv/`), teams, judges and sessions. The directors are the original directors plus the person copying. `copiedFrom` records the source.
+  - Not copied: live / public link, lock and archive approval, ring readiness, ring state (on the mat, calls) and attendance.
+  - Firestore: the event is created first (`isOrganizer` and own uid in `directorIds`), then its documents as an event director. No rule change.
+**Verify.** test/dupview.js (teams grouped by division, then A→Z by name; the sort is kept in this browser's view and the shared event is unchanged; another person (same data, no saved view) sees the default order; reload restores tab and sort; duplicate: dialog, the copy opens, competitors and private details, judges, divisions (not drawn), rings and teams copied, check-ins reset in the copy only). divorder.js. Full e2e set and the other browser tests.

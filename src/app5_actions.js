@@ -33,7 +33,8 @@ function openEvent(id) {
   if (id && S.events[id] && !canOpenEvent(S.events[id])) { toast('You don’t have access to this event. Use “Request access”.', true); return; }
   S.unsub.forEach(u => { try { u(); } catch (e) { /* ignore */ } }); S.unsub = [];
   S.evId = id; S.d = { competitors: {}, pv: {}, teams: {}, divisions: {}, rings: {}, sessions: {}, judges: {}, brackets: {}, attendance: {}, ringstate: {}, ringready: {}, requests: {} };
-  S.ui.tab = ''; S.ui.fq = ''; S.ui.bracketDiv = ''; S.ui.ring = ''; S.ui.session = ''; S.ui.q = ''; S.ui.filter = 'all';
+  S.ui.tab = ''; S.ui.fq = ''; S.ui.bracketDiv = ''; S.ui.ring = ''; S.ui.session = ''; S.ui.q = ''; S.ui.filter = 'all'; S.ui.divFilter = '';
+  if (id && !S.pub) loadView(id);   // v1.46: this person's last view of this event
   saveUIPrefs();
   if (!id) { render(); return; }
   const w = (col, key) => S.unsub.push(S.store.watch(col, o => { S.d[key] = o; render(); }, dbErr));
@@ -355,6 +356,7 @@ const ACT = {
   'call-mat': () => { pushLive(); toast('Called — shown as “now on the mat” for this ring'); },
   'save-result': () => saveResult(),
   'kp-score': el => openKP(el.dataset.did, el.dataset.key),
+  'event-dup': () => dupForm(),
   // v1.41: bracket of the current division from a mat card or a scoresheet, then back to the match
   'mat-bracket': el => { const dv = DC.divBy[el.dataset.did]; openBracketFrom({ ring: el.dataset.ring, label: dv ? dv.name : '' }, el.dataset.did); },
   'sheet-bracket': () => {
@@ -419,7 +421,8 @@ const CHANGE = {
   'sim-ring': el => { S.ui.simRing = el.value; saveUIPrefs(); render(); },
   filter: el => { S.ui.filter = el.value; render(); },
   divFilter: el => { S.ui.divFilter = el.value; render(); },
-  'div-order': el => { const ev = curEvent(); if (!ev || !isDirector()) return; const o = Object.assign({}, ev.divOrder || {}, { [el.dataset.k]: el.value }); guard(() => S.store.update(P.event(ev.id), { divOrder: o }), 'Division order saved'); },
+  'div-order': el => { S.ui.divOrder = Object.assign({}, divOrder(), { [el.dataset.k]: el.value }); render(); },   // v1.46: this person's view only
+  'team-sort': el => { S.ui.teamSort = Object.assign({}, S.ui.teamSort, { [el.dataset.et]: el.value }); render(); },
   ring: el => { S.ui.ring = el.value; S.ui.ringPicked = true; render(); },
   'call-present': el => ringPresent(el.dataset.rid, el.dataset.k, el.checked),
   bracketDiv: el => { S.ui.bracketDiv = el.value; render(); },
@@ -642,6 +645,7 @@ function wire() {
   document.addEventListener('submit', async e => {
     const f = e.target.closest('[data-form]'); if (!f) return; e.preventDefault();
     const k = f.dataset.form;
+    if (k === 'dup') { await duplicateEvent(fd(f)); return; }
     if (k === 'event') {
       const v = fd(f), id = f.dataset.id || uid(), old = S.events[f.dataset.id] || {};
       if (!v.name || !v.startDate) { toast('Name and start date are required.', true); return; }

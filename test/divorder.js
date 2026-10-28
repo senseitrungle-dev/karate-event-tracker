@@ -25,7 +25,7 @@ const path = require('path');
   await p.reload(); await p.waitForTimeout(800);
   if (await p.$('.ev-card')) await p.click('.ev-card'); await p.waitForTimeout(400);
   await p.click('.tab:has-text("Divisions")'); await p.waitForTimeout(300);
-  ok('choice saved on the event', (await p.$eval('#do-age', s => s.value)) === 'desc' && (await p.$eval('#do-rank', s => s.value)) === 'desc');
+  ok('choice kept on this device (per event) after reload', (await p.$eval('#do-age', s => s.value)) === 'desc' && (await p.$eval('#do-rank', s => s.value)) === 'desc');
   await p.selectOption('#do-groups', 'finished'); await p.waitForTimeout(300);
   ok('group order selectable', (await p.$eval('#do-groups', s => s.value)) === 'finished');
   await p.screenshot({ path: 'test/shots/divorder.png' });

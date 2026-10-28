@@ -22,9 +22,45 @@ function eventForm(id) {
       <div><div class="label" style="margin-bottom:6px">Events offered</div><div class="pill-list">${KT.EVENT_ORDER.map(k => `<label class="check chip plain"><input type="checkbox" data-multi="1" name="eventTypes" value="${k}" ${et.has(k) ? 'checked' : ''}> ${esc(KT.EVENT_TYPES[k].label)}</label>`).join('')}</div></div>
     </div></fieldset>
     <label class="f"><span>Notes</span><textarea name="notes" id="ev-notes">${esc(e.notes || '')}</textarea></label></form>`,
-    `${id ? '<button class="danger" data-act="event-delete" style="margin-right:auto">Delete event</button>' : ''}<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-event">${id ? 'Save' : 'Create event'}</button>`));
+    `${id ? '<button class="danger" data-act="event-delete" style="margin-right:auto">Delete event</button>' : ''}${id && canCreateEvents() ? '<button data-act="event-dup">Duplicate…</button>' : ''}<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-event">${id ? 'Save' : 'Create event'}</button>`));
 }
 
+/* ===== v1.46: duplicate an event — settings, competitors (with private details), teams, judges, divisions, rings, sessions ===== */
+function dupForm() {
+  const ev = curEvent(); if (!ev) return;
+  const n = o => Object.keys(S.d[o] || {}).length;
+  openModal(sheet('Duplicate event', `<form id="f-dup" data-form="dup" class="stack">
+    <p class="small">Makes a new event with this event’s settings, <b>${plural(n('competitors'), 'competitor')}</b>, ${plural(n('teams'), 'team')}, ${plural(n('judges'), 'judge')}, ${plural(n('divisions'), 'division')}, ${plural(n('rings'), 'ring')}${n('sessions') ? ', ' + plural(n('sessions'), 'session') : ''}, and the same directors, ring managers and staff. This event is not changed.</p>
+    <div class="fgrid">
+      <label class="f span"><span>Name of the copy</span><input name="name" id="dup-name" value="${esc(ev.name + ' (copy)')}" required></label>
+      <label class="f"><span>Start date</span><input type="date" name="startDate" id="dup-start" value="${esc(ev.startDate || '')}"></label>
+      <label class="f"><span>End date</span><input type="date" name="endDate" id="dup-end" value="${esc(ev.endDate || '')}"></label></div>
+    <label class="check"><input type="checkbox" name="keepStatus" id="dup-status"> Keep check-in, payment and waiver status (otherwise everyone starts not checked in, unpaid, no waiver)</label>
+    ${n('brackets') ? `<label class="check"><input type="checkbox" name="brackets" id="dup-br"> Also copy the drawn brackets and results (${plural(n('brackets'), 'bracket')})</label>` : ''}
+    <p class="tiny muted">Not copied: going live, the public link, ring readiness, who is on the mat, attendance, and approval / archive status.</p></form>`,
+    '<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-dup" id="dup-go">Duplicate</button>'));
+}
+/** Fields of the event document that belong to that event's run, not to its setup. */
+const DUP_DROP = ['id', 'live', 'liveAt', 'endedAt', 'locked', 'archived', 'approvedAt', 'approvedBy', 'reopenedAt', 'reopenedBy', 'public', 'shareToken'];
+async function duplicateEvent(v) {
+  const src = curEvent(), sid = S.evId; if (!src || !canCreateEvents()) return;
+  if (!String(v.name || '').trim()) { toast('Give the copy a name.', true); return; }
+  const id = uid(), now = new Date().toISOString(), keep = !!v.keepStatus;
+  const ev = Object.assign({}, src, { name: String(v.name).trim(), startDate: v.startDate || src.startDate || '', endDate: v.endDate || '', createdAt: now, createdBy: S.myId || '', copiedFrom: sid,
+    directorIds: [...new Set((src.directorIds || []).concat(S.myId ? [S.myId] : []))] });
+  DUP_DROP.forEach(k => delete ev[k]);
+  const D = clone(S.d), btn = $('#dup-go'); if (btn) { btn.disabled = true; btn.textContent = 'Duplicating…'; }
+  toast('Duplicating…');
+  if (!(await guard(() => S.store.set(P.event(id), ev)))) { if (btn) { btn.disabled = false; btn.textContent = 'Duplicate'; } return; }
+  const fresh = (c, x) => keep ? x : c === 'competitors' ? Object.assign(x, { checkedIn: false, feePaid: false, waiver: false }) : c === 'judges' ? Object.assign(x, { checkedIn: false }) : x;
+  let n = 0;
+  for (const c of ['rings', 'divisions', 'competitors', 'teams', 'judges', 'sessions'])
+    for (const [k, x] of Object.entries(D[c] || {})) { if (!(await guard(() => S.store.set(P.doc(id, c, k), fresh(c, x))))) return; n++; }
+  for (const [k, x] of Object.entries(D.pv || {})) if (!(await guard(() => S.store.set(P.pv(id, k), x)))) return;
+  if (v.brackets) for (const [k, x] of Object.entries(D.brackets || {})) if (!(await guard(() => S.store.set(P.live(id, 'brackets', k), x)))) return;
+  closeModal(); openEvent(id);
+  toast(`Copy created · ${plural(n, 'record')} copied`);
+}
 function compForm(id) {
   const ev = curEvent(), tour = ev.kind === 'tournament';
   const c = id ? DC.compBy[id] : { gender: '', events: [], status: 'active' };

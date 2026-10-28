@@ -2,6 +2,7 @@
 let rq = false;
 function render() { if (rq) return; rq = true; setTimeout(() => { rq = false; if (S.dragging) { S.renderPending = true; return; } doRender(); }, 0); }
 function doRender() {
+  saveView();   // v1.46: remember this person's view of the event (on this device)
   derive();
   // keep typing focus across a redraw — but never put focus back on a drop-down on a phone/tablet (that re-opens its picker)
   const ae = document.activeElement, aid = ae && ae.id && !$('#modal').contains(ae) && !(ae.tagName === 'SELECT' && isTouch()) ? ae.id : null;
@@ -236,14 +237,22 @@ function teamsHTML() {
   const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'team').map(u => u.id));
   const placed = {}; for (const did in DC.assign.byDiv) for (const id of DC.assign.byDiv[did]) placed[id] = did;
   const secs = types.map(et => {
-    const T = KT.EVENT_TYPES[et], list = DC.teams.filter(t => t.eventType === et).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    const T = KT.EVENT_TYPES[et], mode = (S.ui.teamSort || {})[et] === 'name' ? 'name' : 'division';
+    const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' });
+    // v1.46: grouped by division (division order as on the Divisions tab; no division last), then by name — or A→Z by name
+    const divOf = t => placed[t.id] ? DC.divBy[placed[t.id]] : null;
+    const list = DC.teams.filter(t => t.eventType === et).sort((a, b) => mode === 'name' ? byName(a, b)
+      : (!divOf(a) - !divOf(b)) || (divOf(a) && divOf(b) && divOf(a) !== divOf(b) ? divSortCmp(divOf(a), divOf(b)) : 0) || byName(a, b));
+    const sortSel = list.length > 1 ? `<select id="team-sort-${et}" data-change="team-sort" data-et="${et}" aria-label="Sort ${esc(T.label)} teams" style="max-width:190px">${opt('division', 'By division', mode)}${opt('name', 'By team name A→Z', mode)}</select>` : '';
+    let lastDiv;
     const need = DC.comps.filter(c => (c.events || []).includes(et) && c.status !== 'withdrawn' && !DC.teams.some(t => t.eventType === et && (t.memberIds || []).includes(c.id)));
     return `<div class="card flush"><div class="card-h"><div><h3>${esc(T.label)}</h3><div class="small muted">${T.size[0] === T.size[1] ? T.size[0] : T.size[0] + '–' + T.size[1]} members · ${T.genders.map(g => KT.GENDERS[g]).join(' / ')}</div></div>
-      <button class="sm" data-act="team-new" data-et="${et}">New team</button></div>
+      <div class="row" style="gap:6px">${sortSel}<button class="sm" data-act="team-new" data-et="${et}">New team</button></div></div>
       ${need.length ? `<div class="notice info" style="margin:10px 16px 0">${plural(need.length, 'competitor')} entered ${esc(T.short)} without a team: ${need.slice(0, 6).map(c => esc(c.firstName + ' ' + c.lastName)).join(', ')}${need.length > 6 ? '…' : ''}</div>` : ''}
       <div class="tw"><table><tbody>${list.map(t => {
         const mem = (t.memberIds || []).map(id => DC.compBy[id]).filter(Boolean);
-        return `<tr class="click" data-act="team-edit" data-id="${esc(t.id)}"><td><div class="name">${esc(t.name)}</div><div class="dojo">${esc(t.dojo || '')}</div></td>
+        const dv = divOf(t), head = mode === 'division' && dv !== lastDiv ? `<tr class="grp-row"><td colspan="3">${dv ? esc(dv.name) : 'No division'} · ${list.filter(x => divOf(x) === dv).length}</td></tr>` : ''; lastDiv = dv;
+        return head + `<tr class="click" data-act="team-edit" data-id="${esc(t.id)}"><td><div class="name">${esc(t.name)}</div><div class="dojo">${esc(t.dojo || '')}</div></td>
         <td class="small">${mem.map(m => esc(m.firstName + ' ' + m.lastName)).join(', ') || '<span class="muted">No members</span>'}</td>
         <td>${unplaced.has(t.id) ? '<span class="chip bad">No division</span>' : placed[t.id] ? `<span class="small">${esc(DC.divBy[placed[t.id]].name)}</span>` : ''}${t.status === 'withdrawn' ? ' <span class="chip bad">Withdrawn</span>' : ''}</td></tr>`;
       }).join('') || `<tr><td class="muted">No teams yet.</td></tr>`}</tbody></table></div></div>`;
@@ -265,9 +274,9 @@ function divisionsHTML() {
   const sorted = list.slice().sort((a, b) => grpOf(a) - grpOf(b) || divSortCmp(a, b));
   const GRP = finFirst ? ['Finished', 'Not finished', 'No entrants'] : ['Not finished', 'Finished', 'No entrants'];
   const orderCtl = `<div class="row div-order" style="gap:6px;flex-wrap:wrap"><span class="tiny muted">Order:</span>
-    <select id="do-groups" data-change="div-order" data-k="groups" aria-label="Group order" ${isDirector() ? '' : 'disabled'}>${opt('open', 'Not finished first', DO.groups)}${opt('finished', 'Finished first', DO.groups)}</select>
-    <select id="do-age" data-change="div-order" data-k="age" aria-label="Age group order" ${isDirector() ? '' : 'disabled'}>${opt('asc', 'Youngest age group first', DO.age)}${opt('desc', 'Oldest age group first', DO.age)}</select>
-    <select id="do-rank" data-change="div-order" data-k="rank" aria-label="Kyu rank order" ${isDirector() ? '' : 'disabled'}>${opt('asc', 'Kyu: 10th → 1st', DO.rank)}${opt('desc', 'Kyu: 1st → 10th', DO.rank)}</select></div>`;
+    <select id="do-groups" data-change="div-order" data-k="groups" aria-label="Group order">${opt('open', 'Not finished first', DO.groups)}${opt('finished', 'Finished first', DO.groups)}</select>
+    <select id="do-age" data-change="div-order" data-k="age" aria-label="Age group order">${opt('asc', 'Youngest age group first', DO.age)}${opt('desc', 'Oldest age group first', DO.age)}</select>
+    <select id="do-rank" data-change="div-order" data-k="rank" aria-label="Kyu rank order">${opt('asc', 'Kyu: 10th → 1st', DO.rank)}${opt('desc', 'Kyu: 1st → 10th', DO.rank)}</select></div>`;
   let lastG = -1;
   const rows = sorted.map(d => {
     const g = grpOf(d), head = g !== lastG ? `<tr class="grp-row"><td colspan="6">${GRP[g]} · ${sorted.filter(x => grpOf(x) === g).length}</td></tr>` : ''; lastG = g;
@@ -276,8 +285,8 @@ function divisionsHTML() {
   return eventHeader() + `<div class="section-h"><select id="div-f" data-change="divFilter" aria-label="Event filter" style="max-width:240px">${opt('', 'All events', f)}${(ev.eventTypes || KT.EVENT_ORDER).map(t => opt(t, KT.EVENT_TYPES[t].label, f)).join('')}</select><div class="row actions">${acts}</div></div>${orderCtl}
     <div class="card flush"><div class="tw"><table class="mcards"><thead><tr><th>Division</th><th>Format</th><th>Ring</th><th class="n">Entrants</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
-/** The event's division order (director's choice, shared with everyone): groups, age groups, kyu ranks. */
-function divOrder() { const o = (curEvent() || {}).divOrder || {}; return { groups: o.groups === 'finished' ? 'finished' : 'open', age: o.age === 'desc' ? 'desc' : 'asc', rank: o.rank === 'desc' ? 'desc' : 'asc' }; }
+/** Division order: groups, age groups, kyu ranks. v1.46: each person's own choice (kept on their device); an order saved on the event by an older version is the starting point. */
+function divOrder() { const o = S.ui.divOrder || (curEvent() || {}).divOrder || {}; return { groups: o.groups === 'finished' ? 'finished' : 'open', age: o.age === 'desc' ? 'desc' : 'asc', rank: o.rank === 'desc' ? 'desc' : 'asc' }; }
 /** Division order: black-belt age groups, then kyu divisions by rank (each direction selectable); then event, gender. */
 function divSortCmp(a, b) {
   const DO = divOrder(), sa = DO.age === 'desc' ? -1 : 1, sr = DO.rank === 'desc' ? -1 : 1;

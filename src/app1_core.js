@@ -80,6 +80,18 @@ const S = {
   draft: {}, profiles: {}, people: {}, access: null, invites: {}, fbRoles: {},
 };
 function readUIPrefs() { try { const p = JSON.parse(localStorage.getItem('kt-ui') || '{}'); if (p.simRole) S.ui.simRole = p.simRole; if (p.simRing) S.ui.simRing = p.simRing; if (p.evId) S.lastEv = p.evId; } catch (e) { /* ignore */ } }
+/* v1.46: each person's view of an event — tab, filters, selections and sort order of every card — is kept on their own
+   device (per event), never in the shared data, so one user's choices never change another user's screen. */
+const VIEW_KEYS = ['tab', 'filter', 'divFilter', 'ring', 'ringPicked', 'bracketDiv', 'session', 'divOrder', 'teamSort'];
+function saveView() {
+  if (!S.evId || S.pub) return;
+  const v = {}; for (const k of VIEW_KEYS) if (S.ui[k] !== undefined && S.ui[k] !== null && S.ui[k] !== '') v[k] = S.ui[k];
+  try { localStorage.setItem('kt-view-' + S.evId, JSON.stringify(v)); } catch (e) { /* ignore */ }
+}
+function loadView(id) {
+  S.ui.divOrder = null; S.ui.teamSort = {}; S.ui.ringPicked = false;
+  try { const v = JSON.parse(localStorage.getItem('kt-view-' + id) || '{}'); for (const k of VIEW_KEYS) if (k in v) S.ui[k] = v[k]; } catch (e) { /* ignore */ }
+}
 function saveUIPrefs() { try { localStorage.setItem('kt-ui', JSON.stringify({ simRole: S.ui.simRole, simRing: S.ui.simRing, evId: S.evId })); } catch (e) { /* ignore */ } }
 
 const P = {
