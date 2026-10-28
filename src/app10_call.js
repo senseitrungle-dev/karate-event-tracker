@@ -14,20 +14,20 @@ function keepCall(rid, ref) {
 }
 /** Who has to be at the ring for an item: [{k, color, id}] — Aka/Shiro for a match, one competitor (or team) for a kata performance. */
 function callSides(x) {
-  if (x.kp) return [{ k: 'c', color: 'kata', id: x.kp.id }];
-  return [{ k: 'a', color: 'Aka', id: x.r.a }, { k: 'b', color: 'Shiro', id: x.r.b }];
+  if (x.kp) return [{ k: 'c', color: 'kata', id: x.kp.id, did: x.did }];
+  return [{ k: 'a', color: 'Aka', id: x.r.a, did: x.did }, { k: 'b', color: 'Shiro', id: x.r.b, did: x.did }];
 }
 function callLabel(x) {
   const dv = DC.divBy[x.did], br = S.d.brackets[x.did];
   return `${dv ? dv.name : ''} · ${x.kp ? x.kp.label : KT.matchLabel(x.m, br)}`;
 }
-const whoText = id => `${entName(id)}${entDojo(id) ? ' (' + entDojo(id) + ')' : ''}`;
+const whoText = (id, did) => `${entName(id, did)}${entDojo(id) ? ' (' + entDojo(id) + ')' : ''}`;
 /** Plain announcement text: what is called, then who is on deck. */
 function announceText(rid, x, deck) {
   const ring = (S.d.rings[rid] || {}).name || 'Ring';
-  const sides = callSides(x).map(s => (x.kp ? '' : s.color + ': ') + whoText(s.id)).join('. ');
+  const sides = callSides(x).map(s => (x.kp ? '' : s.color + ': ') + whoText(s.id, s.did)).join('. ');
   let t = `${ring}, now calling: ${callLabel(x)}. ${sides}.`;
-  if (deck) t += ` On deck: ${callSides(deck).map(s => entName(s.id)).join(' and ')}.`;
+  if (deck) t += ` On deck: ${callSides(deck).map(s => entName(s.id, s.did)).join(' and ')}.`;
   return t;
 }
 /** Queue of a ring without the item already on the mat. */
@@ -47,7 +47,7 @@ function callPanelHTML(r) {
   if (ci < 0) {
     const x = q[0];
     return `<div class="callbox" data-rid="${esc(r.id)}"><div class="label">Next to call</div>
-      <div class="small"><b>${esc(callSides(x).map(s => entName(s.id)).join(' vs '))}</b> <span class="muted">· ${esc(callLabel(x))}</span></div>
+      <div class="small"><b>${esc(callSides(x).map(s => entName(s.id, s.did)).join(' vs '))}</b> <span class="muted">· ${esc(callLabel(x))}</span></div>
       <div class="row" style="margin-top:6px"><button class="go" data-act="ring-call" data-rid="${esc(r.id)}" data-i="0">📣 Call to ${esc(r.name)}</button></div>
       ${busy ? '<div class="tiny muted" style="margin-top:4px">You can call the next one while the current match finishes.</div>' : ''}</div>`;
   }
@@ -55,7 +55,7 @@ function callPanelHTML(r) {
   const allIn = sides.every(s => pres[s.k]);
   return `<div class="callbox called" data-rid="${esc(r.id)}"><div class="row between"><span class="label">Called${c.n > 1 ? ' × ' + c.n : ''}</span><span class="chip ${allIn ? 'ok' : 'warn'}">${allIn ? 'All present' : 'Check in at the ring'}</span></div>
     <p class="announce" id="announce-${esc(r.id)}">${esc(announceText(r.id, x, deck))}</p>
-    <div class="stack" style="gap:4px">${sides.map(s => `<label class="check-in"><input type="checkbox" data-change="call-present" data-rid="${esc(r.id)}" data-k="${s.k}" ${pres[s.k] ? 'checked' : ''}> <span>${x.kp ? '' : `<span class="belt ${s.k}"></span>`}<b>${esc(entName(s.id))}</b> <span class="muted small">${esc(entDojo(s.id))}</span> — present &amp; ready</span></label>`).join('')}</div>
+    <div class="stack" style="gap:4px">${sides.map(s => `<label class="check-in"><input type="checkbox" data-change="call-present" data-rid="${esc(r.id)}" data-k="${s.k}" ${pres[s.k] ? 'checked' : ''}> <span>${x.kp ? '' : `<span class="belt ${s.k}"></span>`}<b>${esc(entName(s.id, s.did))}</b> <span class="muted small">${esc(entDojo(s.id))}</span> — present &amp; ready</span></label>`).join('')}</div>
     <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="primary" data-act="ring-start" data-rid="${esc(r.id)}" ${allIn && !busy ? '' : 'disabled'}>Start — open ${x.kp ? 'score card' : 'scoresheet'}</button>
       <button data-act="ring-recall" data-rid="${esc(r.id)}">Call again</button><button data-act="ring-speak" data-rid="${esc(r.id)}" title="Read the announcement aloud">🔊 Read aloud</button><button class="ghost" data-act="ring-uncall" data-rid="${esc(r.id)}">Cancel call</button></div>
     ${busy ? '<div class="tiny muted" style="margin-top:4px">Finish the match on the mat first.</div>' : ''}
@@ -65,7 +65,7 @@ function callPanelHTML(r) {
 function calledHTML(rid) {
   const rs = S.d.ringstate[rid], c = rs && rs.call; if (!c) return '';
   const x = callQueue(rid).find(y => sameRef(qRef(y), c)); if (!x) return '';
-  return `<div class="called-line small"><span class="chip aka">Called</span> ${esc(callSides(x).map(s => entName(s.id)).join(' vs '))} <span class="muted">· ${esc(callLabel(x))}</span></div>`;
+  return `<div class="called-line small"><span class="chip aka">Called</span> ${esc(callSides(x).map(s => entName(s.id, s.did)).join(' vs '))} <span class="muted">· ${esc(callLabel(x))}</span></div>`;
 }
 async function writeCall(rid, call) {
   const rs = Object.assign({}, S.d.ringstate[rid] || { did: '', mid: '' });
@@ -101,6 +101,6 @@ async function ringStart(rid) {
   else if (canScoreMatch(x.did, x.m.id)) openScore(x.did, x.m.id);
 }
 function speakCall(rid) {
-  const el = document.getElementById('announce-' + rid); const t = el ? el.textContent : '';
+  const el = document.getElementById('announce-' + rid); const t = el ? el.textContent.replace(/ \*(\d+)/g, ', rank $1') : '';   // v1.45: "*2" is read as "rank 2"
   try { if (t && window.speechSynthesis && window.SpeechSynthesisUtterance && !navigator.webdriver) { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(t)); } } catch (e) { /* no speech on this device */ }
 }

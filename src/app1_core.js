@@ -183,10 +183,17 @@ function derive() {
   DC = { ev, asOf, comps, compBy, teams, teamBy, divs, divBy, rings, assign, res, pl };
   return DC;
 }
-function entName(id) {
+/** v1.45: an entrant's rank (seed) in a drawn division — the seeds the bracket was drawn with (older brackets: the division's). */
+function entSeed(id, did) {
+  const br = did && S.d.brackets[did]; if (!br || !id) return 0;
+  return +((br.seeds || (DC.divBy[did] || {}).seeds || {})[id]) || 0;
+}
+/** Name of an entrant; with a drawn division, a ranked (seeded) entrant gets " *N" after the name. */
+function entName(id, did) {
   if (!id) return '';
-  const c = DC.compBy[id]; if (c) return `${c.lastName || ''}, ${c.firstName || ''}`.replace(/^, |, $/g, '');
-  const t = DC.teamBy[id]; if (t) return t.name || 'Team';
+  const n = entSeed(id, did), mark = n ? ' *' + n : '';
+  const c = DC.compBy[id]; if (c) return `${c.lastName || ''}, ${c.firstName || ''}`.replace(/^, |, $/g, '') + mark;
+  const t = DC.teamBy[id]; if (t) return (t.name || 'Team') + mark;
   return 'Withdrawn entrant';
 }
 function entDojo(id) {

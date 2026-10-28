@@ -719,14 +719,14 @@ table.kp tr.live td { background: color-mix(in srgb, var(--ai-soft) 60%, transpa
 .ent-list .ent-grp:first-child { margin-top: 0; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.44.0 */
+<script>/* Karate Event Tracker v1.45.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.44.0';
+  const VERSION = '1.45.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -1356,7 +1356,7 @@ const KT = (function () {
     rnd = rnd || Math.random;
     const format = division.format || 'SE';
     const ordered = orderEntrants(entrants, rnd);
-    const br = { divisionId: division.id, format, entrants: ordered.map(e => e.id), bronze: division.bronze || 'two',
+    const br = { divisionId: division.id, format, entrants: ordered.map(e => e.id), seeds: Object.fromEntries(entrants.filter(e => +e.seed > 0).map(e => [e.id, +e.seed])), bronze: division.bronze || 'two',
       reset: division.reset !== false, matches: {}, results: {}, pools: null, tiebreak: {}, createdAt: new Date().toISOString(), version: VERSION };
     if (format === 'KP') {
       br.judges = +((division.scoring || {}).judges) || 6;
@@ -4529,10 +4529,17 @@ function derive() {
   DC = { ev, asOf, comps, compBy, teams, teamBy, divs, divBy, rings, assign, res, pl };
   return DC;
 }
-function entName(id) {
+/** v1.45: an entrant's rank (seed) in a drawn division — the seeds the bracket was drawn with (older brackets: the division's). */
+function entSeed(id, did) {
+  const br = did && S.d.brackets[did]; if (!br || !id) return 0;
+  return +((br.seeds || (DC.divBy[did] || {}).seeds || {})[id]) || 0;
+}
+/** Name of an entrant; with a drawn division, a ranked (seeded) entrant gets " *N" after the name. */
+function entName(id, did) {
   if (!id) return '';
-  const c = DC.compBy[id]; if (c) return `${c.lastName || ''}, ${c.firstName || ''}`.replace(/^, |, $/g, '');
-  const t = DC.teamBy[id]; if (t) return t.name || 'Team';
+  const n = entSeed(id, did), mark = n ? ' *' + n : '';
+  const c = DC.compBy[id]; if (c) return `${c.lastName || ''}, ${c.firstName || ''}`.replace(/^, |, $/g, '') + mark;
+  const t = DC.teamBy[id]; if (t) return (t.name || 'Team') + mark;
   return 'Withdrawn entrant';
 }
 function entDojo(id) {
@@ -5259,7 +5266,7 @@ function quotaPickForm(did, group) {
     const t = DC.teamBy[id]; return t ? esc((t.memberIds || []).map(m => DC.compBy[m] ? DC.compBy[m].firstName + ' ' + DC.compBy[m].lastName : '').filter(Boolean).join(', ')) : ''; };
   openModal(sheet(`Choose who competes · ${esc(group)}`, `<form id="f-quota" data-form="quota" data-id="${esc(did)}" data-group="${esc(group)}" class="stack">
     <p class="small"><b>${esc(d.name)}</b> allows <b>${max} ${team ? (max === 1 ? 'team' : 'teams') : 'athletes'}</b> per ${esc(sepLabel())}; ${esc(group)} has ${ids.length}. Tick the ${max} who compete.</p>
-    <div class="stack" style="gap:6px">${ids.map(id => `<label class="check quota-row"><input type="checkbox" name="keep" data-multi="1" value="${esc(id)}" data-change="quota-count"> <span><b>${esc(entName(id))}</b><span class="tiny muted" style="display:block">${info(id)}</span></span></label>`).join('')}</div>
+    <div class="stack" style="gap:6px">${ids.map(id => `<label class="check quota-row"><input type="checkbox" name="keep" data-multi="1" value="${esc(id)}" data-change="quota-count"> <span><b>${esc(entName(id, d.id))}</b><span class="tiny muted" style="display:block">${info(id)}</span></span></label>`).join('')}</div>
     <p class="small" id="quota-msg" aria-live="polite"></p>
     <p class="tiny muted">${team ? 'Teams not chosen are marked Withdrawn.' : `Athletes not chosen are taken out of ${esc(KT.EVENT_TYPES[d.eventType].label)} only — they stay registered and keep their other events.`} The division can be drawn once every country is within the limit.</p></form>`,
     `<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-quota" id="quota-save" disabled>Save</button>`));
@@ -5363,15 +5370,15 @@ function nowHTML(rs) {
     const q = br.format === 'KP' ? KT.kpQueue(br).find(x => x.key === rs.kp) : null;
     if (!q) return '';
     return `<div class="label">${esc(dv ? dv.name : '')} · ${esc(q.label)}</div>
-      <div class="now" ${kpTapAttrs(rs.did, rs.kp)} style="grid-template-columns:1fr auto;cursor:pointer"><div class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span style="min-width:0"><div class="name">${esc(entName(q.id))}</div><div class="dojo">${esc(entDojo(q.id))}${rs.kata ? ' · ' + esc(rs.kata) : ''}</div>${kpPrevHTML(rs.did, rs.kp)}</span></div>
+      <div class="now" ${kpTapAttrs(rs.did, rs.kp)} style="grid-template-columns:1fr auto;cursor:pointer"><div class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span style="min-width:0"><div class="name">${esc(entName(q.id, rs.did))}</div><div class="dojo">${esc(entDojo(q.id))}${rs.kata ? ' · ' + esc(rs.kata) : ''}</div>${kpPrevHTML(rs.did, rs.kp)}</span></div>
       <div class="sc num">${rs.score != null && rs.score !== '' ? esc(rs.score) : ''}</div></div>`;
   }
   const res = (DC.res[rs.did] || {})[rs.mid];
   if (!res || res.status !== 'ready') return '';
   return `<div class="label">${esc(dv ? dv.name : '')} · ${esc(KT.matchLabel(br.matches[rs.mid], br))}</div>
-    <div class="now" data-act="match" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}" role="button" tabindex="0" style="cursor:pointer"><div class="side"><span class="belt a"></span><span style="min-width:0"><div class="name">${esc(entName(res.a))}</div><div class="dojo">${esc(entDojo(res.a))}</div>${h2hPrevHTML(rs.did, rs.mid, res.a)}</span></div>
+    <div class="now" data-act="match" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}" role="button" tabindex="0" style="cursor:pointer"><div class="side"><span class="belt a"></span><span style="min-width:0"><div class="name">${esc(entName(res.a, rs.did))}</div><div class="dojo">${esc(entDojo(res.a))}</div>${h2hPrevHTML(rs.did, rs.mid, res.a)}</span></div>
     <div class="sc num">${rs.score ? `${esc(rs.score.a)}–${esc(rs.score.b)}` : 'vs'}</div>
-    <div class="side" style="justify-content:flex-end;text-align:right"><span style="min-width:0"><div class="name">${esc(entName(res.b))}</div><div class="dojo">${esc(entDojo(res.b))}</div>${h2hPrevHTML(rs.did, rs.mid, res.b)}</span><span class="belt b"></span></div></div>
+    <div class="side" style="justify-content:flex-end;text-align:right"><span style="min-width:0"><div class="name">${esc(entName(res.b, rs.did))}</div><div class="dojo">${esc(entDojo(res.b))}</div>${h2hPrevHTML(rs.did, rs.mid, res.b)}</span><span class="belt b"></span></div></div>
     ${rs.phase ? `<div class="phase">${esc(rs.phase)}</div>` : ''}`;
 }
 function ringBoardHTML(rings, withActions) {
@@ -5392,12 +5399,12 @@ function ringBoardHTML(rings, withActions) {
       ${withActions ? callPanelHTML(r) : calledHTML(r.id)}
       <div class="queue"><div class="label">Up next</div>${next.map(x => {
         const can = withActions && (x.kp ? canScoreKP(x.did, x.kp.key) : canScoreMatch(x.did, x.m.id));
-        if (x.kp) return `<div class="q" ${kpTapAttrs(x.did, x.kp.key)} style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id))}</span></span>
+        if (x.kp) return `<div class="q" ${kpTapAttrs(x.did, x.kp.key)} style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id, x.did))}</span></span>
           <span class="vs">${can ? `<button class="sm go" data-act="kp-score" data-did="${esc(x.did)}" data-key="${esc(x.kp.key)}">Score</button>` : 'kata'}</span></div>
           <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(x.kp.label)}</div>`;
-        return `<div class="q" data-act="match" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}" role="button" tabindex="0"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a))}</span></span>
+        return `<div class="q" data-act="match" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}" role="button" tabindex="0"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a, x.did))}</span></span>
         <span class="vs">${can ? `<button class="sm go" data-act="score" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}">Score</button>` : 'vs'}</span>
-        <span class="side" style="justify-content:flex-end"><span class="name">${esc(entName(x.r.b))}</span><span class="belt b"></span></span></div>
+        <span class="side" style="justify-content:flex-end"><span class="name">${esc(entName(x.r.b, x.did))}</span><span class="belt b"></span></span></div>
         <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(KT.matchLabel(x.m, S.d.brackets[x.did]))}${kindOf(DC.divBy[x.did]) === 'fukugo' ? ' · ' + (KT.fukugoPart(x.m, S.d.brackets[x.did]) === 'kitei' ? 'Ki-tei' : 'Kumite') : ''}</div>`;
       }).join('') || '<div class="small muted">Nothing waiting.</div>'}</div></div>`;
   }).join('')}</div>`;
@@ -5439,8 +5446,8 @@ function backBarHTML() {
 }
 function podiumHTML(did) {
   const pl = DC.pl[did]; if (!pl || !pl.gold) return pl && pl.tie ? `<div class="notice warn">Pool finished with a tie that the rules cannot break. ${isDirector() || canScoreDiv(did) ? `<button class="sm" data-act="tiebreak" data-did="${esc(did)}" data-pool="A">Set tiebreak order</button>` : 'Waiting for the director.'}</div>` : '';
-  const line = (cls, lbl, id) => id ? `<div class="pl"><span class="medal ${cls}">${lbl}</span><span style="min-width:0"><div class="name">${esc(entName(id))}</div><div class="dojo">${esc(entDojo(id))}</div></span></div>` : '';
-  return `<div class="card"><div class="row between"><h3>${pl.complete ? 'Final placings' : 'Placings so far'}</h3>${pl.complete ? '<span class="chip ok">Finished</span>' : ''}</div><div class="podium" style="margin-top:8px">${line('g', '1', pl.gold)}${line('s', '2', pl.silver)}${(pl.bronze || []).map(b => line('b', '3', b)).join('')}${pl.fourth ? `<div class="pl"><span class="medal" style="background:var(--ink-3)">4</span><span style="min-width:0"><div class="name">${esc(entName(pl.fourth))}</div><div class="dojo">${esc(entDojo(pl.fourth))}</div></span></div>` : ''}</div></div>`;
+  const line = (cls, lbl, id) => id ? `<div class="pl"><span class="medal ${cls}">${lbl}</span><span style="min-width:0"><div class="name">${esc(entName(id, did))}</div><div class="dojo">${esc(entDojo(id))}</div></span></div>` : '';
+  return `<div class="card"><div class="row between"><h3>${pl.complete ? 'Final placings' : 'Placings so far'}</h3>${pl.complete ? '<span class="chip ok">Finished</span>' : ''}</div><div class="podium" style="margin-top:8px">${line('g', '1', pl.gold)}${line('s', '2', pl.silver)}${(pl.bronze || []).map(b => line('b', '3', b)).join('')}${pl.fourth ? `<div class="pl"><span class="medal" style="background:var(--ink-3)">4</span><span style="min-width:0"><div class="name">${esc(entName(pl.fourth, did))}</div><div class="dojo">${esc(entDojo(pl.fourth))}</div></span></div>` : ''}</div></div>`;
 }
 function bmHTML(did, m, res, live) {
   const r = res[m.id]; if (!r) return '';
@@ -5455,7 +5462,7 @@ function bmHTML(did, m, res, live) {
     const cls = !id ? 'tbd' : r.status === 'done' ? (r.winner === id ? 'win' : 'lose') : r.status === 'bye' ? (r.winner === id ? 'adv' : 'lose') : '';
     const sc = r.status === 'done' && res1.pts ? fmtSc(res1.pts[side]) : '';
     const kt = kataDiv && id && kUsed[side] ? `<div class="kata-used">${esc(kUsed[side])}</div>` : '';
-    return `<div class="ln ${side} ${cls}"><span class="strip"></span><span style="min-width:0"><div class="name">${cls === 'win' ? '<span class="wmark" aria-label="Winner">✓</span>' : ''}${id ? esc(entName(id)) : r.status === 'bye' ? 'Bye' : esc(hint || 'TBD')}</div>${id ? `<div class="dojo">${esc(entDojo(id))}</div>` : ''}${kt}</span><span class="sc">${sc === '' || sc == null ? '' : esc(sc)}</span></div>`;
+    return `<div class="ln ${side} ${cls}"><span class="strip"></span><span style="min-width:0"><div class="name">${cls === 'win' ? '<span class="wmark" aria-label="Winner">✓</span>' : ''}${id ? esc(entName(id, did)) : r.status === 'bye' ? 'Bye' : esc(hint || 'TBD')}</div>${id ? `<div class="dojo">${esc(entDojo(id))}</div>` : ''}${kt}</span><span class="sc">${sc === '' || sc == null ? '' : esc(sc)}</span></div>`;
   };
   return `<div class="bm ${r.status === 'ready' ? 'ready' : ''} ${live ? 'live' : ''} ${canS ? 'click' : ''}" ${canS ? `data-act="${scorer && r.status === 'ready' ? 'score' : 'match'}" data-did="${esc(did)}" data-mid="${esc(m.id)}" tabindex="0" role="button"` : ''}>${ln('a')}${ln('b')}
     <div class="meta"><span>${esc(m.id)}${kindOf(DC.divBy[did]) === 'fukugo' ? ' · ' + (KT.fukugoPart(m, S.d.brackets[did]) === 'kitei' ? 'Ki-tei' : 'Kumite') : ''}</span><span>${r.status === 'done' ? esc(res1.method || '') : r.status === 'bye' ? 'Bye' : r.status === 'ready' ? (live ? '● Live' : scorer ? 'Tap to score' : 'Ready') : ''}</span></div></div>`;
@@ -5550,7 +5557,7 @@ function poolHTML(did, P, liveId) {
   const adv = br.advance || 0;
   return `<div class="card stack"><div class="row between"><h3>Pool ${esc(P)}</h3>${segRingChip(did, 'P:' + P)}${st.complete ? (st.tie ? `<span class="chip warn">Tie</span>` : '<span class="chip ok">Complete</span>') : ''}</div>
     <div class="tw"><table><thead><tr><th>#</th><th>Entrant</th><th class="n">W</th><th class="n">L</th><th class="n">For</th><th class="n">Agst</th></tr></thead><tbody>
-    ${st.rows.map((r, i) => `<tr><td class="num">${i + 1}${adv && i < adv && st.complete ? ' ▸' : ''}</td><td><div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div></td><td class="n">${r.w}</td><td class="n">${r.l}</td><td class="n">${r.pf}</td><td class="n">${r.pa}</td></tr>`).join('')}
+    ${st.rows.map((r, i) => `<tr><td class="num">${i + 1}${adv && i < adv && st.complete ? ' ▸' : ''}</td><td><div class="name">${esc(entName(r.id, did))}</div><div class="dojo">${esc(entDojo(r.id))}</div></td><td class="n">${r.w}</td><td class="n">${r.l}</td><td class="n">${r.pf}</td><td class="n">${r.pa}</td></tr>`).join('')}
     </tbody></table></div>
     ${st.tie && (isDirector() || canScoreDiv(did)) ? `<div class="notice warn">Tied on wins, head-to-head and points. <button class="sm" data-act="tiebreak" data-did="${esc(did)}" data-pool="${esc(P)}">Set order</button></div>` : ''}
     <div class="grid3" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">${ms.map(m => bmHTML(did, m, res, m.id === liveId)).join('')}</div></div>`;
@@ -5567,7 +5574,7 @@ function resultsHTML() {
       if (pl.silver) medals.push({ dojo: entDojo(pl.silver), place: 'silver' });
       (pl.bronze || []).forEach(b => medals.push({ dojo: entDojo(b), place: 'bronze' }));
     }
-    const cell = (id, cls, n) => id ? `<div class="pl"><span class="medal ${cls}">${n}</span><span style="min-width:0"><div class="name">${esc(entName(id))}</div><div class="dojo">${esc(entDojo(id))}</div></span></div>` : '';
+    const cell = (id, cls, n) => id ? `<div class="pl"><span class="medal ${cls}">${n}</span><span style="min-width:0"><div class="name">${esc(entName(id, d.id))}</div><div class="dojo">${esc(entDojo(id))}</div></span></div>` : '';
     const canAward = br && (isDirector() || canScoreDiv(d.id));
     return `<div class="card stack"><div class="row between"><div style="min-width:0"><h3>${esc(d.name)}</h3><div class="small muted">${S.d.rings[d.ringId] ? esc(S.d.rings[d.ringId].name) : 'No ring'}</div></div>
       ${pl.complete ? (br && br.awarded ? '<span class="chip ok">Awarded</span>' : '<span class="chip">Final</span>') : pl.tie ? `<span class="chip warn">Tie to resolve</span>` : `<span class="chip plain">In progress</span>`}</div>
@@ -5640,13 +5647,13 @@ function kpTableHTML(did, title, rows, order, opts) {
   return `<div class="card flush"><div class="card-h"><h3>${esc(title)}</h3>${opts.chip || ''}</div><div class="tw"><table class="kp"><thead><tr><th>#</th><th>${opts.byRank ? 'Place' : 'Order'}</th><th>Competitor · ${br.kataRule ? 'kata' : 'notes'}</th><th>Judges</th>${opts.carry ? '<th class="n">Semifinal</th><th class="n">Final</th>' : ''}<th class="n">Score</th></tr></thead><tbody>
     ${seq.map((r, i) => `<tr class="${can || isDirector() ? 'click' : ''} ${r.advance ? 'adv' : ''} ${onMat(r.key) ? 'live' : ''}" ${can || isDirector() ? `data-act="kp-score" data-did="${esc(did)}" data-key="${esc(r.key)}"` : ''}>
       <td class="num">${i + 1}</td><td class="num">${r.rank ? (opts.medals && r.rank <= 3 ? `<span class="medal ${['g', 's', 'b'][r.rank - 1]}">${r.rank}</span>` : r.rank) : '—'}${r.advance ? ' <span class="chip ok" title="Advances">▸</span>' : ''}</td>
-      <td>${can || isDirector() ? `<button type="button" class="kp-who" aria-label="Score ${esc(entName(r.id))}"><span class="name">${esc(entName(r.id))}</span><span class="dojo">${esc(entDojo(r.id))}</span></button>` : `<div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div>`}
+      <td>${can || isDirector() ? `<button type="button" class="kp-who" aria-label="Score ${esc(entName(r.id, did))}"><span class="name">${esc(entName(r.id, did))}</span><span class="dojo">${esc(entDojo(r.id))}</span></button>` : `<div class="name">${esc(entName(r.id, did))}</div><div class="dojo">${esc(entDojo(r.id))}</div>`}
         ${r.kata || r.sheet ? `<div class="kp-line">${r.kata ? `<span class="kata-used">${esc(r.kata)}</span>` : ''}${r.sheet ? `<b class="kp-sc">${esc(f(r.own))}</b>` : ''}</div>` : ''}
         ${r.appTotal != null ? `<div class="tiny muted">Kata ${f(r.kataOwn)} · Application ${f(r.appTotal)}</div>` : ''}${r.rpTotal != null ? `<div class="tiny muted">Kettei-sen ${f(r.rpTotal)}</div>` : ''}</td>
       <td class="jcell">${sc(r)}</td>
       ${opts.carry ? `<td class="n">${r.sheet ? f(r.carry) : ''}</td><td class="n">${r.sheet ? f(r.own) : ''}</td>` : ''}
       <td class="n"><b>${r.sheet ? f(r.total) : ''}</b></td></tr>`).join('')}</tbody></table></div>
-    ${opts.needRp && opts.needRp.length ? `<div class="notice warn" style="margin:10px 16px">Tied even after adding back all six scores: ${opts.needRp.map(id => esc(entName(id))).join(', ')} — Kettei-sen${br.kataRule ? ' with a different kata' : ''}.</div>` : ''}</div>`;
+    ${opts.needRp && opts.needRp.length ? `<div class="notice warn" style="margin:10px 16px">Tied even after adding back all six scores: ${opts.needRp.map(id => esc(entName(id, did))).join(', ')} — Kettei-sen${br.kataRule ? ' with a different kata' : ''}.</div>` : ''}</div>`;
 }
 function kpViewHTML(did) {
   const br = S.d.brackets[did], st = KT.kpState(br);
@@ -6077,7 +6084,7 @@ function divForm(id) {
       <label class="f"><span>Kettei-sen (seconds, 0 = none)</span><input type="number" name="ketteiTime" id="d-kt" min="0" max="180" step="10" value="${esc(sc.ketteiTime)}"></label>` : ''}
       ${k === 'teamkumite' ? `<label class="f"><span>Rounds per team match</span><select name="bouts" id="d-bouts">${opt('3', '3 (WTKF)', sc.bouts)}${opt('5', '5', sc.bouts)}</select></label>` : ''}
     </div></fieldset>
-    ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${smallDivHTML(id)}${ents.length ? `${entSortSelect('d-entsort')}<div class="stack ent-list" id="d-ents" style="gap:6px">${entRowsSorted(ents).map(({ id: e, head }) => `${head}<div class="row between small ent-row" data-id="${esc(e)}"><span style="min-width:0"><button type="button" class="ghost ent-link" data-act="ent-open" data-id="${esc(e)}" title="Open — change division, details"><b>${esc(entName(e))}</b> ›</button> <span class="muted">${esc(entDojo(e))}</span></span>
+    ${id ? `<fieldset><legend>Entrants &amp; seeds (${ents.length})</legend>${smallDivHTML(id)}${ents.length ? `${entSortSelect('d-entsort')}<div class="stack ent-list" id="d-ents" style="gap:6px">${entRowsSorted(ents).map(({ id: e, head }) => `${head}<div class="row between small ent-row" data-id="${esc(e)}"><span style="min-width:0"><button type="button" class="ghost ent-link" data-act="ent-open" data-id="${esc(e)}" title="Open — change division, details"><b>${esc(entName(e, id))}</b> ›</button> <span class="muted">${esc(entDojo(e))}</span></span>
       <input type="number" min="1" max="64" name="seed_${esc(e)}" id="seed-${esc(e)}" data-input="seed" value="${esc((d.seeds || {})[e] || '')}" placeholder="Seed" style="width:86px" aria-label="Seed"></div>`).join('')}</div>
       <p class="notice bad small" id="seed-msg" hidden style="margin-top:6px"></p>
       <p class="tiny muted" style="margin-top:6px">Each seed number can be given to one entrant only. ${d.chart !== 'standard' && (d.chart === 'wtkf' || ['International', 'National'].includes(ev.level)) ? 'WTKF charts: seeds 1–4 = last championship’s 1st–4th (kumite: 1st A-1, 2nd B-1, 3rd B-2, 4th A-2 with byes first; kata: at the bottom of their chart).' : ''} Seeded entrants are kept apart in the draw; the others are placed at random, with entrants from the same ${esc(sepLabel())} put in different pools and bracket halves wherever possible.</p>` : '<p class="small muted">No entrants match this division yet.</p>'}</fieldset>` : ''}</form>`,
@@ -6328,7 +6335,7 @@ function combineForm(did) {
   const lbl = x => `${x.name} · ${plural(divEntrants(x.id).length, 'entrant')}${S.d.brackets[x.id] ? ' · drawn' : ''}`;
   openModal(sheet(`Combine · ${esc(d.name)}`, `<form id="f-combine" data-form="combine" data-id="${esc(did)}" class="stack">
     <p class="small">${plural(ents.length, team ? 'team' : 'entrant')} here — at least ${MIN_DIV} are needed. Move ${ents.length === 1 ? 'it' : 'them'} into another ${esc(KT.EVENT_TYPES[d.eventType].label)} division:</p>
-    <div class="pill-list">${ents.map(e => `<span class="chip plain">${esc(entName(e))}</span>`).join('')}</div>
+    <div class="pill-list">${ents.map(e => `<span class="chip plain">${esc(entName(e, did))}</span>`).join('')}</div>
     <label class="f"><span>Combine into</span><select name="target" id="cmb-target" data-change="combine-target">${tg.map(x => opt(x.id, lbl(x), tg[0].id)).join('')}</select></label>
     <p class="small" id="cmb-out"></p>
     <label class="check"><input type="checkbox" name="removeOld" checked> Delete “${esc(d.name)}” once it is empty</label>
@@ -6447,7 +6454,7 @@ function tiebreakForm(did, P) {
   S.tbOrder = st.rows.map(r => r.id);
   S.modal = { type: 'tb', did, P, refresh: null };
   const draw = () => `<p class="small muted">Set the final order for Pool ${esc(P)} (for example after a deciding bout or a referee panel decision).</p>
-    <div class="stack" style="gap:6px">${S.tbOrder.map((id, i) => `<div class="row between"><span><b class="num">${i + 1}.</b> ${esc(entName(id))} <span class="muted small">${esc(entDojo(id))}</span></span>
+    <div class="stack" style="gap:6px">${S.tbOrder.map((id, i) => `<div class="row between"><span><b class="num">${i + 1}.</b> ${esc(entName(id, did))} <span class="muted small">${esc(entDojo(id))}</span></span>
     <span class="row" style="gap:4px"><button class="sm" data-act="tb-move" data-i="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Up">↑</button><button class="sm" data-act="tb-move" data-i="${i}" data-dir="1" ${i === S.tbOrder.length - 1 ? 'disabled' : ''} aria-label="Down">↓</button></span></div>`).join('')}</div>`;
   S.tbDraw = draw;
   openModal(sheet(`Tiebreak · Pool ${esc(P)}`, `<div id="tb-body">${draw()}</div>`, `<button data-act="modal-close">Cancel</button><button class="primary" data-act="tb-save">Save order</button>`));
@@ -6532,6 +6539,8 @@ function kyuCfg(dv) {
   return null;
 }
 const ncrLevel = dv => !!kyuCfg(dv);   // kept for older call sites
+/** v1.45: division of the open scoresheet (names show the rank mark " *N"). */
+function mDid() { return (S.modal && S.modal.did) || ''; }
 function partOf(dv, m, br) { return kindOf(dv) === 'fukugo' ? KT.fukugoPart(m, br) : null; }
 function evaluate(dv, d, m, br) {
   const k = kindOf(dv), sc = scoringOf(dv), kogo = kumiteStyle(dv) === 'kogo';
@@ -6592,7 +6601,7 @@ function kumitePanel(log, path, sc, r, opts) {
   const waitStart = !ev.done && ev.phase !== 'hantei' && !CLOCK.running && CLOCK.await && clockLeft() > 0;
   const corner = (s) => {
     const st = ev.st[s];
-    const name = s === 'a' ? entName(r.a) : entName(r.b);
+    const name = s === 'a' ? entName(r.a, mDid()) : entName(r.b, mDid());
     const dis = ev.done || CLOCK.running ? 'disabled' : '';
     const b = (t, l, cls) => `<button class="${cls || ''}" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="${t}" ${dis}${t === 'tento' ? ' title="Fall: Ten-to penalty match (no points). After time has expired: 1 point to the opponent."' : ''}>${l}</button>`;
     return `<div class="corner ${s}${cornerState(ev.done, ev.winner, s)}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${ev.done && ev.winner === s ? WIN_CHIP : ''}</div>
@@ -6619,7 +6628,7 @@ function kumitePanel(log, path, sc, r, opts) {
 function kogoPanel(log, path, r, opts) {
   const ev = KT.kogoEval(log, opts);
   const corner = (s) => {
-    const name = s === 'a' ? entName(r.a) : entName(r.b);
+    const name = s === 'a' ? entName(r.a, mDid()) : entName(r.b, mDid());
     const dis = ev.done ? 'disabled' : '';
     const off = !ev.done && ev.phase !== 'hantei' && ev.offense === s;
     const live = !ev.done && ev.phase !== 'hantei';
@@ -6654,7 +6663,7 @@ function ncrPanel(log, path, r, cfg) {
   const level = cfg.decide === 'points' ? 3 : cfg.ncr === 1 ? 1 : 2;   // which buttons: 1 = Han-soku only, 2 = warning + Han-soku, 3 = points
   const ev = KT.kyuEval(log, cfg), live = !ev.done && ev.phase === 'regular';
   const corner = s => {
-    const name = s === 'a' ? entName(r.a) : entName(r.b), off = live && ev.offense === s;
+    const name = s === 'a' ? entName(r.a, mDid()) : entName(r.b, mDid()), off = live && ev.offense === s;
     const b = (t, l, cls, extra) => `<button class="${cls || ''}" data-act="k-ev" data-p="${path}" data-s="${s}" data-t="${t}" ${ev.done ? 'disabled' : ''} ${extra || ''}>${l}</button>`;
     const btns = level === 3
       ? `${b('waza', 'Waza-ari', '', live ? '' : 'disabled')}${b('saki', 'Saki', 'pen', live && off ? 'disabled title="Saki is a defender’s penalty"' : '')}${b('chui', 'Chui (contact)', 'pen')}${b('hansoku', 'Han-soku', 'pen')}`
@@ -6676,10 +6685,10 @@ const SHEET_BRACKET = ' <button type="button" class="sm ghost sub-btn" data-act=
     v1.41: without a list, each side's kata is typed (shown next to the name in the bracket). */
 function kataListHTML(dv, d, r) {
   const L = dv.kataList || [];
-  if (!L.length) { const k = d.kata || {}, inp = s => `<label class="f" style="min-width:180px"><span>${s === 'a' ? 'Aka' : 'Shiro'} kata · ${esc(entName(r[s]))}</span><input id="kata-${s}" data-change="kata-pick" data-s="${s}" value="${esc(k[s] || '')}" list="kata-h2h" placeholder="e.g. Bassai Dai" autocomplete="off"></label>`;
+  if (!L.length) { const k = d.kata || {}, inp = s => `<label class="f" style="min-width:180px"><span>${s === 'a' ? 'Aka' : 'Shiro'} kata · ${esc(entName(r[s], mDid()))}</span><input id="kata-${s}" data-change="kata-pick" data-s="${s}" value="${esc(k[s] || '')}" list="kata-h2h" placeholder="e.g. Bassai Dai" autocomplete="off"></label>`;
     return `<div class="row" style="gap:8px;flex-wrap:wrap">${inp('a')}${inp('b')}</div><datalist id="kata-h2h">${KATA_LIST.map(x => `<option value="${esc(x)}">`).join('')}</datalist>`; }
   const k = d.kata || {}, sel = s => `<select data-change="kata-pick" data-s="${s}" aria-label="${s === 'a' ? 'Aka' : 'Shiro'} kata">${opt('', '— kata —', k[s] || '')}${L.map(x => opt(x, x, k[s] || '')).join('')}</select>`;
-  return `<div class="notice info" style="display:block"><b>Allowed kata:</b> ${L.map(esc).join(' · ')}<div class="row" style="margin-top:6px;gap:8px;flex-wrap:wrap"><label class="f" style="min-width:180px"><span>Aka · ${esc(entName(r.a))}</span>${sel('a')}</label><label class="f" style="min-width:180px"><span>Shiro · ${esc(entName(r.b))}</span>${sel('b')}</label></div><span class="tiny">A competitor may repeat a kata or change it from round to round, within this list.</span></div>`;
+  return `<div class="notice info" style="display:block"><b>Allowed kata:</b> ${L.map(esc).join(' · ')}<div class="row" style="margin-top:6px;gap:8px;flex-wrap:wrap"><label class="f" style="min-width:180px"><span>Aka · ${esc(entName(r.a, mDid()))}</span>${sel('a')}</label><label class="f" style="min-width:180px"><span>Shiro · ${esc(entName(r.b, mDid()))}</span>${sel('b')}</label></div><span class="tiny">A competitor may repeat a kata or change it from round to round, within this list.</span></div>`;
 }
 function teamPanel(d, sc, r, out, kogo) {
   const ta = DC.teamBy[r.a] || {}, tb = DC.teamBy[r.b] || {};
@@ -6695,7 +6704,7 @@ function teamPanel(d, sc, r, out, kogo) {
     <p class="tiny muted">WTKF: every round is fought; the higher team total wins (Ippon 10). Han-soku or Ki-ken of any member decides the whole team match. Tie → Kettei-sen by Representative.</p>
     <div class="row">${tabs}</div>
     <div class="bout"><div class="bout-h"><b>${isD ? 'Kettei-sen by Representative' : `Round ${idx + 1}`}</b><div class="row">${sel(ta, 'a', isD ? 'd' : idx, b.ma)}${sel(tb, 'b', isD ? 'd' : idx, b.mb)}</div></div>
-    ${kumitePanel(b.log || [], path, sc, r, { kogo: kogo && !isD, allowDraw: !isD, ketteiOnly: isD, names: { a: b.ma ? nm(ta, b.ma) : entName(r.a), b: b.mb ? nm(tb, b.mb) : entName(r.b) } })}</div></div>`;
+    ${kumitePanel(b.log || [], path, sc, r, { kogo: kogo && !isD, allowDraw: !isD, ketteiOnly: isD, names: { a: b.ma ? nm(ta, b.ma) : entName(r.a, mDid()), b: b.mb ? nm(tb, b.mb) : entName(r.b, mDid()) } })}</div></div>`;
 }
 function fukugoPanel(d, sc, r, out, part, kogo) {
   if (part === 'kitei') return `<p class="small muted">Ki-tei round: both competitors perform the designated kata together; five judges each choose a winner (no tie).</p>${flagsPanel(d, { judges: 5 }, 'flags', 'Ki-tei · judges’ flags')}`;
@@ -6716,11 +6725,11 @@ function renderScore(force) {
   const sub = esc(dv.name) + (seg ? ' · ' + esc(SEG_LABEL(seg)) : '') + (S.d.rings[rid] ? ' · ' + esc(S.d.rings[rid].name) : '') + SHEET_BRACKET;
   const positions = positionsFor(dv, m, br), canS = canScoreMatch(did, mid);
   const wSide = r.status === 'done' && r.winner ? (r.winner === r.a ? 'a' : 'b') : '';
-  const hdr = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="corner a${cornerState(!!wSide, wSide, 'a')}">${wSide === 'a' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label" style="color:#fff;opacity:.8">Aka</div><div class="who">${esc(entName(r.a) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(r.a))}</div>${h2hPrevHTML(did, mid, r.a)}</div>
-    <div class="corner b${cornerState(!!wSide, wSide, 'b')}">${wSide === 'b' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label">Shiro</div><div class="who">${esc(entName(r.b) || 'TBD')}</div><div class="tiny muted">${esc(entDojo(r.b))}</div>${h2hPrevHTML(did, mid, r.b)}</div></div>`;
+  const hdr = `<div class="board" style="grid-template-columns:1fr 1fr"><div class="corner a${cornerState(!!wSide, wSide, 'a')}">${wSide === 'a' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label" style="color:#fff;opacity:.8">Aka</div><div class="who">${esc(entName(r.a, mDid()) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(r.a))}</div>${h2hPrevHTML(did, mid, r.a)}</div>
+    <div class="corner b${cornerState(!!wSide, wSide, 'b')}">${wSide === 'b' ? `<div>${WIN_CHIP}</div>` : ''}<div class="label">Shiro</div><div class="who">${esc(entName(r.b, mDid()) || 'TBD')}</div><div class="tiny muted">${esc(entDojo(r.b))}</div>${h2hPrevHTML(did, mid, r.b)}</div></div>`;
   if (r.status === 'done') {
     const can = canS && KT.canEdit(br, mid, DC.res[did]);
-    root.innerHTML = sheet(title, `${hdr}${winBanner(wSide, entName(r.winner), (r.result || {}).method, r.result && r.result.pts)}
+    root.innerHTML = sheet(title, `${hdr}${winBanner(wSide, entName(r.winner, mDid()), (r.result || {}).method, r.result && r.result.pts)}
       ${canScoreDiv(did) ? recordHTML(dv, br, m, r) : officialsRec((r.result || {}).officials, positions)}
       ${!can && canS ? '<p class="small muted">This result can no longer be changed because a later match that depends on it has been scored. Undo that match first.</p>' : ''}`,
       `${can ? '<button class="danger" data-act="undo-result">Undo result</button>' : ''}<button class="primary" data-act="modal-close">Close</button>`, sub);
@@ -6739,7 +6748,7 @@ function renderScore(force) {
   else if (k === 'teamkumite') body = teamPanel(d, sc, r, out, kogo);
   else if (k === 'fukugo') body = fukugoPanel(d, sc, r, out, part, kogo);
   const kiken = `<div class="row small"><span class="muted">Withdrawal / no-show:</span><button class="sm ${d.kiken === 'a' ? 'danger' : ''}" data-act="kiken" data-s="a">Aka kiken</button><button class="sm ${d.kiken === 'b' ? 'danger' : ''}" data-act="kiken" data-s="b">Shiro kiken</button></div>`;
-  const banner = out.done ? winBanner(out.winner, entName(out.winner === 'a' ? r.a : r.b), out.method, out.pts) : '';
+  const banner = out.done ? winBanner(out.winner, entName(out.winner === 'a' ? r.a : r.b, mDid()), out.method, out.pts) : '';
   const ring = S.d.rings[rid];
   const offNote = out.done && offErr ? `<p class="small" style="color:var(--bad)">${esc(offErr)}</p>` : '';
   const openEl = document.activeElement && document.activeElement.id; const wasOpen = !!root.querySelector('details.officials[open]');
@@ -6798,7 +6807,7 @@ async function saveResult() {
   dropDraft(M.key);
   const rid = matchRing(M.did, M.mid);
   if (S.d.rings[rid]) S.store.set(P.live(S.evId, 'ringstate', rid), Object.assign({ did: '', mid: '', at: new Date().toISOString() }, keepCall(rid, { did: M.did, mid: M.mid }))).catch(() => {});
-  toast(`${entName(winnerId)} wins · ${out.method}`);
+  toast(`${entName(winnerId, mDid())} wins · ${out.method}`);
   closeModal();
 }
 
@@ -6836,7 +6845,7 @@ function openKP(did, key) {
   const dis = editable ? '' : 'disabled';
   const row = (field, label) => `<div><div class="label" style="margin-bottom:6px">${label}</div><div class="kprow" style="--j:${J}">${Array.from({ length: J }, (_, i) => `<label class="f"><span style="text-align:center">${i === 0 ? 'Shu-shin' : 'J' + (i + 1)}<span class="tiny jn" data-jn="${i}">${esc(posName(d.officials, i))}</span></span><input id="kp-${field}${i}" data-input="kp-j" data-f="${field}" data-i="${i}" inputmode="decimal" value="${esc((d[field] || [])[i] ?? '')}" ${dis} aria-label="${label} judge ${i + 1}"></label>`).join('')}</div></div>`;
   const kataLabel = br.kataRule ? 'Kata performed' : 'Choreography (optional)';
-  const body = `${officialsHTML(rid, 'kata', positions, d.officials, editable)}<div class="corner" style="background:var(--ai-soft);color:var(--ink)"><div class="label">${esc(ctx.label)}</div><div class="who">${esc(entName(ctx.id))}</div><div class="tiny muted">${esc(entDojo(ctx.id))}</div>${kpPrevHTML(did, key)}</div>
+  const body = `${officialsHTML(rid, 'kata', positions, d.officials, editable)}<div class="corner" style="background:var(--ai-soft);color:var(--ink)"><div class="label">${esc(ctx.label)}</div><div class="who">${esc(entName(ctx.id, did))}</div><div class="tiny muted">${esc(entDojo(ctx.id))}</div>${kpPrevHTML(did, key)}</div>
     <label class="f ${br.kataRule ? 'req' : ''}"><span>${kataLabel}</span><input id="kp-kata" data-input="kp-kata" value="${esc(d.kata || '')}" placeholder="${br.kataRule ? 'e.g. Bassai Dai' : ''}" ${dis} list="kata-list">
       <datalist id="kata-list">${br.kataRule ? KATA_LIST.map(k => `<option value="${k}">`).join('') : ''}</datalist></label>
     ${ctx.rp ? `<p class="small">Kettei-sen: ${br.kataRule ? 'a different kata than the one that tied; ' : ''}this score only breaks the tie and is not added to the total.</p>` : ctx.isFinal && ctx.semiKata && br.kataRule ? `<p class="small">Final elimination (semifinal) kata: <b>${esc(ctx.semiKata)}</b> — the final needs a different kata. The semifinal score${ctx.carry != null ? ` (${(ctx.carry / kpKept(br)).toFixed(3)})` : ''} is carried forward and added to the final score.</p>` : ctx.semi && !ctx.rp ? `<p class="small">Final elimination round: this score is carried forward to the final four${br.kataRule ? ', who must then perform a different kata. Any kata may be used here, even the one from the previous round' : ''}.</p>` : ''}
@@ -6849,7 +6858,7 @@ function openKP(did, key) {
     ${saved.hansoku ? '<p class="small"><b>Han-soku</b> (zero card) — scored 0.</p>' : `<p class="small">Kata: <b>${esc(saved.kata || '—')}</b></p>${kpRecTable(saved.s, J, withApp || saved.app ? 'Kata' : 'Score')}${saved.app ? kpRecTable(saved.app, J, 'Application') : ''}`}
     ${officialsRec(saved.officials, positions)}${recordedBy(saved)}</div></details>` : '';
   const ring = S.d.rings[rid];
-  openModal(sheet(esc(entName(ctx.id)), recBlock + body,
+  openModal(sheet(esc(entName(ctx.id, did)), recBlock + body,
     `${ring && editable ? `<button data-act="kp-call" style="margin-right:auto">Call to ${esc(ring.name)}</button>` : ''}${saved && editable ? '<button class="danger" data-act="kp-clear">Clear score</button>' : ''}<button data-act="modal-close">Close</button>${editable ? '<button class="primary" data-act="kp-save" id="kp-save">Save score</button>' : ''}`,
     `${esc(dv.name)}${ring ? ' · ' + esc(ring.name) : ''}${SHEET_BRACKET}`));
   kpPaint();
@@ -6896,7 +6905,7 @@ function kpPushLive(clear) {
   const M = S.modal; const dv = DC.divBy[M.did]; if (!dv || !S.d.rings[M.rid] || S.readOnly) return;
   const d = loadDraft(M.dkey), { t, a, k } = kpEval();
   const n = (d.s || []).filter(x => x !== '' && x != null).length;
-  const doc = clear ? { did: '', mid: '', at: new Date().toISOString() } : { did: M.did, kp: M.key, seg: M.seg, kata: d.kata || '', score: t ? ((t.total + (a ? a.total : 0)) / k).toFixed(3) : '', log: [entName(M.ctx.id) + ' · ' + M.ctx.label, d.kata ? 'Kata: ' + d.kata : '', `Scores entered ${n}/${(S.d.brackets[M.did] || {}).judges || 6}`].filter(Boolean), at: new Date().toISOString(), by: S.myId || '' };
+  const doc = clear ? { did: '', mid: '', at: new Date().toISOString() } : { did: M.did, kp: M.key, seg: M.seg, kata: d.kata || '', score: t ? ((t.total + (a ? a.total : 0)) / k).toFixed(3) : '', log: [entName(M.ctx.id, M.did) + ' · ' + M.ctx.label, d.kata ? 'Kata: ' + d.kata : '', `Scores entered ${n}/${(S.d.brackets[M.did] || {}).judges || 6}`].filter(Boolean), at: new Date().toISOString(), by: S.myId || '' };
   Object.assign(doc, keepCall(M.rid, { did: M.did, kp: M.key }));
   S.store.set(P.live(S.evId, 'ringstate', M.rid), doc).catch(e => console.warn(e));
 }
@@ -6911,7 +6920,7 @@ async function kpSave() {
   const saved = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { scores: { [M.key]: rec } }));
   if (!saved) return;
   kpPushLive(true); dropDraft(M.dkey);
-  toast(`${entName(M.ctx.id)} · ${d.hansoku ? 'Han-soku' : ((ev.t.total + (ev.a ? ev.a.total : 0)) / kpKept(br)).toFixed(3)}`);
+  toast(`${entName(M.ctx.id, M.did)} · ${d.hansoku ? 'Han-soku' : ((ev.t.total + (ev.a ? ev.a.total : 0)) / kpKept(br)).toFixed(3)}`);
   closeModal();
 }
 
@@ -6961,7 +6970,7 @@ function logRecHTML(log, kogo, names, o) {
 }
 function recordHTML(dv, br, m, r) {
   const rec = r.result || {}, d = rec.detail || {}, k = kindOf(dv), sc = scoringOf(dv), kogo = kumiteStyle(dv) === 'kogo';
-  const names = { a: entName(r.a), b: entName(r.b) };
+  const names = { a: entName(r.a, mDid()), b: entName(r.b, mDid()) };
   let body = '';
   if (/^Ki-ken/.test(rec.method || '')) body = '<p class="small">Decided by Ki-ken (withdrawal / no-show).</p>';
   else if (k === 'kata') body = (d.flags ? flagsRecHTML(d.flags, 'Judges’ flags') : d.sa ? scoresRecHTML(d.sa, d.sb, sc.judges) : '') + (d.kata && (d.kata.a || d.kata.b) ? `<p class="small">Kata — Aka: <b>${esc(d.kata.a || '—')}</b> · Shiro: <b>${esc(d.kata.b || '—')}</b></p>` : '');
@@ -7163,11 +7172,11 @@ function renderMatch() {
   const m = br.matches[mid], r = DC.res[did][mid], seg = KT.segOf(br, m), rid = KT.ringOf(dv, seg, mid);
   const live = r.status === 'done' ? null : liveFor(did, mid), rs = live ? live[1] : null;   // a finished match shows its result, not a stale live board
   const wSide = r.status === 'done' && r.winner ? (r.winner === r.a ? 'a' : 'b') : '';
-  const side = s => { const id = r[s]; return `<div class="corner ${s}${cornerState(!!wSide, wSide, s)}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${wSide === s ? WIN_CHIP : ''}</div><div class="who">${id ? esc(entName(id)) : esc((s === 'a' ? r.hintA : r.hintB) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(id))}</div>
+  const side = s => { const id = r[s]; return `<div class="corner ${s}${cornerState(!!wSide, wSide, s)}"><div class="row between"><span class="label" style="${s === 'a' ? 'color:#fff;opacity:.8' : ''}">${s === 'a' ? 'Aka' : 'Shiro'}</span>${wSide === s ? WIN_CHIP : ''}</div><div class="who">${id ? esc(entName(id, did)) : esc((s === 'a' ? r.hintA : r.hintB) || 'TBD')}</div><div class="tiny" style="opacity:.85">${esc(entDojo(id))}</div>
     ${rs && rs.score ? `<div class="big">${esc(rs.score[s])}</div>` : r.status === 'done' && r.result && r.result.pts ? `<div class="big">${esc(r.result.pts[s])}</div>` : ''}</div>`; };
   const status = r.status === 'done' ? `<span class="chip ok">Final · ${esc((r.result || {}).method || '')}</span>` : rs ? '<span class="chip aka">● Live on the mat</span>' : r.status === 'ready' ? '<span class="chip">Ready</span>' : r.status === 'bye' ? '<span class="chip plain">Bye</span>' : '<span class="chip plain">Waiting for earlier matches</span>';
   const canS = canScoreMatch(did, mid);
-  let body = `${wSide ? winBanner(wSide, entName(r.winner), (r.result || {}).method, r.result && r.result.pts) : ''}<div class="row between">${status}<span class="small muted">${esc(ringName(rid))}${seg ? ' · ' + esc(SEG_LABEL(seg)) : ''}</span></div>
+  let body = `${wSide ? winBanner(wSide, entName(r.winner, did), (r.result || {}).method, r.result && r.result.pts) : ''}<div class="row between">${status}<span class="small muted">${esc(ringName(rid))}${seg ? ' · ' + esc(SEG_LABEL(seg)) : ''}</span></div>
     <div class="board" style="grid-template-columns:1fr 1fr">${side('a')}${side('b')}</div>`;
   if (rs) body += `<div class="card live-card"><div class="row between"><b>${esc(rs.phase || 'In progress')}</b><span class="tiny muted">updated ${esc(timeAgo(rs.at))}</span></div>${(rs.log || []).length ? `<ol class="live-log">${rs.log.slice().reverse().map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : '<p class="small muted">Waiting for the first score.</p>'}</div>`;
   if (r.status === 'done') {
@@ -7197,7 +7206,7 @@ function renderDivPanel() {
   const body = `<div class="row small muted">${esc(KT.FORMATS[dv.format] || dv.format)} · ${esc(scoringLabel(dv))}</div>
     <div class="row">${!bs.drawn ? (n >= 1 ? '<span class="chip plain">Not drawn</span>' : '<span class="chip plain">Empty</span>') : bs.complete ? '<span class="chip ok">Finished</span>' : `<span class="chip">${bs.fought}/${bs.playable} ${bs.kp ? 'performances' : 'matches'}</span>`}</div>
     ${smallDivHTML(dv.id)}
-    ${n ? `<div class="card flush"><div class="card-h"><h3>Entrants (${n})</h3><span class="tiny muted">Tap a name to open the card — e.g. to move to another division</span></div><div style="padding:10px 14px 0;max-width:280px">${entSortSelect('dp-entsort')}</div><div class="pill-list" style="padding:10px 14px">${entRowsSorted(divEntrants(dv.id)).map(({ id: e, head }) => `${head ? head.replace('class="ent-grp label"', 'class="ent-grp label" style="flex-basis:100%"') : ''}<button class="chip plain ent-chip" data-act="ent-open" data-id="${esc(e)}">${esc(entName(e))}${ENT_SORT_LEVEL[entSortMode()] ? '' : entDojo(e) ? ` <span class="muted">· ${esc(entDojo(e))}</span>` : ''}</button>`).join('')}</div></div>` : ''}
+    ${n ? `<div class="card flush"><div class="card-h"><h3>Entrants (${n})</h3><span class="tiny muted">Tap a name to open the card — e.g. to move to another division</span></div><div style="padding:10px 14px 0;max-width:280px">${entSortSelect('dp-entsort')}</div><div class="pill-list" style="padding:10px 14px">${entRowsSorted(divEntrants(dv.id)).map(({ id: e, head }) => `${head ? head.replace('class="ent-grp label"', 'class="ent-grp label" style="flex-basis:100%"') : ''}<button class="chip plain ent-chip" data-act="ent-open" data-id="${esc(e)}">${esc(entName(e, dv.id))}${ENT_SORT_LEVEL[entSortMode()] ? '' : entDojo(e) ? ` <span class="muted">· ${esc(entDojo(e))}</span>` : ''}</button>`).join('')}</div></div>` : ''}
     <div class="card flush"><div class="card-h"><h3>Rings &amp; judges</h3><span class="tiny muted">Pools and rounds use the judges of the ring they run on</span></div><div class="seg-list">${rows}</div></div>
     ${!segs.length ? '<p class="tiny muted">Pools, semifinal and final can be placed on their own rings once the division is drawn.</p>' : ''}`;
   root.innerHTML = sheet(esc(dv.name), body, `<button data-act="div-edit" data-id="${esc(dv.id)}">Settings</button>${bs.drawn ? `<button data-act="view-bracket" data-id="${esc(dv.id)}">Bracket</button>` : n ? `<button class="primary" data-act="draw" data-id="${esc(dv.id)}">Draw</button>` : ''}<button class="primary" data-act="modal-close">Done</button>`);
@@ -7234,9 +7243,9 @@ function entrantStatus(did, id) {
   for (const m of ready) {
     const r = res[m.id], opp = r.a === id ? r.b : r.a, rid = KT.ringOf(dv, KT.segOf(br, m), m.id);
     const live = liveFor(did, m.id);
-    if (live) return { text: `On the mat now · ${ringName(rid)} · vs ${entName(opp)}`, cls: 'aka', did, mid: m.id };
+    if (live) return { text: `On the mat now · ${ringName(rid)} · vs ${entName(opp, did)}`, cls: 'aka', did, mid: m.id };
     const rq = ringQueue(rid), pos = rq.findIndex(x => x.m && x.m.id === m.id && x.did === did);
-    return { text: `${KT.matchLabel(m, br)} vs ${entName(opp)} · ${ringName(rid)}${pos >= 0 ? ` · ${pos === 0 ? 'next up' : pos + ' ahead'}` : ''}`, cls: '', did, mid: m.id };
+    return { text: `${KT.matchLabel(m, br)} vs ${entName(opp, did)} · ${ringName(rid)}${pos >= 0 ? ` · ${pos === 0 ? 'next up' : pos + ' ahead'}` : ''}`, cls: '', did, mid: m.id };
   }
   const pending = ms.some(m => res[m.id] && res[m.id].status === 'pending' && (res[m.id].a === id || res[m.id].b === id));
   const done = ms.filter(m => res[m.id] && res[m.id].status === 'done' && (res[m.id].a === id || res[m.id].b === id));
@@ -7244,7 +7253,7 @@ function entrantStatus(did, id) {
   if (!done.length) return { text: 'Waiting', cls: 'plain' };
   const last = done[done.length - 1], lr = res[last.id];
   if (lr.winner === id) return { text: 'Advanced · waiting for next round', cls: 'plain', did, mid: last.id };
-  return { text: place ? 'Placed (finishing)' : `Out · lost ${KT.matchLabel(last, br)} to ${entName(lr.winner)}`, cls: 'plain', did, mid: last.id };
+  return { text: place ? 'Placed (finishing)' : `Out · lost ${KT.matchLabel(last, br)} to ${entName(lr.winner, did)}`, cls: 'plain', did, mid: last.id };
 }
 function entriesOf(c) {
   const out = [];
@@ -8289,20 +8298,20 @@ function keepCall(rid, ref) {
 }
 /** Who has to be at the ring for an item: [{k, color, id}] — Aka/Shiro for a match, one competitor (or team) for a kata performance. */
 function callSides(x) {
-  if (x.kp) return [{ k: 'c', color: 'kata', id: x.kp.id }];
-  return [{ k: 'a', color: 'Aka', id: x.r.a }, { k: 'b', color: 'Shiro', id: x.r.b }];
+  if (x.kp) return [{ k: 'c', color: 'kata', id: x.kp.id, did: x.did }];
+  return [{ k: 'a', color: 'Aka', id: x.r.a, did: x.did }, { k: 'b', color: 'Shiro', id: x.r.b, did: x.did }];
 }
 function callLabel(x) {
   const dv = DC.divBy[x.did], br = S.d.brackets[x.did];
   return `${dv ? dv.name : ''} · ${x.kp ? x.kp.label : KT.matchLabel(x.m, br)}`;
 }
-const whoText = id => `${entName(id)}${entDojo(id) ? ' (' + entDojo(id) + ')' : ''}`;
+const whoText = (id, did) => `${entName(id, did)}${entDojo(id) ? ' (' + entDojo(id) + ')' : ''}`;
 /** Plain announcement text: what is called, then who is on deck. */
 function announceText(rid, x, deck) {
   const ring = (S.d.rings[rid] || {}).name || 'Ring';
-  const sides = callSides(x).map(s => (x.kp ? '' : s.color + ': ') + whoText(s.id)).join('. ');
+  const sides = callSides(x).map(s => (x.kp ? '' : s.color + ': ') + whoText(s.id, s.did)).join('. ');
   let t = `${ring}, now calling: ${callLabel(x)}. ${sides}.`;
-  if (deck) t += ` On deck: ${callSides(deck).map(s => entName(s.id)).join(' and ')}.`;
+  if (deck) t += ` On deck: ${callSides(deck).map(s => entName(s.id, s.did)).join(' and ')}.`;
   return t;
 }
 /** Queue of a ring without the item already on the mat. */
@@ -8322,7 +8331,7 @@ function callPanelHTML(r) {
   if (ci < 0) {
     const x = q[0];
     return `<div class="callbox" data-rid="${esc(r.id)}"><div class="label">Next to call</div>
-      <div class="small"><b>${esc(callSides(x).map(s => entName(s.id)).join(' vs '))}</b> <span class="muted">· ${esc(callLabel(x))}</span></div>
+      <div class="small"><b>${esc(callSides(x).map(s => entName(s.id, s.did)).join(' vs '))}</b> <span class="muted">· ${esc(callLabel(x))}</span></div>
       <div class="row" style="margin-top:6px"><button class="go" data-act="ring-call" data-rid="${esc(r.id)}" data-i="0">📣 Call to ${esc(r.name)}</button></div>
       ${busy ? '<div class="tiny muted" style="margin-top:4px">You can call the next one while the current match finishes.</div>' : ''}</div>`;
   }
@@ -8330,7 +8339,7 @@ function callPanelHTML(r) {
   const allIn = sides.every(s => pres[s.k]);
   return `<div class="callbox called" data-rid="${esc(r.id)}"><div class="row between"><span class="label">Called${c.n > 1 ? ' × ' + c.n : ''}</span><span class="chip ${allIn ? 'ok' : 'warn'}">${allIn ? 'All present' : 'Check in at the ring'}</span></div>
     <p class="announce" id="announce-${esc(r.id)}">${esc(announceText(r.id, x, deck))}</p>
-    <div class="stack" style="gap:4px">${sides.map(s => `<label class="check-in"><input type="checkbox" data-change="call-present" data-rid="${esc(r.id)}" data-k="${s.k}" ${pres[s.k] ? 'checked' : ''}> <span>${x.kp ? '' : `<span class="belt ${s.k}"></span>`}<b>${esc(entName(s.id))}</b> <span class="muted small">${esc(entDojo(s.id))}</span> — present &amp; ready</span></label>`).join('')}</div>
+    <div class="stack" style="gap:4px">${sides.map(s => `<label class="check-in"><input type="checkbox" data-change="call-present" data-rid="${esc(r.id)}" data-k="${s.k}" ${pres[s.k] ? 'checked' : ''}> <span>${x.kp ? '' : `<span class="belt ${s.k}"></span>`}<b>${esc(entName(s.id, s.did))}</b> <span class="muted small">${esc(entDojo(s.id))}</span> — present &amp; ready</span></label>`).join('')}</div>
     <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="primary" data-act="ring-start" data-rid="${esc(r.id)}" ${allIn && !busy ? '' : 'disabled'}>Start — open ${x.kp ? 'score card' : 'scoresheet'}</button>
       <button data-act="ring-recall" data-rid="${esc(r.id)}">Call again</button><button data-act="ring-speak" data-rid="${esc(r.id)}" title="Read the announcement aloud">🔊 Read aloud</button><button class="ghost" data-act="ring-uncall" data-rid="${esc(r.id)}">Cancel call</button></div>
     ${busy ? '<div class="tiny muted" style="margin-top:4px">Finish the match on the mat first.</div>' : ''}
@@ -8340,7 +8349,7 @@ function callPanelHTML(r) {
 function calledHTML(rid) {
   const rs = S.d.ringstate[rid], c = rs && rs.call; if (!c) return '';
   const x = callQueue(rid).find(y => sameRef(qRef(y), c)); if (!x) return '';
-  return `<div class="called-line small"><span class="chip aka">Called</span> ${esc(callSides(x).map(s => entName(s.id)).join(' vs '))} <span class="muted">· ${esc(callLabel(x))}</span></div>`;
+  return `<div class="called-line small"><span class="chip aka">Called</span> ${esc(callSides(x).map(s => entName(s.id, s.did)).join(' vs '))} <span class="muted">· ${esc(callLabel(x))}</span></div>`;
 }
 async function writeCall(rid, call) {
   const rs = Object.assign({}, S.d.ringstate[rid] || { did: '', mid: '' });
@@ -8376,7 +8385,7 @@ async function ringStart(rid) {
   else if (canScoreMatch(x.did, x.m.id)) openScore(x.did, x.m.id);
 }
 function speakCall(rid) {
-  const el = document.getElementById('announce-' + rid); const t = el ? el.textContent : '';
+  const el = document.getElementById('announce-' + rid); const t = el ? el.textContent.replace(/ \*(\d+)/g, ', rank $1') : '';   // v1.45: "*2" is read as "rank 2"
   try { if (t && window.speechSynthesis && window.SpeechSynthesisUtterance && !navigator.webdriver) { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(t)); } } catch (e) { /* no speech on this device */ }
 }
 /* ===== actions, subscriptions, init ===== */
@@ -8745,7 +8754,7 @@ const ACT = {
     const modal = M.type === 'kp' ? { type: 'kp', did: M.did, key: M.key } : { type: M.type, did: M.did, mid: M.mid };
     let clock = null;
     if (M.type === 'score') { const run = CLOCK.running; stopClock(); clock = { left: CLOCK.left, base: CLOCK.base, key: CLOCK.key, await: CLOCK.await, run }; }
-    openBracketFrom({ ring: rid, modal, clock, label: (dv ? dv.name : '') + (M.type === 'kp' ? ' · ' + entName((M.ctx || {}).id) : ' · ' + KT.matchLabel(br.matches[M.mid], br)) }, M.did);
+    openBracketFrom({ ring: rid, modal, clock, label: (dv ? dv.name : '') + (M.type === 'kp' ? ' · ' + entName((M.ctx || {}).id, M.did) : ' · ' + KT.matchLabel(br.matches[M.mid], br)) }, M.did);
   },
   'back-match': () => {
     const b = S.ui.back; S.ui.back = null; if (!b) return;
@@ -8766,7 +8775,7 @@ const ACT = {
   'ring-speak': el => speakCall(el.dataset.rid),
   'kp-call': () => { kpPushLive(false); toast('Called — shown as “now on the mat” for this ring'); },
   'kp-clear': async () => {
-    const M = S.modal; if (!(await confirmBox(`Clear this score for ${entName(M.ctx.id)}?`, 'Clear score', true))) return;
+    const M = S.modal; if (!(await confirmBox(`Clear this score for ${entName(M.ctx.id, M.did)}?`, 'Clear score', true))) return;
     const ok = await guard(() => S.store.update(P.live(S.evId, 'brackets', M.did), { scores: { [M.key]: null } }), 'Score cleared'); if (ok) { dropDraft(M.dkey); closeModal(); }
   },
   match: el => { if (el.closest('.modal') && S.modal && S.modal.type === 'match') return; openMatch(el.dataset.did, el.dataset.mid); },

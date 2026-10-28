@@ -322,7 +322,7 @@ function quotaPickForm(did, group) {
     const t = DC.teamBy[id]; return t ? esc((t.memberIds || []).map(m => DC.compBy[m] ? DC.compBy[m].firstName + ' ' + DC.compBy[m].lastName : '').filter(Boolean).join(', ')) : ''; };
   openModal(sheet(`Choose who competes · ${esc(group)}`, `<form id="f-quota" data-form="quota" data-id="${esc(did)}" data-group="${esc(group)}" class="stack">
     <p class="small"><b>${esc(d.name)}</b> allows <b>${max} ${team ? (max === 1 ? 'team' : 'teams') : 'athletes'}</b> per ${esc(sepLabel())}; ${esc(group)} has ${ids.length}. Tick the ${max} who compete.</p>
-    <div class="stack" style="gap:6px">${ids.map(id => `<label class="check quota-row"><input type="checkbox" name="keep" data-multi="1" value="${esc(id)}" data-change="quota-count"> <span><b>${esc(entName(id))}</b><span class="tiny muted" style="display:block">${info(id)}</span></span></label>`).join('')}</div>
+    <div class="stack" style="gap:6px">${ids.map(id => `<label class="check quota-row"><input type="checkbox" name="keep" data-multi="1" value="${esc(id)}" data-change="quota-count"> <span><b>${esc(entName(id, d.id))}</b><span class="tiny muted" style="display:block">${info(id)}</span></span></label>`).join('')}</div>
     <p class="small" id="quota-msg" aria-live="polite"></p>
     <p class="tiny muted">${team ? 'Teams not chosen are marked Withdrawn.' : `Athletes not chosen are taken out of ${esc(KT.EVENT_TYPES[d.eventType].label)} only — they stay registered and keep their other events.`} The division can be drawn once every country is within the limit.</p></form>`,
     `<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-quota" id="quota-save" disabled>Save</button>`));
@@ -426,15 +426,15 @@ function nowHTML(rs) {
     const q = br.format === 'KP' ? KT.kpQueue(br).find(x => x.key === rs.kp) : null;
     if (!q) return '';
     return `<div class="label">${esc(dv ? dv.name : '')} · ${esc(q.label)}</div>
-      <div class="now" ${kpTapAttrs(rs.did, rs.kp)} style="grid-template-columns:1fr auto;cursor:pointer"><div class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span style="min-width:0"><div class="name">${esc(entName(q.id))}</div><div class="dojo">${esc(entDojo(q.id))}${rs.kata ? ' · ' + esc(rs.kata) : ''}</div>${kpPrevHTML(rs.did, rs.kp)}</span></div>
+      <div class="now" ${kpTapAttrs(rs.did, rs.kp)} style="grid-template-columns:1fr auto;cursor:pointer"><div class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span style="min-width:0"><div class="name">${esc(entName(q.id, rs.did))}</div><div class="dojo">${esc(entDojo(q.id))}${rs.kata ? ' · ' + esc(rs.kata) : ''}</div>${kpPrevHTML(rs.did, rs.kp)}</span></div>
       <div class="sc num">${rs.score != null && rs.score !== '' ? esc(rs.score) : ''}</div></div>`;
   }
   const res = (DC.res[rs.did] || {})[rs.mid];
   if (!res || res.status !== 'ready') return '';
   return `<div class="label">${esc(dv ? dv.name : '')} · ${esc(KT.matchLabel(br.matches[rs.mid], br))}</div>
-    <div class="now" data-act="match" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}" role="button" tabindex="0" style="cursor:pointer"><div class="side"><span class="belt a"></span><span style="min-width:0"><div class="name">${esc(entName(res.a))}</div><div class="dojo">${esc(entDojo(res.a))}</div>${h2hPrevHTML(rs.did, rs.mid, res.a)}</span></div>
+    <div class="now" data-act="match" data-did="${esc(rs.did)}" data-mid="${esc(rs.mid)}" role="button" tabindex="0" style="cursor:pointer"><div class="side"><span class="belt a"></span><span style="min-width:0"><div class="name">${esc(entName(res.a, rs.did))}</div><div class="dojo">${esc(entDojo(res.a))}</div>${h2hPrevHTML(rs.did, rs.mid, res.a)}</span></div>
     <div class="sc num">${rs.score ? `${esc(rs.score.a)}–${esc(rs.score.b)}` : 'vs'}</div>
-    <div class="side" style="justify-content:flex-end;text-align:right"><span style="min-width:0"><div class="name">${esc(entName(res.b))}</div><div class="dojo">${esc(entDojo(res.b))}</div>${h2hPrevHTML(rs.did, rs.mid, res.b)}</span><span class="belt b"></span></div></div>
+    <div class="side" style="justify-content:flex-end;text-align:right"><span style="min-width:0"><div class="name">${esc(entName(res.b, rs.did))}</div><div class="dojo">${esc(entDojo(res.b))}</div>${h2hPrevHTML(rs.did, rs.mid, res.b)}</span><span class="belt b"></span></div></div>
     ${rs.phase ? `<div class="phase">${esc(rs.phase)}</div>` : ''}`;
 }
 function ringBoardHTML(rings, withActions) {
@@ -455,12 +455,12 @@ function ringBoardHTML(rings, withActions) {
       ${withActions ? callPanelHTML(r) : calledHTML(r.id)}
       <div class="queue"><div class="label">Up next</div>${next.map(x => {
         const can = withActions && (x.kp ? canScoreKP(x.did, x.kp.key) : canScoreMatch(x.did, x.m.id));
-        if (x.kp) return `<div class="q" ${kpTapAttrs(x.did, x.kp.key)} style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id))}</span></span>
+        if (x.kp) return `<div class="q" ${kpTapAttrs(x.did, x.kp.key)} style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id, x.did))}</span></span>
           <span class="vs">${can ? `<button class="sm go" data-act="kp-score" data-did="${esc(x.did)}" data-key="${esc(x.kp.key)}">Score</button>` : 'kata'}</span></div>
           <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(x.kp.label)}</div>`;
-        return `<div class="q" data-act="match" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}" role="button" tabindex="0"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a))}</span></span>
+        return `<div class="q" data-act="match" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}" role="button" tabindex="0"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a, x.did))}</span></span>
         <span class="vs">${can ? `<button class="sm go" data-act="score" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}">Score</button>` : 'vs'}</span>
-        <span class="side" style="justify-content:flex-end"><span class="name">${esc(entName(x.r.b))}</span><span class="belt b"></span></span></div>
+        <span class="side" style="justify-content:flex-end"><span class="name">${esc(entName(x.r.b, x.did))}</span><span class="belt b"></span></span></div>
         <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(KT.matchLabel(x.m, S.d.brackets[x.did]))}${kindOf(DC.divBy[x.did]) === 'fukugo' ? ' · ' + (KT.fukugoPart(x.m, S.d.brackets[x.did]) === 'kitei' ? 'Ki-tei' : 'Kumite') : ''}</div>`;
       }).join('') || '<div class="small muted">Nothing waiting.</div>'}</div></div>`;
   }).join('')}</div>`;
@@ -502,8 +502,8 @@ function backBarHTML() {
 }
 function podiumHTML(did) {
   const pl = DC.pl[did]; if (!pl || !pl.gold) return pl && pl.tie ? `<div class="notice warn">Pool finished with a tie that the rules cannot break. ${isDirector() || canScoreDiv(did) ? `<button class="sm" data-act="tiebreak" data-did="${esc(did)}" data-pool="A">Set tiebreak order</button>` : 'Waiting for the director.'}</div>` : '';
-  const line = (cls, lbl, id) => id ? `<div class="pl"><span class="medal ${cls}">${lbl}</span><span style="min-width:0"><div class="name">${esc(entName(id))}</div><div class="dojo">${esc(entDojo(id))}</div></span></div>` : '';
-  return `<div class="card"><div class="row between"><h3>${pl.complete ? 'Final placings' : 'Placings so far'}</h3>${pl.complete ? '<span class="chip ok">Finished</span>' : ''}</div><div class="podium" style="margin-top:8px">${line('g', '1', pl.gold)}${line('s', '2', pl.silver)}${(pl.bronze || []).map(b => line('b', '3', b)).join('')}${pl.fourth ? `<div class="pl"><span class="medal" style="background:var(--ink-3)">4</span><span style="min-width:0"><div class="name">${esc(entName(pl.fourth))}</div><div class="dojo">${esc(entDojo(pl.fourth))}</div></span></div>` : ''}</div></div>`;
+  const line = (cls, lbl, id) => id ? `<div class="pl"><span class="medal ${cls}">${lbl}</span><span style="min-width:0"><div class="name">${esc(entName(id, did))}</div><div class="dojo">${esc(entDojo(id))}</div></span></div>` : '';
+  return `<div class="card"><div class="row between"><h3>${pl.complete ? 'Final placings' : 'Placings so far'}</h3>${pl.complete ? '<span class="chip ok">Finished</span>' : ''}</div><div class="podium" style="margin-top:8px">${line('g', '1', pl.gold)}${line('s', '2', pl.silver)}${(pl.bronze || []).map(b => line('b', '3', b)).join('')}${pl.fourth ? `<div class="pl"><span class="medal" style="background:var(--ink-3)">4</span><span style="min-width:0"><div class="name">${esc(entName(pl.fourth, did))}</div><div class="dojo">${esc(entDojo(pl.fourth))}</div></span></div>` : ''}</div></div>`;
 }
 function bmHTML(did, m, res, live) {
   const r = res[m.id]; if (!r) return '';
@@ -518,7 +518,7 @@ function bmHTML(did, m, res, live) {
     const cls = !id ? 'tbd' : r.status === 'done' ? (r.winner === id ? 'win' : 'lose') : r.status === 'bye' ? (r.winner === id ? 'adv' : 'lose') : '';
     const sc = r.status === 'done' && res1.pts ? fmtSc(res1.pts[side]) : '';
     const kt = kataDiv && id && kUsed[side] ? `<div class="kata-used">${esc(kUsed[side])}</div>` : '';
-    return `<div class="ln ${side} ${cls}"><span class="strip"></span><span style="min-width:0"><div class="name">${cls === 'win' ? '<span class="wmark" aria-label="Winner">✓</span>' : ''}${id ? esc(entName(id)) : r.status === 'bye' ? 'Bye' : esc(hint || 'TBD')}</div>${id ? `<div class="dojo">${esc(entDojo(id))}</div>` : ''}${kt}</span><span class="sc">${sc === '' || sc == null ? '' : esc(sc)}</span></div>`;
+    return `<div class="ln ${side} ${cls}"><span class="strip"></span><span style="min-width:0"><div class="name">${cls === 'win' ? '<span class="wmark" aria-label="Winner">✓</span>' : ''}${id ? esc(entName(id, did)) : r.status === 'bye' ? 'Bye' : esc(hint || 'TBD')}</div>${id ? `<div class="dojo">${esc(entDojo(id))}</div>` : ''}${kt}</span><span class="sc">${sc === '' || sc == null ? '' : esc(sc)}</span></div>`;
   };
   return `<div class="bm ${r.status === 'ready' ? 'ready' : ''} ${live ? 'live' : ''} ${canS ? 'click' : ''}" ${canS ? `data-act="${scorer && r.status === 'ready' ? 'score' : 'match'}" data-did="${esc(did)}" data-mid="${esc(m.id)}" tabindex="0" role="button"` : ''}>${ln('a')}${ln('b')}
     <div class="meta"><span>${esc(m.id)}${kindOf(DC.divBy[did]) === 'fukugo' ? ' · ' + (KT.fukugoPart(m, S.d.brackets[did]) === 'kitei' ? 'Ki-tei' : 'Kumite') : ''}</span><span>${r.status === 'done' ? esc(res1.method || '') : r.status === 'bye' ? 'Bye' : r.status === 'ready' ? (live ? '● Live' : scorer ? 'Tap to score' : 'Ready') : ''}</span></div></div>`;
@@ -613,7 +613,7 @@ function poolHTML(did, P, liveId) {
   const adv = br.advance || 0;
   return `<div class="card stack"><div class="row between"><h3>Pool ${esc(P)}</h3>${segRingChip(did, 'P:' + P)}${st.complete ? (st.tie ? `<span class="chip warn">Tie</span>` : '<span class="chip ok">Complete</span>') : ''}</div>
     <div class="tw"><table><thead><tr><th>#</th><th>Entrant</th><th class="n">W</th><th class="n">L</th><th class="n">For</th><th class="n">Agst</th></tr></thead><tbody>
-    ${st.rows.map((r, i) => `<tr><td class="num">${i + 1}${adv && i < adv && st.complete ? ' ▸' : ''}</td><td><div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div></td><td class="n">${r.w}</td><td class="n">${r.l}</td><td class="n">${r.pf}</td><td class="n">${r.pa}</td></tr>`).join('')}
+    ${st.rows.map((r, i) => `<tr><td class="num">${i + 1}${adv && i < adv && st.complete ? ' ▸' : ''}</td><td><div class="name">${esc(entName(r.id, did))}</div><div class="dojo">${esc(entDojo(r.id))}</div></td><td class="n">${r.w}</td><td class="n">${r.l}</td><td class="n">${r.pf}</td><td class="n">${r.pa}</td></tr>`).join('')}
     </tbody></table></div>
     ${st.tie && (isDirector() || canScoreDiv(did)) ? `<div class="notice warn">Tied on wins, head-to-head and points. <button class="sm" data-act="tiebreak" data-did="${esc(did)}" data-pool="${esc(P)}">Set order</button></div>` : ''}
     <div class="grid3" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">${ms.map(m => bmHTML(did, m, res, m.id === liveId)).join('')}</div></div>`;
@@ -630,7 +630,7 @@ function resultsHTML() {
       if (pl.silver) medals.push({ dojo: entDojo(pl.silver), place: 'silver' });
       (pl.bronze || []).forEach(b => medals.push({ dojo: entDojo(b), place: 'bronze' }));
     }
-    const cell = (id, cls, n) => id ? `<div class="pl"><span class="medal ${cls}">${n}</span><span style="min-width:0"><div class="name">${esc(entName(id))}</div><div class="dojo">${esc(entDojo(id))}</div></span></div>` : '';
+    const cell = (id, cls, n) => id ? `<div class="pl"><span class="medal ${cls}">${n}</span><span style="min-width:0"><div class="name">${esc(entName(id, d.id))}</div><div class="dojo">${esc(entDojo(id))}</div></span></div>` : '';
     const canAward = br && (isDirector() || canScoreDiv(d.id));
     return `<div class="card stack"><div class="row between"><div style="min-width:0"><h3>${esc(d.name)}</h3><div class="small muted">${S.d.rings[d.ringId] ? esc(S.d.rings[d.ringId].name) : 'No ring'}</div></div>
       ${pl.complete ? (br && br.awarded ? '<span class="chip ok">Awarded</span>' : '<span class="chip">Final</span>') : pl.tie ? `<span class="chip warn">Tie to resolve</span>` : `<span class="chip plain">In progress</span>`}</div>
@@ -703,13 +703,13 @@ function kpTableHTML(did, title, rows, order, opts) {
   return `<div class="card flush"><div class="card-h"><h3>${esc(title)}</h3>${opts.chip || ''}</div><div class="tw"><table class="kp"><thead><tr><th>#</th><th>${opts.byRank ? 'Place' : 'Order'}</th><th>Competitor · ${br.kataRule ? 'kata' : 'notes'}</th><th>Judges</th>${opts.carry ? '<th class="n">Semifinal</th><th class="n">Final</th>' : ''}<th class="n">Score</th></tr></thead><tbody>
     ${seq.map((r, i) => `<tr class="${can || isDirector() ? 'click' : ''} ${r.advance ? 'adv' : ''} ${onMat(r.key) ? 'live' : ''}" ${can || isDirector() ? `data-act="kp-score" data-did="${esc(did)}" data-key="${esc(r.key)}"` : ''}>
       <td class="num">${i + 1}</td><td class="num">${r.rank ? (opts.medals && r.rank <= 3 ? `<span class="medal ${['g', 's', 'b'][r.rank - 1]}">${r.rank}</span>` : r.rank) : '—'}${r.advance ? ' <span class="chip ok" title="Advances">▸</span>' : ''}</td>
-      <td>${can || isDirector() ? `<button type="button" class="kp-who" aria-label="Score ${esc(entName(r.id))}"><span class="name">${esc(entName(r.id))}</span><span class="dojo">${esc(entDojo(r.id))}</span></button>` : `<div class="name">${esc(entName(r.id))}</div><div class="dojo">${esc(entDojo(r.id))}</div>`}
+      <td>${can || isDirector() ? `<button type="button" class="kp-who" aria-label="Score ${esc(entName(r.id, did))}"><span class="name">${esc(entName(r.id, did))}</span><span class="dojo">${esc(entDojo(r.id))}</span></button>` : `<div class="name">${esc(entName(r.id, did))}</div><div class="dojo">${esc(entDojo(r.id))}</div>`}
         ${r.kata || r.sheet ? `<div class="kp-line">${r.kata ? `<span class="kata-used">${esc(r.kata)}</span>` : ''}${r.sheet ? `<b class="kp-sc">${esc(f(r.own))}</b>` : ''}</div>` : ''}
         ${r.appTotal != null ? `<div class="tiny muted">Kata ${f(r.kataOwn)} · Application ${f(r.appTotal)}</div>` : ''}${r.rpTotal != null ? `<div class="tiny muted">Kettei-sen ${f(r.rpTotal)}</div>` : ''}</td>
       <td class="jcell">${sc(r)}</td>
       ${opts.carry ? `<td class="n">${r.sheet ? f(r.carry) : ''}</td><td class="n">${r.sheet ? f(r.own) : ''}</td>` : ''}
       <td class="n"><b>${r.sheet ? f(r.total) : ''}</b></td></tr>`).join('')}</tbody></table></div>
-    ${opts.needRp && opts.needRp.length ? `<div class="notice warn" style="margin:10px 16px">Tied even after adding back all six scores: ${opts.needRp.map(id => esc(entName(id))).join(', ')} — Kettei-sen${br.kataRule ? ' with a different kata' : ''}.</div>` : ''}</div>`;
+    ${opts.needRp && opts.needRp.length ? `<div class="notice warn" style="margin:10px 16px">Tied even after adding back all six scores: ${opts.needRp.map(id => esc(entName(id, did))).join(', ')} — Kettei-sen${br.kataRule ? ' with a different kata' : ''}.</div>` : ''}</div>`;
 }
 function kpViewHTML(did) {
   const br = S.d.brackets[did], st = KT.kpState(br);
