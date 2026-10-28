@@ -82,7 +82,7 @@ const S = {
 function readUIPrefs() { try { const p = JSON.parse(localStorage.getItem('kt-ui') || '{}'); if (p.simRole) S.ui.simRole = p.simRole; if (p.simRing) S.ui.simRing = p.simRing; if (p.evId) S.lastEv = p.evId; } catch (e) { /* ignore */ } }
 /* v1.46: each person's view of an event — tab, filters, selections and sort order of every card — is kept on their own
    device (per event), never in the shared data, so one user's choices never change another user's screen. */
-const VIEW_KEYS = ['tab', 'filter', 'divFilter', 'ring', 'ringPicked', 'bracketDiv', 'session', 'divOrder', 'teamSort'];
+const VIEW_KEYS = ['tab', 'filter', 'divFilter', 'ring', 'ringPicked', 'bracketDiv', 'session', 'divOrder', 'teamSort', 'teamMemSort'];
 function saveView() {
   if (!S.evId || S.pub) return;
   const v = {}; for (const k of VIEW_KEYS) if (S.ui[k] !== undefined && S.ui[k] !== null && S.ui[k] !== '') v[k] = S.ui[k];

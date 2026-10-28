@@ -708,3 +708,19 @@ table.kp tr.live td { background: color-mix(in srgb, var(--ai-soft) 60%, transpa
 .ent-sort { max-width: 280px; margin-bottom: 8px; }
 .ent-grp { margin-top: 6px; padding-bottom: 2px; border-bottom: 1px solid var(--line); }
 .ent-list .ent-grp:first-child { margin-top: 0; }
+/* v1.47: teams — stacked rows that fit a phone; member picker with groups and "On <team>" */
+.team-list { display: flex; flex-direction: column; }
+.team-grp { background: var(--paper); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); padding: 8px 16px; overflow-wrap: anywhere; }
+.team-row { padding: 10px 16px; border-top: 1px solid var(--line); min-width: 0; cursor: pointer; }
+.team-row:hover { background: color-mix(in srgb, var(--ai-soft) 35%, transparent); }
+.team-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+.team-top .name { min-width: 0; overflow-wrap: anywhere; }
+.team-chips { display: flex; gap: 4px; align-items: center; flex: none; }
+.team-go { color: var(--ink-3); font-size: 1.1rem; }
+.team-mem { margin-top: 2px; overflow-wrap: anywhere; }
+.tm-list { gap: 2px; max-height: 340px; overflow: auto; }
+.tm-row { align-items: flex-start; padding: 4px 0; }
+.tm-row input { margin-top: 2px; }
+.tm-who { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.tm-info { overflow-wrap: anywhere; }
+.tm-on { align-self: flex-start; margin-top: 2px; }

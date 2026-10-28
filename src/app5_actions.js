@@ -422,6 +422,7 @@ const CHANGE = {
   filter: el => { S.ui.filter = el.value; render(); },
   divFilter: el => { S.ui.divFilter = el.value; render(); },
   'div-order': el => { S.ui.divOrder = Object.assign({}, divOrder(), { [el.dataset.k]: el.value }); render(); },   // v1.46: this person's view only
+  'team-mem-sort': el => { S.ui.teamMemSort = el.value; saveView(); reorderTeamMems(el.value); },
   'team-sort': el => { S.ui.teamSort = Object.assign({}, S.ui.teamSort, { [el.dataset.et]: el.value }); render(); },
   ring: el => { S.ui.ring = el.value; S.ui.ringPicked = true; render(); },
   'call-present': el => ringPresent(el.dataset.rid, el.dataset.k, el.checked),
@@ -625,7 +626,7 @@ function wire() {
     if (e.key === 'Enter' && e.target && (e.target.id === 'fb-pw' || e.target.id === 'fb-email')) { e.preventDefault(); fbEmailSignIn(); return; }
     if (e.key === 'Enter' && e.target && /^fb-(code|newpw2?)$/.test(e.target.id || '')) { e.preventDefault(); fbCreateWithCode(); return; }
     if (e.key === 'Escape') { if (!$('#confirm').hidden) confirmDone(false); else if (!$('#modal').hidden) closeModal(); }
-    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bm[role="button"]')) { e.preventDefault(); e.target.click(); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bm[role="button"], .team-row[role="button"]')) { e.preventDefault(); e.target.click(); }
   });
   document.addEventListener('change', e => {
     // phones/tablets: a chosen item closes the drop-down everywhere (cards and pop-ups) — release it before the screen redraws

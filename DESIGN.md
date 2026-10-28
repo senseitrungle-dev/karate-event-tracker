@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.46.0 Requirements & Design
+# Karate Event Tracker · v1.47.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -659,3 +659,13 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
   - Not copied: live / public link, lock and archive approval, ring readiness, ring state (on the mat, calls) and attendance.
   - Firestore: the event is created first (`isOrganizer` and own uid in `directorIds`), then its documents as an event director. No rule change.
 **Verify.** test/dupview.js (teams grouped by division, then A→Z by name; the sort is kept in this browser's view and the shared event is unchanged; another person (same data, no saved view) sees the default order; reload restores tab and sort; duplicate: dialog, the copy opens, competitors and private details, judges, divisions (not drawn), rings and teams copied, check-ins reset in the copy only). divorder.js. Full e2e set and the other browser tests.
+
+## §73 Team cards fit a phone; team member list sorted by country / region / club with the team already assigned (v1.47.0)
+**Requirement.** Teams card: fit the width of a mobile device. In the team's competitor list, sort by country / region / club / dojo, and show the name of the team a competitor is already on.
+**Design.**
+- **Teams tab:** the three-column table is replaced by one stacked row per team: name (with "No division" / "Withdrawn" chips and ›), club, then members on their own line. In "By team name" mode the division name is shown too (in "By division" mode it is the group heading). Rows wrap long names and never widen the card. The card header wraps on narrow screens. Rows are buttons (Enter / Space open them).
+- **Team editor members:** a "Sort competitors" select: By country / By region / By club / dojo / By name A→Z. The default follows the event's separation group (International → country, National → region, otherwise club). Group modes add a heading per group ("No country" etc. last), then A→Z by name (`KT.sortEntrants`).
+  - Each competitor is two lines: name, then country · region · club (de-duplicated) · gender · rank.
+  - A competitor already on another team of the same event shows a chip "On <team name>" (several names if on more than one).
+  - Re-sorting moves the rows in place, so ticks stay. The choice is part of the person's own view (`teamMemSort` in `VIEW_KEYS`, §72).
+**Verify.** test/teamcard.js (international @390, national @360, local @1280: page, cards and rows fit; one stacked row per team; default sort = event group; headings in order; "On Senior Women B" / "On Enbu Pair 2"; ticks kept through every sort; name A→Z; editor fits; choice remembered). dupview.js (updated selectors), worlds2026 (team size), full e2e set and the other browser tests.

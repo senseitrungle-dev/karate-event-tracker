@@ -363,9 +363,9 @@ function teamForm(id, et) {
   const t = id ? DC.teamBy[id] : { eventType: et, memberIds: [], status: 'active' };
   et = t.eventType; const T = KT.EVENT_TYPES[et];
   const mem = new Set(t.memberIds || []);
-  const pool = DC.comps.filter(c => c.status !== 'withdrawn' && ((c.events || []).includes(et) || mem.has(c.id)))
-    .sort((a, b) => String(a.dojo).localeCompare(String(b.dojo)) || String(a.lastName).localeCompare(String(b.lastName)));
-  const inOther = new Set(DC.teams.filter(x => x.id !== id && x.eventType === et).flatMap(x => x.memberIds || []));
+  const pool = DC.comps.filter(c => c.status !== 'withdrawn' && ((c.events || []).includes(et) || mem.has(c.id)));
+  // v1.47: which other team of this event each competitor is already on (by name)
+  const onTeam = {}; for (const x of DC.teams) if (x.id !== id && x.eventType === et) for (const m of x.memberIds || []) (onTeam[m] = onTeam[m] || []).push(x.name || 'Team');
   const divs = DC.divs.filter(d => d.eventType === et);
   openModal(sheet(id ? esc(t.name) : `New ${esc(T.label)} team`, `<form id="f-team" data-form="team" data-id="${esc(id || '')}" data-et="${et}" class="stack">
     <div class="fgrid"><label class="f req"><span>Team name</span><input name="name" id="t-name" required value="${esc(t.name || '')}" placeholder="e.g. Hoshi Dojo A"></label>
@@ -373,10 +373,31 @@ function teamForm(id, et) {
       <label class="f"><span>Division</span><select name="divisionId" id="t-div">${opt('', 'Auto (by members)', t.divisionId)}${divs.map(d => opt(d.id, d.name, t.divisionId)).join('')}</select></label>
       <label class="f"><span>Status</span><select name="status" id="t-status">${opt('active', 'Active', t.status)}${opt('withdrawn', 'Withdrawn', t.status)}</select></label></div>
     <fieldset><legend>Members · ${T.size[0] === T.size[1] ? T.size[0] : T.size[0] + '–' + T.size[1]} needed</legend>
-      ${pool.length ? `<div class="stack" style="gap:6px;max-height:300px;overflow:auto">${pool.map(c => `<label class="check"><input type="checkbox" data-multi="1" name="memberIds" value="${esc(c.id)}" ${mem.has(c.id) ? 'checked' : ''}>
-        ${esc(c.lastName)}, ${esc(c.firstName)} <span class="muted small">· ${esc(c.dojo || '')} · ${esc(c.gender === 'F' ? 'W' : 'M')} · ${esc(KT.rankLabel(c.rank))}${inOther.has(c.id) ? ' · on another team' : ''}</span></label>`).join('')}</div>`
+      ${pool.length ? `${teamMemSortSelect()}<div class="stack tm-list" id="t-mems">${teamMemRows(pool.map(c => c.id)).map(({ id: cid, head }) => { const c = DC.compBy[cid]; return `${head}<label class="check tm-row" data-id="${esc(cid)}"><input type="checkbox" data-multi="1" name="memberIds" value="${esc(cid)}" ${mem.has(cid) ? 'checked' : ''}>
+        <span class="tm-who"><b>${esc(c.lastName)}, ${esc(c.firstName)}</b><span class="muted small tm-info">${esc([c.country, c.state, c.dojo].filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(' · '))} · ${esc(c.gender === 'F' ? 'W' : 'M')} · ${esc(KT.rankLabel(c.rank))}</span>${onTeam[cid] ? `<span class="chip warn tm-on">On ${esc(onTeam[cid].join(', '))}</span>` : ''}</span></label>`; }).join('')}</div>`
         : `<p class="small muted">No competitors have entered ${esc(T.label)} yet. Tick the event on their registration first.</p>`}</fieldset></form>`,
     `${id ? '<button class="danger" data-act="team-delete" style="margin-right:auto">Delete</button>' : ''}<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-team">Save</button>`));
+}
+/** v1.47: team member list order — country / region / club (dojo) with a heading per group, or name A→Z. Default: the event's separation group. */
+const TEAM_MEM_SORTS = { country: 'By country', region: 'By region', club: 'By club / dojo', name: 'By name A→Z' };
+function teamMemSortMode() {
+  if (TEAM_MEM_SORTS[S.ui.teamMemSort]) return S.ui.teamMemSort;
+  const lv = (curEvent() || {}).level; return lv === 'International' ? 'country' : lv === 'National' ? 'region' : 'club';
+}
+function teamMemSortSelect() { return `<label class="f ent-sort"><span>Sort competitors</span><select id="t-msort" data-change="team-mem-sort">${Object.entries(TEAM_MEM_SORTS).map(([k, l]) => opt(k, l, teamMemSortMode())).join('')}</select></label>`; }
+function teamMemRows(ids, mode) {
+  mode = mode || teamMemSortMode();
+  const f = { country: 'country', region: 'state', club: 'dojo' }[mode];
+  const list = KT.sortEntrants(ids.map(id => { const c = DC.compBy[id] || {}; return { id, last: c.lastName, first: c.firstName, group: f ? String(c[f] || '').trim() : '' }; }), mode === 'name' ? 'name' : 'club');
+  let last = null;
+  return list.map(x => { const g = f ? (x.group || 'No ' + (mode === 'club' ? 'club' : mode)) : null; const head = g !== null && g !== last ? `<div class="ent-grp label">${esc(g)}</div>` : ''; last = g; return { id: x.id, head }; });
+}
+/** Re-order the member rows in place (ticks stay as they are). */
+function reorderTeamMems(mode) {
+  const box = $('#t-mems'); if (!box) return;
+  const rows = Object.fromEntries($$('.tm-row', box).map(r => [r.dataset.id, r]));
+  $$('.ent-grp', box).forEach(h => h.remove());
+  for (const { id, head } of teamMemRows(Object.keys(rows), mode)) { if (head) box.insertAdjacentHTML('beforeend', head); box.appendChild(rows[id]); }
 }
 async function saveTeam(form) {
   const v = fd(form), et = form.dataset.et, T = KT.EVENT_TYPES[et], id = form.dataset.id || uid();
