@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.47.0';
+  const VERSION = '1.47.1';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -17,7 +17,7 @@ const KT = (function () {
   };
   const EVENT_ORDER = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'];
   const GENDERS = { M: 'Men', F: 'Women', X: 'Mixed' };
-  const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools)', DE: 'Double elimination', DES: 'Double elimination (simplified)', KP: 'Kata score pools (8 per pool)' };
+  const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools)', DE: 'Double elimination', DES: 'Double elimination (simplified)', KP: 'Kata score pools (12 max per pool)' };
   const ELIM_POOL = 8;
   const KP_POOL = 8, KP_ADV = 4;
   /** WTKF Competition Rules 2009, Kata Rules Art. 1-3 (pp. 62–63): permitted kata (Dai/Sho and series listed separately). */

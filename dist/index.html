@@ -731,14 +731,14 @@ table.kp tr.live td { background: color-mix(in srgb, var(--ai-soft) 60%, transpa
 .tm-on { align-self: flex-start; margin-top: 2px; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.47.0 */
+<script>/* Karate Event Tracker v1.47.1 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.47.0';
+  const VERSION = '1.47.1';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -751,7 +751,7 @@ const KT = (function () {
   };
   const EVENT_ORDER = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'];
   const GENDERS = { M: 'Men', F: 'Women', X: 'Mixed' };
-  const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools)', DE: 'Double elimination', DES: 'Double elimination (simplified)', KP: 'Kata score pools (8 per pool)' };
+  const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools)', DE: 'Double elimination', DES: 'Double elimination (simplified)', KP: 'Kata score pools (12 max per pool)' };
   const ELIM_POOL = 8;
   const KP_POOL = 8, KP_ADV = 4;
   /** WTKF Competition Rules 2009, Kata Rules Art. 1-3 (pp. 62–63): permitted kata (Dai/Sho and series listed separately). */
