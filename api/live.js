@@ -1,4 +1,4 @@
-// Karate Event Tracker v1.49 — spectators' live feed through the website cache (Vercel function + CDN).
+// Karate Event Tracker v1.50 — spectators' live feed through the website cache (Vercel function + CDN).
 // GET /api/live?t=<share token>                 → event + versions of every part / bracket + ring boards  (cached 10 s)
 // GET /api/live?t=<share token>&k=<key>&v=<ver> → one part or bracket at that version                     (cached for good)
 // The function reads Firestore's REST API without signing in, so the security rules decide exactly as for a

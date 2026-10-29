@@ -12,7 +12,7 @@ const path = require('path'), fs = require('fs');
   const home = async p => { await p.reload(); await p.waitForTimeout(1000); if (await p.$('.bar button.brand')) { await p.click('.bar button.brand'); await p.waitForTimeout(300); } };
   const db = p => p.evaluate(() => JSON.parse(localStorage.getItem('fbmock')));
   const A = await mk('u_admin');
-  await A.click('text=Become director'); await A.waitForSelector('text=Manage access', { timeout: 10000 });
+  await A.click('text=Become director'); await A.waitForSelector('text=Manage access', { timeout: 10000 }); await A.waitForSelector('details.admin-card', { state: 'attached', timeout: 5000 }); await A.click('details.admin-card > summary'); await A.waitForTimeout(200);
   await A.click('button:has-text("Create demo tournament") >> nth=0'); await A.click('button[data-kind="local"]'); await A.waitForSelector('text=Director checklist', { timeout: 60000 });
   const eid = Object.keys(await db(A)).find(k => /^events\/[^/]+$/.test(k)).split('/')[1];
   await home(A);

@@ -26,7 +26,7 @@ function publicLink(token) {
   try { base = location.origin && location.origin !== 'null' ? location.origin + location.pathname : location.href.split('#')[0].split('?')[0]; } catch (e) { base = ''; }
   return base ? `${base}#watch=${token}` : '';
 }
-/** v1.49: the public page uses the website cache (/api/live) where the site has it, otherwise the database directly. */
+/** v1.50: the public page uses the website cache (/api/live) where the site has it, otherwise the database directly. */
 async function startPublic() {
   if (cdnUsable()) return cdnStart();
   return startPublicDirect();
@@ -45,7 +45,7 @@ async function startPublicDirect() {
     S.pub.paused = null;
     if (!d || !d.public || d.shareToken !== S.pub.token) { S.events = {}; S.pub.error = 'This event is no longer shared publicly.'; S.pub.wait = null; closeEv(); }
     else if (!d.live) { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; S.pub.wait = Object.assign({}, d, { id }); closeEv(); }   // v1.25: link handed out before the start
-    else if (d.pubPaused) { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; S.pub.wait = null; S.pub.paused = S.events[id]; closeEv(); }   // v1.49: director paused the spectators
+    else if (d.pubPaused) { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; S.pub.wait = null; S.pub.paused = S.events[id]; closeEv(); }   // v1.50: director paused the spectators
     else if (d.pubFeed !== 'direct' && S.pub.cdnOk) { if (S.pubUnsub) { S.pubUnsub(); S.pubUnsub = null; } closeEv(); cdnStart(); return; }   // back to the website cache
     else { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; S.pub.wait = null; if (S.evId !== id) openEvent(id); }
     S.loadedEvents = true; render();

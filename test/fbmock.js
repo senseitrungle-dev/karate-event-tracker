@@ -18,7 +18,7 @@
   const evDir=(d,e)=>isDir(d)||(!!uid()&&(ev(d,e).directorIds||[]).includes(uid()));
   const evMem=(d,e)=>evDir(d,e)||(!!uid()&&((ev(d,e).managerIds||[]).includes(uid())||(ev(d,e).staffIds||[]).includes(uid())));
   const evOf=p=>{const m=/^(?:events|live|pv|pubsnap)\/([^/]+)/.exec(p); return m?m[1]:null;};
-  // v1.49: spectators (public + live + not paused) read only pubsnap/, brackets and ring boards
+  // v1.50: spectators (public + live + not paused) read only pubsnap/, brackets and ring boards
   const isPub=(d,e)=>ev(d,e).public===true&&ev(d,e).live===true&&ev(d,e).pubPaused!==true;
   const pubReadable=p=>/^pubsnap\//.test(p)||/^live\/[^/]+\/(brackets|ringstate)(\/|$)/.test(p);
   const canWrite=(p,d,v)=>{
@@ -66,7 +66,7 @@
     doc(p){ return { async get(){const d=load(); if(!canRead(p,d)) throw {code:'permission-denied'}; window.__mockReads=(window.__mockReads||0)+1; return snap(p,d[p]);},
       onSnapshot(n,err){let first=true; const f=()=>{const d=load(); if(!canRead(p,d)){ if(err)err({code:'permission-denied'}); return;} if(first){ first=false; window.__mockReads=(window.__mockReads||0)+1; } n(snap(p,d[p]));}; subs.add(f); setTimeout(f,5); return ()=>subs.delete(f);},
       async set(v,o){const d=load(); let nv;
-        if(o&&o.mergeFields){ nv=JSON.parse(JSON.stringify(d[p]||{})); const src=JSON.parse(JSON.stringify(v));   // v1.49: replace only the listed field paths
+        if(o&&o.mergeFields){ nv=JSON.parse(JSON.stringify(d[p]||{})); const src=JSON.parse(JSON.stringify(v));   // v1.50: replace only the listed field paths
           for(const f of o.mergeFields){ const segs=typeof f==='string'?f.split('.'):f.segs; let x=src; for(const sg of segs) x=x==null?undefined:x[sg]; let t=nv; for(const sg of segs.slice(0,-1)) t=t[sg]=(t[sg]&&typeof t[sg]==='object')?t[sg]:{}; const last=segs[segs.length-1]; if(x===undefined||(x&&x.__fvDelete)) delete t[last]; else t[last]=x; } }
         else nv=o&&o.merge&&d[p]?merge(JSON.parse(JSON.stringify(d[p])),JSON.parse(JSON.stringify(v))):JSON.parse(JSON.stringify(v));
         if(!canWrite(p,d,nv))return deny(); d[p]=nv; save(d); window.__mockWrites=(window.__mockWrites||0)+1; fire();},

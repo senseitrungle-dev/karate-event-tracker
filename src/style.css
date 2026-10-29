@@ -728,3 +728,8 @@ table.kp tr.live td { background: color-mix(in srgb, var(--ai-soft) 60%, transpa
 label.f.na > span:first-child, label.f.na select, label.f.na input, label.f.na .tiny:not(.na-note) { opacity: .45; }
 label.f.na select, label.f.na input { cursor: not-allowed; }
 .na-note { color: var(--ink-3); font-style: italic; }
+/* v1.49: fold / unfold groups of the Competitors list */
+tr.grp-tog { cursor: pointer; user-select: none; }
+tr.grp-tog .fold { display: inline-block; width: 1em; }
+tr.grp-tog.shut td { opacity: .8; }
+.fold-ctl { gap: 6px; flex-wrap: wrap; margin: -4px 0 8px; }

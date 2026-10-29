@@ -69,11 +69,17 @@ function judgesHTML() {
   const ev = curEvent(), list = judgesList(), need = KT.judgeNeed(ev.level, ev.judgeMin);
   const where = ev.level === 'International' ? 'country' : ev.level === 'National' ? 'region' : 'dojo';
   const un = list.filter(j => !S.d.rings[j.ringId]);
+  // v1.49: judges in each card sorted by name, or grouped by country / region / dojo (this person's view)
+  const js0 = { name: 'By name', country: 'By country', region: 'By region', dojo: 'By dojo / club' }, jsm = js0[S.ui.judgeSort] ? S.ui.judgeSort : 'name';
+  const jg = j => jsm === 'name' ? '' : String(j[jsm] || '').trim();
+  const rowsOf = js => { let last = null; return KT.sortEntrants(js.map(j => ({ id: j.id, last: j.name, first: '', group: jg(j) })), jsm === 'name' ? 'name' : 'club').map(x => { const j = S.d.judges[x.id];
+    const g = jsm === 'name' ? null : (jg(j) || 'No ' + (jsm === 'dojo' ? 'dojo' : jsm)), head = g !== null && g.toLowerCase() !== last ? `<div class="ent-grp label">${esc(g)}</div>` : ''; last = g === null ? null : g.toLowerCase(); return head + judgeRow(j); }).join(''); };
+  const sortSel = list.length > 1 ? `<label class="f ent-sort"><span>Sort judges</span><select id="judge-sort" data-change="judge-sort">${Object.entries(js0).map(([k, l]) => opt(k, l, jsm)).join('')}</select></label>` : '';
   const ringCards = DC.rings.map(r => { const js = ringJudges(r.id); return `<div class="card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${js.length ? '' : 'plain'}">${plural(js.length, 'judge')}</span></div>
-    <div class="jlist">${js.map(judgeRow).join('') || '<span class="small muted">No judges on this ring yet.</span>'}</div></div>`; }).join('');
+    <div class="jlist">${rowsOf(js) || '<span class="small muted">No judges on this ring yet.</span>'}</div></div>`; }).join('');
   return fab('judge-new', 'Add judge') + eventHeader(`<button data-act="judge-import">Import judges</button>${list.length ? '<button data-act="judge-export">Export</button>' : ''}<button class="primary" data-act="judge-new">Add judge</button>`)
     + `<p class="small muted">${esc(ev.level)} event · judges shown with their ${where}. Each judge works on one ring until moved; every division, pool and round run on that ring uses the ring’s judges. Credential levels 1–7; levels 3–7 may judge National and International events, levels 1–2 Regional and Local only.${need >= 3 ? '' : ''}</p>`
-    + (list.length ? `<div class="card stack"><div class="row between"><h3>Unassigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${un.map(judgeRow).join('') || '<span class="small muted">Every judge is assigned to a ring.</span>'}</div></div>
+    + sortSel + (list.length ? `<div class="card stack"><div class="row between"><h3>Unassigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${rowsOf(un) || '<span class="small muted">Every judge is assigned to a ring.</span>'}</div></div>
       ${DC.rings.length ? `<div class="grid2">${ringCards}</div>` : '<p class="small muted">Create rings on the Rings tab, then assign judges to them.</p>'}`
       : `<div class="card empty"><div class="mark-lg"></div><h2>No judges yet</h2><p class="muted">Add the judges pool, then assign each judge to a ring.</p><button class="primary" data-act="judge-new">Add judge</button></div>`);
 }
@@ -268,7 +274,7 @@ function followHTML() {
   let results = '';
   if (q) {
     const cm = comps.filter(c => `${c.firstName} ${c.lastName}`.toLowerCase().includes(q)).slice(0, 12);
-    const dm = DC.divs.filter(d => divEntrants(d.id).length && String(d.name || '').toLowerCase().includes(q)).sort(divSortCmp).slice(0, 12);   // v1.49: follow a division
+    const dm = DC.divs.filter(d => divEntrants(d.id).length && String(d.name || '').toLowerCase().includes(q)).sort(divSortCmp).slice(0, 12);   // v1.50: follow a division
     const grp = (title, kind, list) => list.length ? `<div class="label" style="margin-top:8px">${title}</div>${list.map(v => `<div class="frow">${star(kind, v)}<span>${esc(v)}</span><span class="tiny muted">${comps.filter(c => (kind === 'dojos' ? c.dojo : kind === 'regions' ? c.state : c.country) === v).length} competitors</span></div>`).join('')}` : '';
     results = `<div class="card stack" style="gap:4px">${cm.length ? `<div class="label">Competitors</div>${cm.map(c => `<div class="frow">${star('comps', c.id)}<span><b>${esc(c.lastName)}, ${esc(c.firstName)}</b> <span class="tiny muted">${esc(c.dojo || '')}</span></span></div>`).join('')}` : ''}
       ${dm.length ? `<div class="label" style="margin-top:8px">Divisions</div>${dm.map(d => `<div class="frow">${star('divs', d.id)}<span>${esc(d.name)}</span><span class="tiny muted">${plural(divEntrants(d.id).length, 'entrant')}</span></div>`).join('')}` : ''}

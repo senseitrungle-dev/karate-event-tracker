@@ -11,7 +11,7 @@ const path = require('path'), fs = require('fs');
   const db = p => p.evaluate(() => JSON.parse(localStorage.getItem('fbmock')));
   const accts = p => p.evaluate(() => JSON.parse(localStorage.getItem('fbmock_auth') || '{}'));
   const A = await ctx.newPage(); await A.addInitScript(`sessionStorage.setItem('nextuid','u_admin');` + mock); A.on('pageerror', e => errors.push('A: ' + e.message)); await A.goto(url); await signInG(A);
-  await A.click('text=Become director'); await A.waitForSelector('text=Manage access', { timeout: 10000 });
+  await A.click('text=Become director'); await A.waitForSelector('text=Manage access', { timeout: 10000 }); await A.waitForSelector('details.admin-card', { state: 'attached', timeout: 5000 }); await A.click('details.admin-card > summary'); await A.waitForTimeout(200);
   for (const [email, role] of [['sam@club.org', 'member'], ['gina@gmail.com', 'organizer']]) {
     await A.fill('#ai-email', email); await A.selectOption('#ai-role', role); await A.click('#f-app-invite button[type="submit"]'); await A.waitForTimeout(600);
     if (email === 'sam@club.org') {

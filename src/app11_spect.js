@@ -1,4 +1,4 @@
-/* ===== v1.49: spectator feed — compact summary documents, website cache, pause switch ===== */
+/* ===== v1.50: spectator feed — compact summary documents, website cache, pause switch ===== */
 /* Spectators (public link visitors, and signed-in people who are not on the event's team) no longer read the event's
    collections one document per competitor. The staff's own app keeps a compact copy for them:
      pubsnap/{e}/parts/{col}~{n}  { col, d: {id: doc} }   competitors, teams, divisions, rings, sessions, judges, attendance

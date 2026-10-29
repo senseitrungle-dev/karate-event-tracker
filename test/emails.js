@@ -9,7 +9,7 @@ const path = require('path'), fs = require('fs');
   const mock = fs.readFileSync('test/fbmock.js', 'utf8');
   const mk = async (u) => { const p = await ctx.newPage(); await p.addInitScript(`sessionStorage.setItem('nextuid','${u}');` + mock); p.on('pageerror', e => errors.push(u + ': ' + e.message)); await p.goto('file://' + path.resolve('dist/karate-event-tracker.html')); await signIn(p); return p; };
   const A = await mk('u_admin');
-  await A.click('text=Become director'); await A.waitForSelector('text=Manage access', { timeout: 10000 });
+  await A.click('text=Become director'); await A.waitForSelector('text=Manage access', { timeout: 10000 }); await A.waitForSelector('details.admin-card', { state: 'attached', timeout: 5000 }); await A.click('details.admin-card > summary'); await A.waitForTimeout(200);
   await A.click('button:has-text("Create demo tournament") >> nth=0'); await A.click('button[data-kind="local"]'); await A.waitForSelector('text=Director checklist', { timeout: 60000 });
   const D = await mk('u_dee'); await D.waitForTimeout(800);
   await A.reload(); await A.waitForTimeout(1200); if (await A.$('.bar button.brand')) { await A.click('.bar button.brand'); await A.waitForTimeout(300); }

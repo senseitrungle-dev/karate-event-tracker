@@ -1,4 +1,4 @@
-// v1.49: a stand-in for Firestore's REST API (read-only, not signed in) over a test database {path: doc} —
+// v1.50: a stand-in for Firestore's REST API (read-only, not signed in) over a test database {path: doc} —
 // the same rules a signed-out visitor meets (see firestore.rules / test/fbmock.js). Used by test/livefn.js and test/spectfeed.js.
 function enc(v) {
   if (v === null || v === undefined) return { nullValue: null };

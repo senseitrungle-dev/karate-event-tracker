@@ -1,11 +1,11 @@
 rules_version = '2';
-// Karate Event Tracker v1.49.0 — Firestore security rules
+// Karate Event Tracker v1.50.0 — Firestore security rules
 // App admin            = roles/{uid}.role in ['admin','director']  (every event; approves tournament directors)
 // Tournament director  = roles/{uid}.role == 'organizer'           (may create events)
 // Event director       = uid in events/{e}.directorIds              (full control of that event only)
 // Ring manager         = uid in events/{e}/rings/{r}.managerIds     (scores that ring; listed in events/{e}.managerIds)
 // Everyone signed in sees the event list (name, dates); only an event's directors / ring managers / staff (and app
-// admins) read its data. v1.49: spectators (anyone while the event is live and public, and not paused) read only the
+// admins) read its data. v1.50: spectators (anyone while the event is live and public, and not paused) read only the
 // compact copy pubsnap/{e}, the brackets and the ring boards — never the event's own collections. Private competitor
 // data (pv/) is director-only.
 service cloud.firestore {
@@ -26,7 +26,7 @@ service cloud.firestore {
     // approved & archived events are read-only (only the event document itself can be changed, to reopen it)
     function open_(e) { return ev(e).get('locked', false) != true; }
     // v1.25: a public link can be handed out before the start — its data opens only while the event is live
-    // v1.49: the director can pause the spectators (pubPaused) — the event's team keeps working
+    // v1.50: the director can pause the spectators (pubPaused) — the event's team keeps working
     function isPublic(e) { return ev(e).get('public', false) == true && ev(e).get('live', false) == true && ev(e).get('pubPaused', false) != true; }
     function ring(e, rid) { return get(/databases/$(database)/documents/events/$(e)/rings/$(rid)).data; }
     function managesRing(e, rid) { return signedIn() && rid is string && rid != '' && request.auth.uid in ring(e, rid).get('managerIds', []); }
@@ -160,7 +160,7 @@ service cloud.firestore {
       allow read: if evMember(e);
       allow write: if open_(e) && (evDirector(e) || isStaff(e));
     }
-    // v1.49: the spectators' copy — written by the event's team as they work; read by spectators while public & live
+    // v1.50: the spectators' copy — written by the event's team as they work; read by spectators while public & live
     match /pubsnap/{e} {
       allow read: if evMember(e) || isPublic(e);
       allow write: if open_(e) && evMember(e);

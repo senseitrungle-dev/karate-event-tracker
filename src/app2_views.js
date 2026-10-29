@@ -104,7 +104,7 @@ function mainHTML() {
   if (!S.evId) return homeHTML();
   const ev = curEvent();
   if (!ev) return `<div class="empty"><p>This event is no longer available.</p><button data-act="home">All events</button></div>`;
-  if (S.feed === 'direct' && !S.pub && ev.pubPaused) return pausedHTML(ev);   // v1.49: signed-in spectator, results paused
+  if (S.feed === 'direct' && !S.pub && ev.pubPaused) return pausedHTML(ev);   // v1.50: signed-in spectator, results paused
   const dirV = isDirector();
   const v = { overview: overviewHTML, competitors: competitorsHTML, teams: teamsHTML, divisions: dirV ? divisionsHTML : viewerDivisionsHTML, rings: dirV ? ringsHTML : viewerRingsHTML, people: dirV ? peopleHTML : overviewHTML, judges: judgesHTML, follow: followHTML, mat: matHTML,
     brackets: bracketsHTML, results: resultsHTML, sessions: sessionsHTML, attendance: attendanceHTML, staff: staffHTML }[S.ui.tab] || overviewHTML;
@@ -216,9 +216,14 @@ function competitorsHTML() {
   const yobNote = fullDob ? `<div class="notice info" style="display:block"><b>${plural(fullDob, 'competitor')}</b> ${fullDob === 1 ? 'has' : 'have'} a full date of birth stored. International events only need the year (ages count on 31 Dec) — keep only what is needed. <button class="sm" data-act="keep-year">Keep year only</button></div>` : '';
   if (!DC.comps.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No ${word}s registered</h2><p class="muted">${dir ? `Add ${word}s one at a time or import a spreadsheet (CSV).` : 'Registrations will appear here.'}</p>${dir ? `<div class="row">${acts}</div>` : ''}</div>`;
   let lastG = null;
+  const gName = c => csGroup(c) || 'No ' + (cs === 'club' ? 'club' : cs);
+  const closed = (S.ui.compClosed || {})[cs] || {}, gKeys = cf ? [...new Set(list.map(c => gName(c).toLowerCase()))] : [];
+  // v1.49: group headings fold / unfold their group (Collapse all / Expand all above the list)
+  const foldCtl = cf && gKeys.length > 1 ? `<div class="row fold-ctl"><button class="sm ghost" data-act="comp-grp-all" data-v="close" data-gs="${esc(JSON.stringify(gKeys))}">Collapse all</button><button class="sm ghost" data-act="comp-grp-all" data-v="open">Expand all</button><span class="tiny muted">Tap a ${cs === 'club' ? 'club' : cs} to show or hide its ${word}s</span></div>` : '';
   const rows = list.map(c => {
-    const g = cf ? (csGroup(c) || 'No ' + (cs === 'club' ? 'club' : cs)) : null;
-    const head = g !== null && g.toLowerCase() !== lastG ? `<tr class="grp-row"><td colspan="5">${esc(g)} · ${list.filter(x => (csGroup(x) || 'No ' + (cs === 'club' ? 'club' : cs)).toLowerCase() === g.toLowerCase()).length}</td></tr>` : ''; lastG = g === null ? null : g.toLowerCase();
+    const g = cf ? gName(c) : null, gk = g === null ? null : g.toLowerCase(), shut = gk !== null && !!closed[gk];
+    const head = g !== null && gk !== lastG ? `<tr class="grp-row grp-tog${shut ? ' shut' : ''}" data-act="comp-grp" data-g="${esc(gk)}" role="button" tabindex="0" aria-expanded="${!shut}"><td colspan="5"><span class="fold" aria-hidden="true">${shut ? '▸' : '▾'}</span> ${esc(g)} · ${list.filter(x => gName(x).toLowerCase() === gk).length}</td></tr>` : ''; lastG = gk;
+    if (shut) return head;
     const age = KT.ageOf(c, DC.asOf), miss = dir ? KT.validateCompetitor(c, DC.asOf) : [];
     const evs = tour ? (c.events || []).map(et => {
       const T = KT.EVENT_TYPES[et]; if (!T) return '';
@@ -234,7 +239,7 @@ function competitorsHTML() {
       <td>${c.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : dir ? `<button class="sm ${c.checkedIn ? '' : 'ghost'}" data-act="checkin" data-id="${esc(c.id)}" aria-pressed="${!!c.checkedIn}">${c.checkedIn ? '✓ Checked in' : 'Check in'}</button>` : (c.checkedIn ? '<span class="chip ok">Checked in</span>' : '<span class="chip plain">Not checked in</span>')}
         ${miss.length ? `<span class="chip warn" title="Missing: ${esc(miss.join(', '))}">Incomplete</span>` : ''}</td></tr>`;
   }).join('');
-  return fab('comp-new', tour ? 'Add competitor' : 'Add participant') + eventHeader() + yobNote + `<div class="section-h">${tools}<div class="row actions">${acts}</div></div>
+  return fab('comp-new', tour ? 'Add competitor' : 'Add participant') + eventHeader() + yobNote + `<div class="section-h">${tools}<div class="row actions">${acts}</div></div>${foldCtl}
     <div class="card flush"><div class="tw"><table class="mcards"><thead><tr><th>Name</th><th>Sex · Age</th><th>Rank</th>${tour ? '<th>Events</th>' : ''}<th>Status</th></tr></thead>
     <tbody>${rows || `<tr><td colspan="5" class="muted">No ${word}s match this filter.</td></tr>`}</tbody></table></div></div>
     <p class="small muted">${plural(list.length, word)} shown · ages as of ${fmtDate(DC.asOf)}.${dir ? ' Contact details, dates of birth and emergency contacts are visible to directors only.' : ''}</p>`;

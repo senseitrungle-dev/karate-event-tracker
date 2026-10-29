@@ -1,4 +1,4 @@
-// v1.49: firestore.rules in the real Firestore emulator — spectators' copy (pubsnap), pause, team-only collections,
+// v1.50: firestore.rules in the real Firestore emulator — spectators' copy (pubsnap), pause, team-only collections,
 // and the field-level writes the app uses (set + mergeFields + FieldValue.delete).
 // Needs Java and:  npm i firebase-tools@13 @firebase/rules-unit-testing@3 firebase@10   (anywhere; point NODE_PATH at its node_modules)
 // Run:  NODE_PATH=<dir>/node_modules npx firebase emulators:exec --only firestore --project demo-kt "node test/rules-emulator.js"

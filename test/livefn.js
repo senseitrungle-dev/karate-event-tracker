@@ -1,4 +1,4 @@
-// v1.49: /api/live (Vercel function) — states, versions, cache headers, value decoding, rules respected, config
+// v1.50: /api/live (Vercel function) — states, versions, cache headers, value decoding, rules respected, config
 const assert = require('assert');
 const live = require('../api/live.js');
 const { fakeFetch, callLive } = require('./fakerest');

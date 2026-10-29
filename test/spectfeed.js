@@ -1,4 +1,4 @@
-// v1.49: spectator feed — compact copy for spectators (#2), website cache /api/live (#3), pause spectators (#4), follow a division
+// v1.50: spectator feed — compact copy for spectators (#2), website cache /api/live (#3), pause spectators (#4), follow a division
 // Part A: Firebase mock on file:// (no website function → direct feed). Part B: http site with /api/live run through the real
 // function over a stand-in Firestore REST API and an emulated CDN cache.
 const { chromium } = require(require('child_process').execSync('npm root -g').toString().trim() + '/playwright');
