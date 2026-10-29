@@ -11,7 +11,9 @@ const path = require('path'), fs = require('fs');
   const home = async p => { await p.reload(); await p.waitForTimeout(900); if (await p.$('.bar button.brand')) { await p.click('.bar button.brand'); await p.waitForTimeout(300); } };
   // A = app admin
   const A = await mk('u_admin');
-  await A.click('text=Become director'); await A.waitForSelector('text=Manage access', { timeout: 10000 });
+  await A.click('text=Become director'); await A.waitForSelector('text=Manage access', { timeout: 10000 }); await A.waitForSelector('details.admin-card', { state: 'attached', timeout: 5000 }); ok('App admin card collapsed by default (v1.49)', !(await A.$eval('details.admin-card', d => d.open))); await A.click('details.admin-card > summary'); await A.waitForTimeout(200);
+  await A.reload(); await A.waitForSelector('details.admin-card', { state: 'attached', timeout: 10000 }); await A.waitForTimeout(300);
+  ok('App admin card stays open after reload once opened', await A.$eval('details.admin-card', d => d.open));
   await A.click('button:has-text("Create demo tournament") >> nth=0'); await A.click('button[data-kind="local"]'); await A.waitForSelector('text=Director checklist', { timeout: 60000 });
   // B and C sign in: no create button; they request to become tournament directors
   const B = await mk('u_bob'), C = await mk('u_cat');

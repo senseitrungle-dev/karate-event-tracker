@@ -357,6 +357,11 @@ const ACT = {
   'save-result': () => saveResult(),
   'kp-score': el => openKP(el.dataset.did, el.dataset.key),
   'event-dup': () => dupForm(),
+  // v1.49: fold / unfold a group (country, region, club) of the Competitors list — this person's view only
+  'comp-grp': el => { const m = S.ui.compSort, g = el.dataset.g, c = Object.assign({}, S.ui.compClosed || {}), cur = Object.assign({}, c[m] || {});
+    if (cur[g]) delete cur[g]; else cur[g] = 1; c[m] = cur; S.ui.compClosed = c; render(); },
+  'comp-grp-all': el => { const m = S.ui.compSort, c = Object.assign({}, S.ui.compClosed || {});
+    c[m] = el.dataset.v === 'close' ? Object.fromEntries(JSON.parse(el.dataset.gs || '[]').map(g => [g, 1])) : {}; S.ui.compClosed = c; render(); },
   // v1.41: bracket of the current division from a mat card or a scoresheet, then back to the match
   'mat-bracket': el => { const dv = DC.divBy[el.dataset.did]; openBracketFrom({ ring: el.dataset.ring, label: dv ? dv.name : '' }, el.dataset.did); },
   'sheet-bracket': () => {
@@ -424,6 +429,7 @@ const CHANGE = {
   'div-order': el => { S.ui.divOrder = Object.assign({}, divOrder(), { [el.dataset.k]: el.value }); render(); },   // v1.46: this person's view only
   'team-mem-sort': el => { S.ui.teamMemSort = el.value; saveView(); reorderTeamMems(el.value); },
   'comp-sort': el => { S.ui.compSort = el.value; render(); },
+  'judge-sort': el => { S.ui.judgeSort = el.value; render(); },
   'div-fmt': el => fmtApplies(el.form),
   'team-sort': el => { S.ui.teamSort = Object.assign({}, S.ui.teamSort, { [el.dataset.et]: el.value }); render(); },
   ring: el => { S.ui.ring = el.value; S.ui.ringPicked = true; render(); },
@@ -628,8 +634,10 @@ function wire() {
     if (e.key === 'Enter' && e.target && (e.target.id === 'fb-pw' || e.target.id === 'fb-email')) { e.preventDefault(); fbEmailSignIn(); return; }
     if (e.key === 'Enter' && e.target && /^fb-(code|newpw2?)$/.test(e.target.id || '')) { e.preventDefault(); fbCreateWithCode(); return; }
     if (e.key === 'Escape') { if (!$('#confirm').hidden) confirmDone(false); else if (!$('#modal').hidden) closeModal(); }
-    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bm[role="button"], .team-row[role="button"]')) { e.preventDefault(); e.target.click(); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bm[role="button"], .team-row[role="button"], tr.grp-tog')) { e.preventDefault(); e.target.click(); }
   });
+  // v1.49: remember open / closed sections marked data-keep (toggle does not bubble: capture it)
+  document.addEventListener('toggle', e => { const d = e.target; if (d && d.dataset && d.dataset.keep) setKeepOpen(d.dataset.keep, d.open); }, true);
   document.addEventListener('change', e => {
     // phones/tablets: a chosen item closes the drop-down everywhere (cards and pop-ups) — release it before the screen redraws
     const touchSel = isTouch() && e.target.tagName === 'SELECT';
