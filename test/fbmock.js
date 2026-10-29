@@ -17,7 +17,10 @@
   const ev=(d,e)=>d['events/'+e]||{};
   const evDir=(d,e)=>isDir(d)||(!!uid()&&(ev(d,e).directorIds||[]).includes(uid()));
   const evMem=(d,e)=>evDir(d,e)||(!!uid()&&((ev(d,e).managerIds||[]).includes(uid())||(ev(d,e).staffIds||[]).includes(uid())));
-  const evOf=p=>{const m=/^(?:events|live|pv)\/([^/]+)/.exec(p); return m?m[1]:null;};
+  const evOf=p=>{const m=/^(?:events|live|pv|pubsnap)\/([^/]+)/.exec(p); return m?m[1]:null;};
+  // v1.49: spectators (public + live + not paused) read only pubsnap/, brackets and ring boards
+  const isPub=(d,e)=>ev(d,e).public===true&&ev(d,e).live===true&&ev(d,e).pubPaused!==true;
+  const pubReadable=p=>/^pubsnap\//.test(p)||/^live\/[^/]+\/(brackets|ringstate)(\/|$)/.test(p);
   const canWrite=(p,d,v)=>{
     if(p.startsWith('users/'))return p==='users/'+uid();
     if(p.startsWith('meta/'))return true;
@@ -34,6 +37,7 @@
     m=/^events\/([^/]+)\/rings\/([^/]+)$/.exec(p); if(m){ const i=inv(d); if(!evDir(d,m[1])&&i&&i.role==='manager'&&i.eventId===m[1]&&i.ringId===m[2]) return true; }
     const e=evOf(p); if(!e) return false;
     if(ev(d,e).locked===true) return false; // archived: read-only
+    if(p.startsWith('pubsnap/')){ const m2=/^pubsnap\/[^/]+\/parts\/([^/]+)$/.exec(p); return m2?(evDir(d,e)||(evMem(d,e)&&/^attendance~[0-9]+$/.test(m2[1]))):evMem(d,e); }
     if(p.startsWith('live/'))return evMem(d,e);
     return evDir(d,e);
   };
@@ -43,25 +47,29 @@
     if(p.startsWith('blocked/'))return isDir(d)||p==='blocked/'+rawUid();
     if(p.startsWith('share/'))return true;
     const e=evOf(p);
-    if(!uid()){ if(/^events\/[^/]+$/.test(p)) return ev(d,e).public===true; return !!(e&&ev(d,e).public===true&&ev(d,e).live===true&&!p.startsWith('pv/')); }
+    if(!uid()){ if(/^events\/[^/]+$/.test(p)) return ev(d,e).public===true; return !!(e&&isPub(d,e)&&pubReadable(p)); }
     if(/^events\/[^/]+$/.test(p)||!e)return true;
     if(p.startsWith('pv/'))return evDir(d,e);
     if(/^events\/[^/]+\/requests\/([^/]+)$/.test(p))return evDir(d,e)||p.endsWith('/'+uid());
-    return evMem(d,e)||(ev(d,e).public===true&&ev(d,e).live===true);
+    return evMem(d,e)||(isPub(d,e)&&pubReadable(p));
   };
   const canList=(col,d)=>{ if(uid())return canRead(col+'/x',d)||col==='events'||col==='users'||col==='roles'||col==='invites'||col==='orgRequests'; if(col==='events'||col==='share')return false; return canRead(col+'/x',d); };
   const deny=()=>Promise.reject({code:'permission-denied',message:'denied'});
   const snap=(k,v)=>({id:k.split('/').pop(),exists:!!v,data:()=>v&&JSON.parse(JSON.stringify(v))});
   const q=(col,filt)=>({
-    onSnapshot(n,err){const f=()=>{const d=load(); if(!canList(col,d)){ if(err)err({code:'permission-denied'}); return;} const docs=Object.keys(d).filter(k=>k.split('/').slice(0,-1).join('/')===col&&canRead(k,d)&&(!filt||d[k][filt[0]]===filt[1])).map(k=>snap(k,d[k])); n({docs});}; subs.add(f); setTimeout(f,5); return ()=>subs.delete(f);},
+    onSnapshot(n,err){let first=true; const f=()=>{const d=load(); if(!canList(col,d)){ if(err)err({code:'permission-denied'}); return;} const docs=Object.keys(d).filter(k=>k.split('/').slice(0,-1).join('/')===col&&canRead(k,d)&&(!filt||d[k][filt[0]]===filt[1])).map(k=>snap(k,d[k])); if(first){ first=false; window.__mockReads=(window.__mockReads||0)+Math.max(1,docs.length); } n({docs});}; subs.add(f); setTimeout(f,5); return ()=>subs.delete(f);},
     async get(){const d=load(); if(!canList(col,d)) throw {code:'permission-denied'}; return {docs:Object.keys(d).filter(k=>k.split('/').slice(0,-1).join('/')===col&&canRead(k,d)&&(!filt||d[k][filt[0]]===filt[1])).map(k=>snap(k,d[k]))};},
     where(f,op,v){ return q(col,[f,v]); },
   });
   const fs={
     settings(){}, collection(col){ return q(col); },
-    doc(p){ return { async get(){const d=load(); if(!canRead(p,d)) throw {code:'permission-denied'}; return snap(p,d[p]);},
-      onSnapshot(n,err){const f=()=>{const d=load(); if(!canRead(p,d)){ if(err)err({code:'permission-denied'}); return;} n(snap(p,d[p]));}; subs.add(f); setTimeout(f,5); return ()=>subs.delete(f);},
-      async set(v,o){const d=load(); const nv=o&&o.merge&&d[p]?merge(JSON.parse(JSON.stringify(d[p])),JSON.parse(JSON.stringify(v))):JSON.parse(JSON.stringify(v)); if(!canWrite(p,d,nv))return deny(); d[p]=nv; save(d); fire();},
+    doc(p){ return { async get(){const d=load(); if(!canRead(p,d)) throw {code:'permission-denied'}; window.__mockReads=(window.__mockReads||0)+1; return snap(p,d[p]);},
+      onSnapshot(n,err){let first=true; const f=()=>{const d=load(); if(!canRead(p,d)){ if(err)err({code:'permission-denied'}); return;} if(first){ first=false; window.__mockReads=(window.__mockReads||0)+1; } n(snap(p,d[p]));}; subs.add(f); setTimeout(f,5); return ()=>subs.delete(f);},
+      async set(v,o){const d=load(); let nv;
+        if(o&&o.mergeFields){ nv=JSON.parse(JSON.stringify(d[p]||{})); const src=JSON.parse(JSON.stringify(v));   // v1.49: replace only the listed field paths
+          for(const f of o.mergeFields){ const segs=typeof f==='string'?f.split('.'):f.segs; let x=src; for(const sg of segs) x=x==null?undefined:x[sg]; let t=nv; for(const sg of segs.slice(0,-1)) t=t[sg]=(t[sg]&&typeof t[sg]==='object')?t[sg]:{}; const last=segs[segs.length-1]; if(x===undefined||(x&&x.__fvDelete)) delete t[last]; else t[last]=x; } }
+        else nv=o&&o.merge&&d[p]?merge(JSON.parse(JSON.stringify(d[p])),JSON.parse(JSON.stringify(v))):JSON.parse(JSON.stringify(v));
+        if(!canWrite(p,d,nv))return deny(); d[p]=nv; save(d); window.__mockWrites=(window.__mockWrites||0)+1; fire();},
       async delete(){const d=load(); if(!canWrite(p,d))return deny(); delete d[p]; save(d); fire();} }; },
     batch(){ const ops=[]; return { set(ref,v){ops.push([ref,v]);}, async commit(){ for(const [r,v] of ops) await r.set(v);} }; },
   };
@@ -79,6 +87,7 @@
   // test helpers: the person opens the emailed link (choose a password / confirm the address)
   window.__mockResetPassword=(e,pw,verify)=>{ const a=accts(); if(!a[e]) return false; a[e].pw=pw; if(verify) a[e].verified=true; saveA(a); return true; };
   window.__mockVerify=e=>{ const a=accts(); if(a[e]){ a[e].verified=true; saveA(a); } };
-  window.firebase={ initializeApp(){}, auth: Object.assign(()=>auth,{GoogleAuthProvider:function(){ this.setCustomParameters=function(o){ sessionStorage.setItem('fbprompt', o && o.prompt || ''); }; }}), firestore:()=>fs };
+  function FieldPath(){ this.segs=Array.from(arguments); }
+  window.firebase={ initializeApp(){}, auth: Object.assign(()=>auth,{GoogleAuthProvider:function(){ this.setCustomParameters=function(o){ sessionStorage.setItem('fbprompt', o && o.prompt || ''); }; }}), firestore:Object.assign(()=>fs,{ FieldPath, FieldValue:{ delete:()=>({__fvDelete:1}) } }) };
   window.KT_FIREBASE_CONFIG={projectId:'mock'};
 })();

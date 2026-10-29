@@ -201,7 +201,7 @@ function renderDivPanel() {
 
 /* ---------- follow: competitors, dojos, regions, countries ---------- */
 function followKey() { return 'kt-follow-' + S.evId; }
-function getFollow() { if (S.follow && S.follow.ev === S.evId) return S.follow; let f = {}; try { f = JSON.parse(localStorage.getItem(followKey()) || '{}') || {}; } catch (e) { /* ignore */ } S.follow = Object.assign({ ev: S.evId, comps: [], dojos: [], regions: [], countries: [] }, f, { ev: S.evId }); return S.follow; }
+function getFollow() { if (S.follow && S.follow.ev === S.evId) return S.follow; let f = {}; try { f = JSON.parse(localStorage.getItem(followKey()) || '{}') || {}; } catch (e) { /* ignore */ } S.follow = Object.assign({ ev: S.evId, comps: [], dojos: [], regions: [], countries: [], divs: [] }, f, { ev: S.evId }); return S.follow; }
 function toggleFollow(kind, val) { const f = getFollow(); const a = f[kind] || (f[kind] = []); const i = a.indexOf(val); if (i >= 0) a.splice(i, 1); else a.push(val); try { localStorage.setItem(followKey(), JSON.stringify(f)); } catch (e) { /* ignore */ } render(); }
 const star = (kind, val) => { const on = (getFollow()[kind] || []).includes(val); return `<button class="star ${on ? 'on' : ''}" data-act="follow" data-k="${kind}" data-v="${esc(val)}" aria-pressed="${on}" aria-label="${on ? 'Unfollow' : 'Follow'}">${on ? '★' : '☆'}</button>`; };
 /** Where a competitor (or team) stands in one division. */
@@ -268,10 +268,12 @@ function followHTML() {
   let results = '';
   if (q) {
     const cm = comps.filter(c => `${c.firstName} ${c.lastName}`.toLowerCase().includes(q)).slice(0, 12);
+    const dm = DC.divs.filter(d => divEntrants(d.id).length && String(d.name || '').toLowerCase().includes(q)).sort(divSortCmp).slice(0, 12);   // v1.49: follow a division
     const grp = (title, kind, list) => list.length ? `<div class="label" style="margin-top:8px">${title}</div>${list.map(v => `<div class="frow">${star(kind, v)}<span>${esc(v)}</span><span class="tiny muted">${comps.filter(c => (kind === 'dojos' ? c.dojo : kind === 'regions' ? c.state : c.country) === v).length} competitors</span></div>`).join('')}` : '';
     results = `<div class="card stack" style="gap:4px">${cm.length ? `<div class="label">Competitors</div>${cm.map(c => `<div class="frow">${star('comps', c.id)}<span><b>${esc(c.lastName)}, ${esc(c.firstName)}</b> <span class="tiny muted">${esc(c.dojo || '')}</span></span></div>`).join('')}` : ''}
+      ${dm.length ? `<div class="label" style="margin-top:8px">Divisions</div>${dm.map(d => `<div class="frow">${star('divs', d.id)}<span>${esc(d.name)}</span><span class="tiny muted">${plural(divEntrants(d.id).length, 'entrant')}</span></div>`).join('')}` : ''}
       ${grp('Dojos / clubs', 'dojos', dojos.filter(d => d.toLowerCase().includes(q)))}${grp('Regions', 'regions', regions.filter(d => d.toLowerCase().includes(q)))}${grp('Countries', 'countries', countries.filter(d => d.toLowerCase().includes(q)))}
-      ${!cm.length && ![...dojos, ...regions, ...countries].some(d => d.toLowerCase().includes(q)) ? '<p class="small muted">No matches.</p>' : ''}</div>`;
+      ${!cm.length && !dm.length && ![...dojos, ...regions, ...countries].some(d => d.toLowerCase().includes(q)) ? '<p class="small muted">No matches.</p>' : ''}</div>`;
   }
   const fc = f.comps.map(id => DC.compBy[id]).filter(Boolean);
   const groupCard = (kind, v, key) => {
@@ -282,9 +284,10 @@ function followHTML() {
       <div class="stack" style="gap:8px">${members.map(c => `<div><div class="name">${esc(c.lastName)}, ${esc(c.firstName)}</div>${compStatusHTML(c, true)}</div>`).join('')}</div></div>`;
   };
   const followed = fc.map(c => `<div class="card stack"><div class="row between"><div class="row" style="gap:6px;min-width:0">${star('comps', c.id)}<div style="min-width:0"><div class="name">${esc(c.lastName)}, ${esc(c.firstName)}</div><div class="dojo">${esc([c.dojo, c.state, c.country].filter(Boolean).join(' · '))}</div></div></div></div>${compStatusHTML(c)}</div>`).join('')
+    + (f.divs || []).filter(d => DC.divBy[d]).map(divFollowCardHTML).join('')
     + f.dojos.map(v => groupCard('dojos', v, 'dojo')).join('') + f.regions.map(v => groupCard('regions', v, 'state')).join('') + f.countries.map(v => groupCard('countries', v, 'country')).join('');
-  return eventHeader() + `<div class="section-h"><input id="follow-q" class="search" type="search" placeholder="Find a competitor, dojo, region or country…" value="${esc(S.ui.fq || '')}" data-input="fq" aria-label="Search to follow"></div>${results}
-    ${followed ? `<div class="grid2">${followed}</div>` : `<div class="card empty"><div class="mark-lg"></div><h2>Follow competitors</h2><p class="muted" style="max-width:48ch">Search above and tap ☆ to follow a competitor, a dojo, a region or a country. You’ll see their rings, next matches, live status and medals here. Follows are saved on this device.</p></div>`}`;
+  return eventHeader() + `<div class="section-h"><input id="follow-q" class="search" type="search" placeholder="Find a competitor, division, dojo, region or country…" value="${esc(S.ui.fq || '')}" data-input="fq" aria-label="Search to follow"></div>${results}
+    ${followed ? `<div class="grid2">${followed}</div>` : `<div class="card empty"><div class="mark-lg"></div><h2>Follow competitors</h2><p class="muted" style="max-width:48ch">Search above and tap ☆ to follow a competitor, a division, a dojo, a region or a country. You’ll see their rings, next matches, live status and medals here. Follows are saved on this device.</p></div>`}`;
 }
 
 /* ===== v1.10: import judges & credentials (CSV / pasted list), copy from another event, export ===== */

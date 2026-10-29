@@ -17,6 +17,7 @@ Plain HTML/CSS/JS with the rules engine (`src/logic.js`) kept separate from the 
 - **Demos**: Local tournament (clubs/dojos), National championship (regions), World championship (countries).
 - **Go live** (v1.8): a readiness checklist (event drawn, competitors and judges checked in, rings with managers and helpers ready), then Go live; End live when the tournament is complete.
 - **Public spectator link per event** (v1.6, Vercel + Firebase): created when the director goes live; spectators open it without signing in and land on that event's Dashboard (then Follow, Rings, Divisions) and cannot see other events. Stop sharing turns the link off.
+- **Spectators don't load the database** (v1.49): spectators read a compact copy of the event (a few dozen documents instead of one per competitor), served by default through the website cache (`api/live.js`, refreshed every 10 s), so database use stays the same however many people watch. The director can switch to instant updates, or **Pause spectators** at once (the event's team keeps working). Spectators can also follow a division (☆).
 - **People** (v1.7): directors and ring managers picked from everyone who has opened the tracker (like judges), or invited by email — on claude.ai they enter the invitation code from the email; on the Vercel site the role is applied when they first sign in.
 - **Running the day**: ring queues, “call to the mat”, live score on the ring board, automatic advancement, undo (from the end of the bracket back), pool tiebreak order, placings, medal table by dojo, “medals presented” tracking, CSV import/export.
 - **Camps**: participants, sessions, attendance by session, staff.
@@ -32,7 +33,7 @@ Plain HTML/CSS/JS with the rules engine (`src/logic.js`) kept separate from the 
 2. **Rules**: `npm i -g firebase-tools && firebase login && firebase use <project-id> && npm run deploy:rules`
    (or paste `firestore.rules` into Firestore → Rules → Publish).
 3. **GitHub**: create an empty repo, then in this folder: `git remote add origin https://github.com/<you>/karate-event-tracker.git && git push -u origin main`.
-4. **Vercel**: New Project → import the GitHub repo → Framework “Other”, no build command, output directory `vercel` (already in `vercel.json`) → Deploy.
+4. **Vercel**: New Project → import the GitHub repo → Framework “Other”, no build command, output directory `vercel` (already in `vercel.json`) → Deploy. The spectators' feed `api/live.js` deploys with it and reads the project from `vercel/firebase-config.js` (or the environment variables `FIREBASE_PROJECT_ID` and `FIREBASE_API_KEY`).
    Then add the Vercel domain to Firebase → Authentication → Settings → **Authorized domains**.
 5. Open the site, sign in, press **Become director** (the first person only). Ring managers sign in once, then the director assigns them on the Rings tab. After upgrading to 1.5, redeploy `firestore.rules` (needed again for 1.6 public links) (ring managers may score pools of other rings' divisions placed on their ring).
 
