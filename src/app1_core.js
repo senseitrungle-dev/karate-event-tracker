@@ -82,7 +82,7 @@ const S = {
 function readUIPrefs() { try { const p = JSON.parse(localStorage.getItem('kt-ui') || '{}'); if (p.simRole) S.ui.simRole = p.simRole; if (p.simRing) S.ui.simRing = p.simRing; if (p.evId) S.lastEv = p.evId; } catch (e) { /* ignore */ } }
 /* v1.46: each person's view of an event — tab, filters, selections and sort order of every card — is kept on their own
    device (per event), never in the shared data, so one user's choices never change another user's screen. */
-const VIEW_KEYS = ['tab', 'filter', 'divFilter', 'ring', 'ringPicked', 'bracketDiv', 'session', 'divOrder', 'teamSort', 'teamMemSort', 'compSort'];
+const VIEW_KEYS = ['tab', 'filter', 'divFilter', 'ring', 'ringPicked', 'bracketDiv', 'session', 'divOrder', 'teamSort', 'teamMemSort', 'compSort', 'compClosed', 'judgeSort'];
 function saveView() {
   if (!S.evId || S.pub) return;
   const v = {}; for (const k of VIEW_KEYS) if (S.ui[k] !== undefined && S.ui[k] !== null && S.ui[k] !== '') v[k] = S.ui[k];
@@ -92,6 +92,9 @@ function loadView(id) {
   S.ui.divOrder = null; S.ui.teamSort = {}; S.ui.ringPicked = false;
   try { const v = JSON.parse(localStorage.getItem('kt-view-' + id) || '{}'); for (const k of VIEW_KEYS) if (k in v) S.ui[k] = v[k]; } catch (e) { /* ignore */ }
 }
+/** v1.49: sections this person opened (app level, e.g. the App admin card — collapsed by default). */
+function keepOpen(key) { try { return !!(JSON.parse(localStorage.getItem('kt-open') || '{}'))[key]; } catch (e) { return false; } }
+function setKeepOpen(key, on) { try { const o = JSON.parse(localStorage.getItem('kt-open') || '{}'); if (on) o[key] = 1; else delete o[key]; localStorage.setItem('kt-open', JSON.stringify(o)); } catch (e) { /* ignore */ } }
 function saveUIPrefs() { try { localStorage.setItem('kt-ui', JSON.stringify({ simRole: S.ui.simRole, simRing: S.ui.simRing, evId: S.evId })); } catch (e) { /* ignore */ } }
 
 const P = {

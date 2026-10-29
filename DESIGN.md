@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.48.0 Requirements & Design
+# Karate Event Tracker · v1.49.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -687,3 +687,12 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
   - Kata decision (flags / scores): head-to-head formats (kata score pools always use scores).
   - Kata pools max per pool: KP.
 **Verify.** test/fmtsort.js (national demo, desktop and 390 px: A→Z default, Z→A, region / club / country headings in order with counts adding up, sort + filter, no horizontal scroll; SE / RR / DE grey out exactly the others' settings with the reason; a greyed value is kept and saved; kata score pools greys out the head-to-head settings; form fits). Full e2e set and the other browser tests.
+
+## §76 Judges sort by country; App admin card collapsed by default; Competitors groups fold (v1.49.0)
+**Requirement.** Judges card: sort by country. App owner: the App admin section is collapsed by default. Competitors card: the country listing is collapsible.
+**Design.**
+- **Judges tab:** "Sort judges" select: By name (default) / By country / By region / By dojo / club. In every card (Unassigned and each ring) the judges are A→Z, or grouped under a heading per country / region / dojo ("No country" etc. last). The choice is the person's own view (`judgeSort` in `VIEW_KEYS`, §72).
+- **App admin card** (home, app owner / admins): `<details>` is no longer `open` by default. Opening or closing it is remembered on the device (`data-keep="admin"`, captured `toggle` event → localStorage `kt-open`), so a redraw never opens or closes it. The summary still shows the "N requests" chip while closed.
+- **Competitors tab:** with the list grouped (country, region or club, §75), each group heading is a button (▾ / ▸, `aria-expanded`, Enter / Space). Tapping it hides or shows that group's competitors. "Collapse all" / "Expand all" sit above the list. Folds are kept per grouping (`compClosed[mode][group]` in the person's view): changing the grouping and back restores them, and they survive a reload.
+- Tests that use the App admin card open it first (access, appaccess, appinvite, emails, emailsignin, adminphone). access.js checks it starts collapsed and stays open after a reload once opened. fmtsort.js ignores the fold arrow in headings.
+**Verify.** test/judgefold.js (international demo, desktop and 390 px: judges grouped by country in order in each card, A→Z by name; country headings fold one / all / reopen one; another grouping has its own folds; same folds after switching back and after reload; Expand all; keyboard Enter; no horizontal scroll; judge sort remembered). access.js, full e2e set and the other browser tests.

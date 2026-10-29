@@ -19,7 +19,7 @@ const path = require('path');
     ok(`${width}: Z→A`, n.every((x, i) => i === 0 || n[i - 1].localeCompare(x) >= 0));
     for (const [m, re] of [['region', /^(Central|Eastern|Mountain|Pacific|Southern) · \d+$/], ['club', /(Dojo|Karate|Budokan|Club) · \d+$/], ['country', /^Example · \d+$/]]) {
       await p.selectOption('#comp-s', m); await W(250);
-      const h = await p.$$eval('#main tr.grp-row', x => x.map(y => y.textContent.trim()));
+      const h = await p.$$eval('#main tr.grp-row', x => x.map(y => y.textContent.replace(/^[\s▾▸]+/, '').trim()));
       const total = h.reduce((s, t) => s + +t.split(' · ').pop(), 0);
       ok(`${width}: by ${m} — headings in order with counts (${h.slice(0, 3).join(' | ')}…)`, h.length >= 1 && h.every(t => re.test(t)) && total === (await names()).length && h.every((t, i) => i === 0 || t.toLowerCase().localeCompare(h[i - 1].toLowerCase()) >= 0));
     }

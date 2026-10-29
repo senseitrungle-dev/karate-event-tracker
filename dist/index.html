@@ -733,16 +733,21 @@ table.kp tr.live td { background: color-mix(in srgb, var(--ai-soft) 60%, transpa
 label.f.na > span:first-child, label.f.na select, label.f.na input, label.f.na .tiny:not(.na-note) { opacity: .45; }
 label.f.na select, label.f.na input { cursor: not-allowed; }
 .na-note { color: var(--ink-3); font-style: italic; }
+/* v1.49: fold / unfold groups of the Competitors list */
+tr.grp-tog { cursor: pointer; user-select: none; }
+tr.grp-tog .fold { display: inline-block; width: 1em; }
+tr.grp-tog.shut td { opacity: .8; }
+.fold-ctl { gap: 6px; flex-wrap: wrap; margin: -4px 0 8px; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.48.0 */
+<script>/* Karate Event Tracker v1.49.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.48.0';
+  const VERSION = '1.49.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -4444,7 +4449,7 @@ const S = {
 function readUIPrefs() { try { const p = JSON.parse(localStorage.getItem('kt-ui') || '{}'); if (p.simRole) S.ui.simRole = p.simRole; if (p.simRing) S.ui.simRing = p.simRing; if (p.evId) S.lastEv = p.evId; } catch (e) { /* ignore */ } }
 /* v1.46: each person's view of an event — tab, filters, selections and sort order of every card — is kept on their own
    device (per event), never in the shared data, so one user's choices never change another user's screen. */
-const VIEW_KEYS = ['tab', 'filter', 'divFilter', 'ring', 'ringPicked', 'bracketDiv', 'session', 'divOrder', 'teamSort', 'teamMemSort', 'compSort'];
+const VIEW_KEYS = ['tab', 'filter', 'divFilter', 'ring', 'ringPicked', 'bracketDiv', 'session', 'divOrder', 'teamSort', 'teamMemSort', 'compSort', 'compClosed', 'judgeSort'];
 function saveView() {
   if (!S.evId || S.pub) return;
   const v = {}; for (const k of VIEW_KEYS) if (S.ui[k] !== undefined && S.ui[k] !== null && S.ui[k] !== '') v[k] = S.ui[k];
@@ -4454,6 +4459,9 @@ function loadView(id) {
   S.ui.divOrder = null; S.ui.teamSort = {}; S.ui.ringPicked = false;
   try { const v = JSON.parse(localStorage.getItem('kt-view-' + id) || '{}'); for (const k of VIEW_KEYS) if (k in v) S.ui[k] = v[k]; } catch (e) { /* ignore */ }
 }
+/** v1.49: sections this person opened (app level, e.g. the App admin card — collapsed by default). */
+function keepOpen(key) { try { return !!(JSON.parse(localStorage.getItem('kt-open') || '{}'))[key]; } catch (e) { return false; } }
+function setKeepOpen(key, on) { try { const o = JSON.parse(localStorage.getItem('kt-open') || '{}'); if (on) o[key] = 1; else delete o[key]; localStorage.setItem('kt-open', JSON.stringify(o)); } catch (e) { /* ignore */ } }
 function saveUIPrefs() { try { localStorage.setItem('kt-ui', JSON.stringify({ simRole: S.ui.simRole, simRing: S.ui.simRing, evId: S.evId })); } catch (e) { /* ignore */ } }
 
 const P = {
@@ -5187,9 +5195,14 @@ function competitorsHTML() {
   const yobNote = fullDob ? `<div class="notice info" style="display:block"><b>${plural(fullDob, 'competitor')}</b> ${fullDob === 1 ? 'has' : 'have'} a full date of birth stored. International events only need the year (ages count on 31 Dec) — keep only what is needed. <button class="sm" data-act="keep-year">Keep year only</button></div>` : '';
   if (!DC.comps.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No ${word}s registered</h2><p class="muted">${dir ? `Add ${word}s one at a time or import a spreadsheet (CSV).` : 'Registrations will appear here.'}</p>${dir ? `<div class="row">${acts}</div>` : ''}</div>`;
   let lastG = null;
+  const gName = c => csGroup(c) || 'No ' + (cs === 'club' ? 'club' : cs);
+  const closed = (S.ui.compClosed || {})[cs] || {}, gKeys = cf ? [...new Set(list.map(c => gName(c).toLowerCase()))] : [];
+  // v1.49: group headings fold / unfold their group (Collapse all / Expand all above the list)
+  const foldCtl = cf && gKeys.length > 1 ? `<div class="row fold-ctl"><button class="sm ghost" data-act="comp-grp-all" data-v="close" data-gs="${esc(JSON.stringify(gKeys))}">Collapse all</button><button class="sm ghost" data-act="comp-grp-all" data-v="open">Expand all</button><span class="tiny muted">Tap a ${cs === 'club' ? 'club' : cs} to show or hide its ${word}s</span></div>` : '';
   const rows = list.map(c => {
-    const g = cf ? (csGroup(c) || 'No ' + (cs === 'club' ? 'club' : cs)) : null;
-    const head = g !== null && g.toLowerCase() !== lastG ? `<tr class="grp-row"><td colspan="5">${esc(g)} · ${list.filter(x => (csGroup(x) || 'No ' + (cs === 'club' ? 'club' : cs)).toLowerCase() === g.toLowerCase()).length}</td></tr>` : ''; lastG = g === null ? null : g.toLowerCase();
+    const g = cf ? gName(c) : null, gk = g === null ? null : g.toLowerCase(), shut = gk !== null && !!closed[gk];
+    const head = g !== null && gk !== lastG ? `<tr class="grp-row grp-tog${shut ? ' shut' : ''}" data-act="comp-grp" data-g="${esc(gk)}" role="button" tabindex="0" aria-expanded="${!shut}"><td colspan="5"><span class="fold" aria-hidden="true">${shut ? '▸' : '▾'}</span> ${esc(g)} · ${list.filter(x => gName(x).toLowerCase() === gk).length}</td></tr>` : ''; lastG = gk;
+    if (shut) return head;
     const age = KT.ageOf(c, DC.asOf), miss = dir ? KT.validateCompetitor(c, DC.asOf) : [];
     const evs = tour ? (c.events || []).map(et => {
       const T = KT.EVENT_TYPES[et]; if (!T) return '';
@@ -5205,7 +5218,7 @@ function competitorsHTML() {
       <td>${c.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : dir ? `<button class="sm ${c.checkedIn ? '' : 'ghost'}" data-act="checkin" data-id="${esc(c.id)}" aria-pressed="${!!c.checkedIn}">${c.checkedIn ? '✓ Checked in' : 'Check in'}</button>` : (c.checkedIn ? '<span class="chip ok">Checked in</span>' : '<span class="chip plain">Not checked in</span>')}
         ${miss.length ? `<span class="chip warn" title="Missing: ${esc(miss.join(', '))}">Incomplete</span>` : ''}</td></tr>`;
   }).join('');
-  return fab('comp-new', tour ? 'Add competitor' : 'Add participant') + eventHeader() + yobNote + `<div class="section-h">${tools}<div class="row actions">${acts}</div></div>
+  return fab('comp-new', tour ? 'Add competitor' : 'Add participant') + eventHeader() + yobNote + `<div class="section-h">${tools}<div class="row actions">${acts}</div></div>${foldCtl}
     <div class="card flush"><div class="tw"><table class="mcards"><thead><tr><th>Name</th><th>Sex · Age</th><th>Rank</th>${tour ? '<th>Events</th>' : ''}<th>Status</th></tr></thead>
     <tbody>${rows || `<tr><td colspan="5" class="muted">No ${word}s match this filter.</td></tr>`}</tbody></table></div></div>
     <p class="small muted">${plural(list.length, word)} shown · ages as of ${fmtDate(DC.asOf)}.${dir ? ' Contact details, dates of birth and emergency contacts are visible to directors only.' : ''}</p>`;
@@ -7202,11 +7215,17 @@ function judgesHTML() {
   const ev = curEvent(), list = judgesList(), need = KT.judgeNeed(ev.level, ev.judgeMin);
   const where = ev.level === 'International' ? 'country' : ev.level === 'National' ? 'region' : 'dojo';
   const un = list.filter(j => !S.d.rings[j.ringId]);
+  // v1.49: judges in each card sorted by name, or grouped by country / region / dojo (this person's view)
+  const js0 = { name: 'By name', country: 'By country', region: 'By region', dojo: 'By dojo / club' }, jsm = js0[S.ui.judgeSort] ? S.ui.judgeSort : 'name';
+  const jg = j => jsm === 'name' ? '' : String(j[jsm] || '').trim();
+  const rowsOf = js => { let last = null; return KT.sortEntrants(js.map(j => ({ id: j.id, last: j.name, first: '', group: jg(j) })), jsm === 'name' ? 'name' : 'club').map(x => { const j = S.d.judges[x.id];
+    const g = jsm === 'name' ? null : (jg(j) || 'No ' + (jsm === 'dojo' ? 'dojo' : jsm)), head = g !== null && g.toLowerCase() !== last ? `<div class="ent-grp label">${esc(g)}</div>` : ''; last = g === null ? null : g.toLowerCase(); return head + judgeRow(j); }).join(''); };
+  const sortSel = list.length > 1 ? `<label class="f ent-sort"><span>Sort judges</span><select id="judge-sort" data-change="judge-sort">${Object.entries(js0).map(([k, l]) => opt(k, l, jsm)).join('')}</select></label>` : '';
   const ringCards = DC.rings.map(r => { const js = ringJudges(r.id); return `<div class="card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${js.length ? '' : 'plain'}">${plural(js.length, 'judge')}</span></div>
-    <div class="jlist">${js.map(judgeRow).join('') || '<span class="small muted">No judges on this ring yet.</span>'}</div></div>`; }).join('');
+    <div class="jlist">${rowsOf(js) || '<span class="small muted">No judges on this ring yet.</span>'}</div></div>`; }).join('');
   return fab('judge-new', 'Add judge') + eventHeader(`<button data-act="judge-import">Import judges</button>${list.length ? '<button data-act="judge-export">Export</button>' : ''}<button class="primary" data-act="judge-new">Add judge</button>`)
     + `<p class="small muted">${esc(ev.level)} event · judges shown with their ${where}. Each judge works on one ring until moved; every division, pool and round run on that ring uses the ring’s judges. Credential levels 1–7; levels 3–7 may judge National and International events, levels 1–2 Regional and Local only.${need >= 3 ? '' : ''}</p>`
-    + (list.length ? `<div class="card stack"><div class="row between"><h3>Unassigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${un.map(judgeRow).join('') || '<span class="small muted">Every judge is assigned to a ring.</span>'}</div></div>
+    + sortSel + (list.length ? `<div class="card stack"><div class="row between"><h3>Unassigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${rowsOf(un) || '<span class="small muted">Every judge is assigned to a ring.</span>'}</div></div>
       ${DC.rings.length ? `<div class="grid2">${ringCards}</div>` : '<p class="small muted">Create rings on the Rings tab, then assign judges to them.</p>'}`
       : `<div class="card empty"><div class="mark-lg"></div><h2>No judges yet</h2><p class="muted">Add the judges pool, then assign each judge to a ring.</p><button class="primary" data-act="judge-new">Add judge</button></div>`);
 }
@@ -8216,7 +8235,8 @@ function adminCardHTML() {
   const reqRow = ([id, q]) => isBlocked(id)
     ? `<div class="jrow2 pr">${whoHTML(id, 'Access was removed — asks to be let back in')}<div class="pctl"><button class="sm go" data-act="acc-restore" data-id="${esc(id)}">Restore access</button><button class="sm danger" data-act="org-decline" data-id="${esc(id)}">Decline</button></div></div>`
     : `<div class="jrow2 pr">${whoHTML(id, 'Wants to run tournaments · ' + timeAgo(q.at))}<div class="pctl"><button class="sm go" data-act="org-approve" data-id="${esc(id)}">Approve as director</button><button class="sm danger" data-act="org-decline" data-id="${esc(id)}">Decline</button></div></div>`;
-  return `<details class="card admin-card" open><summary><b>App admin</b> <span class="small muted">· who can use the app, and in which events</span>${reqs.length ? ` <span class="chip warn">${reqs.length} request${reqs.length > 1 ? 's' : ''}</span>` : ''}</summary>
+  // v1.49: collapsed by default; stays as this person left it (a redraw does not open or close it)
+  return `<details class="card admin-card" data-keep="admin" ${keepOpen('admin') ? 'open' : ''}><summary><b>App admin</b> <span class="small muted">· who can use the app, and in which events</span>${reqs.length ? ` <span class="chip warn">${reqs.length} request${reqs.length > 1 ? 's' : ''}</span>` : ''}</summary>
     <div class="grid2" style="margin-top:10px">
       <div class="stack">
         <div class="label">Requests</div>${reqs.map(reqRow).join('') || '<span class="small muted">No pending requests.</span>'}
@@ -8867,6 +8887,11 @@ const ACT = {
   'save-result': () => saveResult(),
   'kp-score': el => openKP(el.dataset.did, el.dataset.key),
   'event-dup': () => dupForm(),
+  // v1.49: fold / unfold a group (country, region, club) of the Competitors list — this person's view only
+  'comp-grp': el => { const m = S.ui.compSort, g = el.dataset.g, c = Object.assign({}, S.ui.compClosed || {}), cur = Object.assign({}, c[m] || {});
+    if (cur[g]) delete cur[g]; else cur[g] = 1; c[m] = cur; S.ui.compClosed = c; render(); },
+  'comp-grp-all': el => { const m = S.ui.compSort, c = Object.assign({}, S.ui.compClosed || {});
+    c[m] = el.dataset.v === 'close' ? Object.fromEntries(JSON.parse(el.dataset.gs || '[]').map(g => [g, 1])) : {}; S.ui.compClosed = c; render(); },
   // v1.41: bracket of the current division from a mat card or a scoresheet, then back to the match
   'mat-bracket': el => { const dv = DC.divBy[el.dataset.did]; openBracketFrom({ ring: el.dataset.ring, label: dv ? dv.name : '' }, el.dataset.did); },
   'sheet-bracket': () => {
@@ -8934,6 +8959,7 @@ const CHANGE = {
   'div-order': el => { S.ui.divOrder = Object.assign({}, divOrder(), { [el.dataset.k]: el.value }); render(); },   // v1.46: this person's view only
   'team-mem-sort': el => { S.ui.teamMemSort = el.value; saveView(); reorderTeamMems(el.value); },
   'comp-sort': el => { S.ui.compSort = el.value; render(); },
+  'judge-sort': el => { S.ui.judgeSort = el.value; render(); },
   'div-fmt': el => fmtApplies(el.form),
   'team-sort': el => { S.ui.teamSort = Object.assign({}, S.ui.teamSort, { [el.dataset.et]: el.value }); render(); },
   ring: el => { S.ui.ring = el.value; S.ui.ringPicked = true; render(); },
@@ -9138,8 +9164,10 @@ function wire() {
     if (e.key === 'Enter' && e.target && (e.target.id === 'fb-pw' || e.target.id === 'fb-email')) { e.preventDefault(); fbEmailSignIn(); return; }
     if (e.key === 'Enter' && e.target && /^fb-(code|newpw2?)$/.test(e.target.id || '')) { e.preventDefault(); fbCreateWithCode(); return; }
     if (e.key === 'Escape') { if (!$('#confirm').hidden) confirmDone(false); else if (!$('#modal').hidden) closeModal(); }
-    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bm[role="button"], .team-row[role="button"]')) { e.preventDefault(); e.target.click(); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.bm[role="button"], .team-row[role="button"], tr.grp-tog')) { e.preventDefault(); e.target.click(); }
   });
+  // v1.49: remember open / closed sections marked data-keep (toggle does not bubble: capture it)
+  document.addEventListener('toggle', e => { const d = e.target; if (d && d.dataset && d.dataset.keep) setKeepOpen(d.dataset.keep, d.open); }, true);
   document.addEventListener('change', e => {
     // phones/tablets: a chosen item closes the drop-down everywhere (cards and pop-ups) — release it before the screen redraws
     const touchSel = isTouch() && e.target.tagName === 'SELECT';

@@ -72,7 +72,8 @@ function adminCardHTML() {
   const reqRow = ([id, q]) => isBlocked(id)
     ? `<div class="jrow2 pr">${whoHTML(id, 'Access was removed — asks to be let back in')}<div class="pctl"><button class="sm go" data-act="acc-restore" data-id="${esc(id)}">Restore access</button><button class="sm danger" data-act="org-decline" data-id="${esc(id)}">Decline</button></div></div>`
     : `<div class="jrow2 pr">${whoHTML(id, 'Wants to run tournaments · ' + timeAgo(q.at))}<div class="pctl"><button class="sm go" data-act="org-approve" data-id="${esc(id)}">Approve as director</button><button class="sm danger" data-act="org-decline" data-id="${esc(id)}">Decline</button></div></div>`;
-  return `<details class="card admin-card" open><summary><b>App admin</b> <span class="small muted">· who can use the app, and in which events</span>${reqs.length ? ` <span class="chip warn">${reqs.length} request${reqs.length > 1 ? 's' : ''}</span>` : ''}</summary>
+  // v1.49: collapsed by default; stays as this person left it (a redraw does not open or close it)
+  return `<details class="card admin-card" data-keep="admin" ${keepOpen('admin') ? 'open' : ''}><summary><b>App admin</b> <span class="small muted">· who can use the app, and in which events</span>${reqs.length ? ` <span class="chip warn">${reqs.length} request${reqs.length > 1 ? 's' : ''}</span>` : ''}</summary>
     <div class="grid2" style="margin-top:10px">
       <div class="stack">
         <div class="label">Requests</div>${reqs.map(reqRow).join('') || '<span class="small muted">No pending requests.</span>'}
