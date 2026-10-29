@@ -68,12 +68,17 @@ function compForm(id) {
   const offered = (ev.eventTypes || KT.EVENT_ORDER);
   const evRows = tour ? offered.map(et => {
     const T = KT.EVENT_TYPES[et];
-    if (T.team) return `<div class="row between small"><label class="check"><input type="checkbox" data-multi="1" name="events" value="${et}" ${evs.has(et) ? 'checked' : ''}> ${esc(T.label)}</label><span class="muted tiny">Assign on the Teams tab</span></div>`;
+    // v1.54: the team (and its division) this competitor is actually on
+    if (T.team) { const a = id && evs.has(et) ? compAssigned(c, et) : null;
+      return `<div class="row between small" style="gap:6px"><label class="check"><input type="checkbox" data-multi="1" name="events" value="${et}" ${evs.has(et) ? 'checked' : ''}> ${esc(T.label)}</label>${a && a.team
+        ? `<button type="button" class="sm ghost assigned" data-act="team-edit" data-id="${esc(a.team.id)}" title="Open the team"><b>${esc(a.team.name)}</b>${a.div ? ' · ' + esc(a.div.name) : ' · <span class="chip bad">no division</span>'} ›</button>`
+        : `<span class="muted tiny">${evs.has(et) && id ? '<span class="chip warn">Not on a team yet</span> ' : ''}Assign on the Teams tab</span>`}</div>`; }
     const cand = id ? KT.candidateDivisions(c, et, DC.divs, DC.asOf) : [];
     const all = DC.divs.filter(d => d.eventType === et);
     const ov = (c.divOverride || {})[et] || '';
     return `<div class="row between small" style="gap:6px"><label class="check"><input type="checkbox" data-multi="1" name="events" value="${et}" ${evs.has(et) ? 'checked' : ''}> ${esc(T.label)}</label>
-      <select name="ov_${et}" id="ov-${et}" style="max-width:320px" aria-label="${esc(T.label)} division">${opt('', cand.length ? `Auto → ${cand[0].name}` : 'Auto (save to match)', ov)}${all.map(d => opt(d.id, d.name, ov)).join('')}</select></div>`;
+      <select name="ov_${et}" id="ov-${et}" style="max-width:320px" aria-label="${esc(T.label)} division">${opt('', cand.length ? `Auto → ${cand[0].name}` : 'Auto (save to match)', ov)}${all.map(d => opt(d.id, d.name, ov)).join('')}</select>
+      ${id && evs.has(et) ? (a => `<div class="tiny assigned-line" style="flex-basis:100%">${a.div ? `In: <b>${esc(a.div.name)}</b>` : '<span class="chip bad">No division yet</span>'}</div>`)(compAssigned(c, et)) : ''}</div>`;
   }).join('') : '';
   openModal(sheet(id ? `${esc(c.firstName)} ${esc(c.lastName)}` : (tour ? 'Register competitor' : 'Add participant'), `<form id="f-comp" data-form="comp" data-id="${esc(id || '')}" class="stack">
     <fieldset><legend>Competitor</legend><div class="fgrid">

@@ -747,16 +747,19 @@ tr.grp-tog.shut td { opacity: .8; }
 .dojo .where { font-weight: 600; color: var(--ink-2); }
 .ev-div { white-space: normal; text-align: left; overflow-wrap: anywhere; max-width: 100%; }
 @media (max-width: 760px) { table.mcards td.ev-cell { grid-column: 1 / -1; } }
+/* v1.54: competitor card — the division / team actually assigned */
+.assigned { text-align: left; white-space: normal; overflow-wrap: anywhere; min-height: 0; }
+.assigned-line { color: var(--ink-2); overflow-wrap: anywhere; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.53.0 */
+<script>/* Karate Event Tracker v1.54.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.53.0';
+  const VERSION = '1.54.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -4576,6 +4579,16 @@ function derive() {
   DC = { ev, asOf, comps, compBy, teams, teamBy, divs, divBy, rings, assign, res, pl };
   return DC;
 }
+/** v1.54: what a competitor is actually in for one event — { div, team, text } (text: division; team · division; or what is missing). */
+function compAssigned(c, et) {
+  const T = KT.EVENT_TYPES[et]; if (!T) return { text: et };
+  const inDiv = id => Object.keys(DC.assign.byDiv).find(d => DC.divBy[d] && DC.divBy[d].eventType === et && DC.assign.byDiv[d].includes(id));
+  if (T.team) {
+    const tm = DC.teams.find(t => t.eventType === et && (t.memberIds || []).includes(c.id)); if (!tm) return { text: T.short + ' · no team yet' };
+    const d = inDiv(tm.id); return { team: tm, div: d ? DC.divBy[d] : null, text: (tm.name || 'Team') + ' · ' + (d ? DC.divBy[d].name : 'no division') };
+  }
+  const d = inDiv(c.id); return { div: d ? DC.divBy[d] : null, text: d ? DC.divBy[d].name : T.short + ' · no division' };
+}
 /** v1.45: an entrant's rank (seed) in a drawn division — the seeds the bracket was drawn with (older brackets: the division's). */
 function entSeed(id, did) {
   const br = did && S.d.brackets[did]; if (!br || !id) return 0;
@@ -5204,8 +5217,6 @@ function competitorsHTML() {
   const ev = curEvent(), dir = isDirector(), tour = ev.kind === 'tournament';
   const q = S.ui.q.toLowerCase(), f = S.ui.filter;
   const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'competitor').map(u => u.id));
-  const placedIn = {};
-  for (const did in DC.assign.byDiv) for (const id of DC.assign.byDiv[did]) (placedIn[id] = placedIn[id] || []).push(did);
   // v1.48: list order — name A→Z / Z→A, or grouped by country / region / club (dojo); the person's own view (§72)
   const cs = compSortMode(), cf = { country: 'country', region: 'state', club: 'dojo' }[cs];
   const csGroup = c => cf ? String(c[cf] || '').trim() : '';
@@ -5238,11 +5249,9 @@ function competitorsHTML() {
     const age = KT.ageOf(c, DC.asOf), miss = dir ? KT.validateCompetitor(c, DC.asOf) : [];
     const evs = tour ? (c.events || []).map(et => {
       const T = KT.EVENT_TYPES[et]; if (!T) return '';
-      // v1.52: the division actually assigned (teams: the team and its division); otherwise the event with what is missing
-      if (T.team) { const tm = DC.teams.find(t => t.eventType === et && (t.memberIds || []).includes(c.id)), tdid = tm && (placedIn[tm.id] || [])[0];
-        return tm ? `<span class="chip plain ev-div" title="${esc(T.label)}">${esc(tm.name)}${tdid ? ' · ' + esc(DC.divBy[tdid].name) : ' · <i>no division</i>'}</span>` : `<span class="chip warn ev-div" title="${esc(T.label)}">${esc(T.short)} · no team yet</span>`; }
-      const did = (placedIn[c.id] || []).find(d => DC.divBy[d] && DC.divBy[d].eventType === et);
-      return did ? `<span class="chip plain ev-div" title="${esc(T.label)}">${esc(DC.divBy[did].name)}</span>` : `<span class="chip bad ev-div" title="No matching division">${esc(T.short)} · no division</span>`;
+      // v1.52: the division actually assigned (teams: the team and its division); otherwise the event with what is missing (v1.54: compAssigned)
+      const a = compAssigned(c, et);
+      return `<span class="chip ${a.div ? 'plain' : T.team && !a.team ? 'warn' : 'bad'} ev-div" title="${esc(T.label)}">${esc(a.text)}</span>`;
     }).join(' ') : '';
     return head + `<tr class="${dir ? 'click' : ''}" ${dir ? `data-act="comp-edit" data-id="${esc(c.id)}"` : ''}>
       <td><div class="name">${esc(c.lastName)}, ${esc(c.firstName)}</div><div class="dojo">${compWhere(c, ev.level)}</div></td>
@@ -5848,12 +5857,17 @@ function compForm(id) {
   const offered = (ev.eventTypes || KT.EVENT_ORDER);
   const evRows = tour ? offered.map(et => {
     const T = KT.EVENT_TYPES[et];
-    if (T.team) return `<div class="row between small"><label class="check"><input type="checkbox" data-multi="1" name="events" value="${et}" ${evs.has(et) ? 'checked' : ''}> ${esc(T.label)}</label><span class="muted tiny">Assign on the Teams tab</span></div>`;
+    // v1.54: the team (and its division) this competitor is actually on
+    if (T.team) { const a = id && evs.has(et) ? compAssigned(c, et) : null;
+      return `<div class="row between small" style="gap:6px"><label class="check"><input type="checkbox" data-multi="1" name="events" value="${et}" ${evs.has(et) ? 'checked' : ''}> ${esc(T.label)}</label>${a && a.team
+        ? `<button type="button" class="sm ghost assigned" data-act="team-edit" data-id="${esc(a.team.id)}" title="Open the team"><b>${esc(a.team.name)}</b>${a.div ? ' · ' + esc(a.div.name) : ' · <span class="chip bad">no division</span>'} ›</button>`
+        : `<span class="muted tiny">${evs.has(et) && id ? '<span class="chip warn">Not on a team yet</span> ' : ''}Assign on the Teams tab</span>`}</div>`; }
     const cand = id ? KT.candidateDivisions(c, et, DC.divs, DC.asOf) : [];
     const all = DC.divs.filter(d => d.eventType === et);
     const ov = (c.divOverride || {})[et] || '';
     return `<div class="row between small" style="gap:6px"><label class="check"><input type="checkbox" data-multi="1" name="events" value="${et}" ${evs.has(et) ? 'checked' : ''}> ${esc(T.label)}</label>
-      <select name="ov_${et}" id="ov-${et}" style="max-width:320px" aria-label="${esc(T.label)} division">${opt('', cand.length ? `Auto → ${cand[0].name}` : 'Auto (save to match)', ov)}${all.map(d => opt(d.id, d.name, ov)).join('')}</select></div>`;
+      <select name="ov_${et}" id="ov-${et}" style="max-width:320px" aria-label="${esc(T.label)} division">${opt('', cand.length ? `Auto → ${cand[0].name}` : 'Auto (save to match)', ov)}${all.map(d => opt(d.id, d.name, ov)).join('')}</select>
+      ${id && evs.has(et) ? (a => `<div class="tiny assigned-line" style="flex-basis:100%">${a.div ? `In: <b>${esc(a.div.name)}</b>` : '<span class="chip bad">No division yet</span>'}</div>`)(compAssigned(c, et)) : ''}</div>`;
   }).join('') : '';
   openModal(sheet(id ? `${esc(c.firstName)} ${esc(c.lastName)}` : (tour ? 'Register competitor' : 'Add participant'), `<form id="f-comp" data-form="comp" data-id="${esc(id || '')}" class="stack">
     <fieldset><legend>Competitor</legend><div class="fgrid">
@@ -9063,8 +9077,10 @@ const ACT = {
   'export-comps': () => {
     const dir = isDirector();
     const yo = yobOnly();
-    const rows = [['first_name', 'last_name', 'gender', yo ? 'birth_year' : 'dob', 'age', 'rank', 'dojo', 'state', 'country', 'email', 'phone', 'emergency_name', 'emergency_phone', 'waiver', 'paid', 'checked_in', 'status', 'events']];
-    for (const c of DC.comps) rows.push([c.firstName, c.lastName, c.gender, dir ? (yo ? c.birthYear || (c.dob || '').slice(0, 4) : c.dob || '') : '', KT.ageOf(c, DC.asOf), KT.rankLabel(c.rank), c.dojo, c.state, c.country, dir ? c.email : '', dir ? c.phone : '', dir ? c.emergencyName : '', dir ? c.emergencyPhone : '', c.waiver ? 'yes' : 'no', c.feePaid ? 'yes' : 'no', c.checkedIn ? 'yes' : 'no', c.status, (c.events || []).map(e => KT.EVENT_TYPES[e] ? KT.EVENT_TYPES[e].label : e).join('; ')]);
+    // v1.54: one column per event with the division actually assigned (team events: team · division); "events" stays for re-import
+    const ets = (curEvent().eventTypes || KT.EVENT_ORDER).filter(et => KT.EVENT_TYPES[et]);
+    const rows = [['first_name', 'last_name', 'gender', yo ? 'birth_year' : 'dob', 'age', 'rank', 'dojo', 'state', 'country', 'email', 'phone', 'emergency_name', 'emergency_phone', 'waiver', 'paid', 'checked_in', 'status', 'events', ...ets.map(et => KT.EVENT_TYPES[et].label)]];
+    for (const c of DC.comps) rows.push([c.firstName, c.lastName, c.gender, dir ? (yo ? c.birthYear || (c.dob || '').slice(0, 4) : c.dob || '') : '', KT.ageOf(c, DC.asOf), KT.rankLabel(c.rank), c.dojo, c.state, c.country, dir ? c.email : '', dir ? c.phone : '', dir ? c.emergencyName : '', dir ? c.emergencyPhone : '', c.waiver ? 'yes' : 'no', c.feePaid ? 'yes' : 'no', c.checkedIn ? 'yes' : 'no', c.status, (c.events || []).map(e => KT.EVENT_TYPES[e] ? KT.EVENT_TYPES[e].label : e).join('; '), ...ets.map(et => (c.events || []).includes(et) ? compAssigned(c, et).text : '')]);
     saveFile(`${curEvent().name} - competitors.csv`, KT.toCSV(rows));
   },
   'export-results': () => {

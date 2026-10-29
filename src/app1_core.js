@@ -200,6 +200,16 @@ function derive() {
   DC = { ev, asOf, comps, compBy, teams, teamBy, divs, divBy, rings, assign, res, pl };
   return DC;
 }
+/** v1.54: what a competitor is actually in for one event — { div, team, text } (text: division; team · division; or what is missing). */
+function compAssigned(c, et) {
+  const T = KT.EVENT_TYPES[et]; if (!T) return { text: et };
+  const inDiv = id => Object.keys(DC.assign.byDiv).find(d => DC.divBy[d] && DC.divBy[d].eventType === et && DC.assign.byDiv[d].includes(id));
+  if (T.team) {
+    const tm = DC.teams.find(t => t.eventType === et && (t.memberIds || []).includes(c.id)); if (!tm) return { text: T.short + ' · no team yet' };
+    const d = inDiv(tm.id); return { team: tm, div: d ? DC.divBy[d] : null, text: (tm.name || 'Team') + ' · ' + (d ? DC.divBy[d].name : 'no division') };
+  }
+  const d = inDiv(c.id); return { div: d ? DC.divBy[d] : null, text: d ? DC.divBy[d].name : T.short + ' · no division' };
+}
 /** v1.45: an entrant's rank (seed) in a drawn division — the seeds the bracket was drawn with (older brackets: the division's). */
 function entSeed(id, did) {
   const br = did && S.d.brackets[did]; if (!br || !id) return 0;

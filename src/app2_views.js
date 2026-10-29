@@ -206,8 +206,6 @@ function competitorsHTML() {
   const ev = curEvent(), dir = isDirector(), tour = ev.kind === 'tournament';
   const q = S.ui.q.toLowerCase(), f = S.ui.filter;
   const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'competitor').map(u => u.id));
-  const placedIn = {};
-  for (const did in DC.assign.byDiv) for (const id of DC.assign.byDiv[did]) (placedIn[id] = placedIn[id] || []).push(did);
   // v1.48: list order — name A→Z / Z→A, or grouped by country / region / club (dojo); the person's own view (§72)
   const cs = compSortMode(), cf = { country: 'country', region: 'state', club: 'dojo' }[cs];
   const csGroup = c => cf ? String(c[cf] || '').trim() : '';
@@ -240,11 +238,9 @@ function competitorsHTML() {
     const age = KT.ageOf(c, DC.asOf), miss = dir ? KT.validateCompetitor(c, DC.asOf) : [];
     const evs = tour ? (c.events || []).map(et => {
       const T = KT.EVENT_TYPES[et]; if (!T) return '';
-      // v1.52: the division actually assigned (teams: the team and its division); otherwise the event with what is missing
-      if (T.team) { const tm = DC.teams.find(t => t.eventType === et && (t.memberIds || []).includes(c.id)), tdid = tm && (placedIn[tm.id] || [])[0];
-        return tm ? `<span class="chip plain ev-div" title="${esc(T.label)}">${esc(tm.name)}${tdid ? ' · ' + esc(DC.divBy[tdid].name) : ' · <i>no division</i>'}</span>` : `<span class="chip warn ev-div" title="${esc(T.label)}">${esc(T.short)} · no team yet</span>`; }
-      const did = (placedIn[c.id] || []).find(d => DC.divBy[d] && DC.divBy[d].eventType === et);
-      return did ? `<span class="chip plain ev-div" title="${esc(T.label)}">${esc(DC.divBy[did].name)}</span>` : `<span class="chip bad ev-div" title="No matching division">${esc(T.short)} · no division</span>`;
+      // v1.52: the division actually assigned (teams: the team and its division); otherwise the event with what is missing (v1.54: compAssigned)
+      const a = compAssigned(c, et);
+      return `<span class="chip ${a.div ? 'plain' : T.team && !a.team ? 'warn' : 'bad'} ev-div" title="${esc(T.label)}">${esc(a.text)}</span>`;
     }).join(' ') : '';
     return head + `<tr class="${dir ? 'click' : ''}" ${dir ? `data-act="comp-edit" data-id="${esc(c.id)}"` : ''}>
       <td><div class="name">${esc(c.lastName)}, ${esc(c.firstName)}</div><div class="dojo">${compWhere(c, ev.level)}</div></td>
