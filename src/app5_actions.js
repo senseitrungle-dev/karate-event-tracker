@@ -238,8 +238,10 @@ const ACT = {
   'export-comps': () => {
     const dir = isDirector();
     const yo = yobOnly();
-    const rows = [['first_name', 'last_name', 'gender', yo ? 'birth_year' : 'dob', 'age', 'rank', 'dojo', 'state', 'country', 'email', 'phone', 'emergency_name', 'emergency_phone', 'waiver', 'paid', 'checked_in', 'status', 'events']];
-    for (const c of DC.comps) rows.push([c.firstName, c.lastName, c.gender, dir ? (yo ? c.birthYear || (c.dob || '').slice(0, 4) : c.dob || '') : '', KT.ageOf(c, DC.asOf), KT.rankLabel(c.rank), c.dojo, c.state, c.country, dir ? c.email : '', dir ? c.phone : '', dir ? c.emergencyName : '', dir ? c.emergencyPhone : '', c.waiver ? 'yes' : 'no', c.feePaid ? 'yes' : 'no', c.checkedIn ? 'yes' : 'no', c.status, (c.events || []).map(e => KT.EVENT_TYPES[e] ? KT.EVENT_TYPES[e].label : e).join('; ')]);
+    // v1.54: one column per event with the division actually assigned (team events: team · division); "events" stays for re-import
+    const ets = (curEvent().eventTypes || KT.EVENT_ORDER).filter(et => KT.EVENT_TYPES[et]);
+    const rows = [['first_name', 'last_name', 'gender', yo ? 'birth_year' : 'dob', 'age', 'rank', 'dojo', 'state', 'country', 'email', 'phone', 'emergency_name', 'emergency_phone', 'waiver', 'paid', 'checked_in', 'status', 'events', ...ets.map(et => KT.EVENT_TYPES[et].label)]];
+    for (const c of DC.comps) rows.push([c.firstName, c.lastName, c.gender, dir ? (yo ? c.birthYear || (c.dob || '').slice(0, 4) : c.dob || '') : '', KT.ageOf(c, DC.asOf), KT.rankLabel(c.rank), c.dojo, c.state, c.country, dir ? c.email : '', dir ? c.phone : '', dir ? c.emergencyName : '', dir ? c.emergencyPhone : '', c.waiver ? 'yes' : 'no', c.feePaid ? 'yes' : 'no', c.checkedIn ? 'yes' : 'no', c.status, (c.events || []).map(e => KT.EVENT_TYPES[e] ? KT.EVENT_TYPES[e].label : e).join('; '), ...ets.map(et => (c.events || []).includes(et) ? compAssigned(c, et).text : '')]);
     saveFile(`${curEvent().name} - competitors.csv`, KT.toCSV(rows));
   },
   'export-results': () => {

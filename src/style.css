@@ -742,3 +742,6 @@ tr.grp-tog.shut td { opacity: .8; }
 .dojo .where { font-weight: 600; color: var(--ink-2); }
 .ev-div { white-space: normal; text-align: left; overflow-wrap: anywhere; max-width: 100%; }
 @media (max-width: 760px) { table.mcards td.ev-cell { grid-column: 1 / -1; } }
+/* v1.54: competitor card — the division / team actually assigned */
+.assigned { text-align: left; white-space: normal; overflow-wrap: anywhere; min-height: 0; }
+.assigned-line { color: var(--ink-2); overflow-wrap: anywhere; }

@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.53.0 Requirements & Design
+# Karate Event Tracker · v1.54.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -786,3 +786,12 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
 **Requirement.** Make the country (listing on the Competitors tab) collapsible — it should be there without first choosing a sort.
 **Design.** `compSortMode()`: the person's own choice (§75) if they made one, otherwise the event level's group: International → By country, National → By region, otherwise By club / dojo. So the list opens with collapsible group headings (§76: tap a heading, Collapse all / Expand all). Name A→Z / Z→A stay available in the sort select. The fold actions use the same effective mode.
 **Verify.** judgefold.js (international: opens By country with collapsible headings), fmtsort.js (national: opens By region with collapsible headings; A→Z / Z→A on choice), full e2e set and the other browser tests.
+
+## §81 Competitor card shows the team and division assigned; export has the assignment per event (v1.54.0)
+**Requirement.** Competitors tab: when a competitor is opened, show the actual team event (team) they are assigned to. Export competitors: include the actual event (division) they are assigned to instead of just Kata, Kumite, Team.
+**Design.**
+- `compAssigned(c, et)` (app1_core) → `{ div, team, text }` from `DC.assign.byDiv`: the division (individual events), or the team and its division (team events). It also covers what is missing: "Kata · no division", "Team Kata · no team yet", "<team> · no division". The Competitors list (§79), the card and the export all use it.
+- **Competitor card:** each entered team event shows a button "<team> · <division> ›" that opens the team, or "Not on a team yet" (assign on the Teams tab). Each entered individual event shows "In: <division>" under its division picker (or "No division yet").
+- **Export CSV:** the `events` column keeps the event names, so an exported file still imports. One column per offered event is added (header = event name) holding the assignment text. Import ignores those columns unless they hold yes / x / 1, so they don't add or remove events.
+- Test fix: signin.js waits for the sign-in call instead of a fixed 400 ms (it failed under load twice).
+**Verify.** test/compcard.js (national @390: card shows "Senior Women A · Black Belt Senior Women Team Kata" matching the list; "In: …" for individual events; the team button opens the team; "Not on a team yet"; fits the phone; export: events column kept, columns per event with the division names and "team · division"). compdiv.js, yob.js (export), full e2e set and the other browser tests.
