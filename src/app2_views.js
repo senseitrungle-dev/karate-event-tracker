@@ -194,7 +194,12 @@ function competitorsHTML() {
   const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'competitor').map(u => u.id));
   const placedIn = {};
   for (const did in DC.assign.byDiv) for (const id of DC.assign.byDiv[did]) (placedIn[id] = placedIn[id] || []).push(did);
-  let list = DC.comps.slice().sort((a, b) => String(a.lastName).localeCompare(String(b.lastName)) || String(a.firstName).localeCompare(String(b.firstName)));
+  // v1.48: list order — name A→Z / Z→A, or grouped by country / region / club (dojo); the person's own view (§72)
+  const cs = KT.ENT_SORTS[S.ui.compSort] ? S.ui.compSort : 'name', cf = { country: 'country', region: 'state', club: 'dojo' }[cs];
+  const csGroup = c => cf ? String(c[cf] || '').trim() : '';
+  const order = KT.sortEntrants(DC.comps.map(c => ({ id: c.id, last: c.lastName, first: c.firstName, group: csGroup(c) })), cs).map(x => x.id);
+  const pos = Object.fromEntries(order.map((id, i) => [id, i]));
+  let list = DC.comps.slice().sort((a, b) => pos[a.id] - pos[b.id]);
   if (q) list = list.filter(c => `${c.firstName} ${c.lastName} ${c.dojo} ${c.country || ''} ${c.state || ''}`.toLowerCase().includes(q));
   if (f === 'out') list = list.filter(c => !c.checkedIn && c.status !== 'withdrawn');
   if (f === 'in') list = list.filter(c => c.checkedIn);
@@ -203,12 +208,16 @@ function competitorsHTML() {
   if (f === 'withdrawn') list = list.filter(c => c.status === 'withdrawn');
   const word = tour ? 'competitor' : 'participant';
   const tools = `<div class="row"><input id="comp-q" class="search" type="search" placeholder="Search name, dojo…" value="${esc(S.ui.q)}" data-input="q" aria-label="Search">
+    <select id="comp-s" data-change="comp-sort" aria-label="Sort">${Object.entries(KT.ENT_SORTS).map(([k, l]) => opt(k, k === 'name' ? 'Name A→Z' : k === 'name-desc' ? 'Name Z→A' : 'By ' + l.toLowerCase(), cs)).join('')}</select>
     <select id="comp-f" data-change="filter" aria-label="Filter">${opt('all', 'All', f)}${opt('out', 'Not checked in', f)}${opt('in', 'Checked in', f)}${dir ? opt('incomplete', 'Missing information', f) : ''}${tour && dir ? opt('unplaced', 'No division match', f) : ''}${opt('withdrawn', 'Withdrawn', f)}</select></div>`;
   const acts = dir ? `<button data-act="import-open">Import CSV</button><button data-act="export-comps">Export CSV</button>${DC.comps.length ? '<button class="danger" data-act="rm-group">Remove group…</button>' : ''}<button class="primary" data-act="comp-new">Add ${word}</button>` : '';
   const fullDob = dir && ev.level === 'International' ? DC.comps.filter(c => c.dob).length : 0;
   const yobNote = fullDob ? `<div class="notice info" style="display:block"><b>${plural(fullDob, 'competitor')}</b> ${fullDob === 1 ? 'has' : 'have'} a full date of birth stored. International events only need the year (ages count on 31 Dec) — keep only what is needed. <button class="sm" data-act="keep-year">Keep year only</button></div>` : '';
   if (!DC.comps.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No ${word}s registered</h2><p class="muted">${dir ? `Add ${word}s one at a time or import a spreadsheet (CSV).` : 'Registrations will appear here.'}</p>${dir ? `<div class="row">${acts}</div>` : ''}</div>`;
+  let lastG = null;
   const rows = list.map(c => {
+    const g = cf ? (csGroup(c) || 'No ' + (cs === 'club' ? 'club' : cs)) : null;
+    const head = g !== null && g.toLowerCase() !== lastG ? `<tr class="grp-row"><td colspan="5">${esc(g)} · ${list.filter(x => (csGroup(x) || 'No ' + (cs === 'club' ? 'club' : cs)).toLowerCase() === g.toLowerCase()).length}</td></tr>` : ''; lastG = g === null ? null : g.toLowerCase();
     const age = KT.ageOf(c, DC.asOf), miss = dir ? KT.validateCompetitor(c, DC.asOf) : [];
     const evs = tour ? (c.events || []).map(et => {
       const T = KT.EVENT_TYPES[et]; if (!T) return '';
@@ -216,7 +225,7 @@ function competitorsHTML() {
       const did = (placedIn[c.id] || []).find(d => DC.divBy[d] && DC.divBy[d].eventType === et);
       return `<span class="chip ${did ? 'plain' : 'bad'}" title="${esc(did ? DC.divBy[did].name : 'No matching division')}">${esc(T.short)}</span>`;
     }).join(' ') : '';
-    return `<tr class="${dir ? 'click' : ''}" ${dir ? `data-act="comp-edit" data-id="${esc(c.id)}"` : ''}>
+    return head + `<tr class="${dir ? 'click' : ''}" ${dir ? `data-act="comp-edit" data-id="${esc(c.id)}"` : ''}>
       <td><div class="name">${esc(c.lastName)}, ${esc(c.firstName)}</div><div class="dojo">${esc(c.dojo || '')}${c.state || c.country ? ' · ' + esc([c.state, c.country].filter(Boolean).join(', ')) : ''}</div></td>
       <td>${esc(c.gender === 'F' ? 'W' : c.gender === 'M' ? 'M' : '')}${age != null ? ` · <span class="num">${age}</span>` : ''}</td>
       <td>${esc(KT.rankLabel(c.rank))}</td>

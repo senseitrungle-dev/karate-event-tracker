@@ -724,3 +724,7 @@ table.kp tr.live td { background: color-mix(in srgb, var(--ai-soft) 60%, transpa
 .tm-who { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .tm-info { overflow-wrap: anywhere; }
 .tm-on { align-self: flex-start; margin-top: 2px; }
+/* v1.48: bracket settings that the chosen format does not use */
+label.f.na > span:first-child, label.f.na select, label.f.na input, label.f.na .tiny:not(.na-note) { opacity: .45; }
+label.f.na select, label.f.na input { cursor: not-allowed; }
+.na-note { color: var(--ink-3); font-style: italic; }
