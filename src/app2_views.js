@@ -189,6 +189,19 @@ function overviewHTML() {
 }
 
 /* ---------- competitors ---------- */
+/** v1.52: where a competitor is from, led by what the event level separates by: country (International), region (National), dojo / club (otherwise). */
+function compWhere(c, level) {
+  const country = String(c.country || '').trim(), region = String(c.state || '').trim(), dojo = String(c.dojo || '').trim();
+  const parts = level === 'International' ? [country, dojo && dojo.toLowerCase() !== ('team ' + country).toLowerCase() ? dojo : '']
+    : level === 'National' ? [region, dojo] : [dojo, region];
+  const [lead, ...rest] = parts.filter(Boolean);
+  return lead ? `<b class="where">${esc(lead)}</b>${rest.length ? ' · ' + esc(rest.join(' · ')) : ''}` : '';
+}
+/** v1.53: the Competitors list order — this person's choice, else grouped (collapsible) by the event level's group. */
+function compSortMode() {
+  if (KT.ENT_SORTS[S.ui.compSort]) return S.ui.compSort;
+  const lv = (curEvent() || {}).level; return lv === 'International' ? 'country' : lv === 'National' ? 'region' : 'club';
+}
 function competitorsHTML() {
   const ev = curEvent(), dir = isDirector(), tour = ev.kind === 'tournament';
   const q = S.ui.q.toLowerCase(), f = S.ui.filter;
@@ -196,7 +209,7 @@ function competitorsHTML() {
   const placedIn = {};
   for (const did in DC.assign.byDiv) for (const id of DC.assign.byDiv[did]) (placedIn[id] = placedIn[id] || []).push(did);
   // v1.48: list order — name A→Z / Z→A, or grouped by country / region / club (dojo); the person's own view (§72)
-  const cs = KT.ENT_SORTS[S.ui.compSort] ? S.ui.compSort : 'name', cf = { country: 'country', region: 'state', club: 'dojo' }[cs];
+  const cs = compSortMode(), cf = { country: 'country', region: 'state', club: 'dojo' }[cs];
   const csGroup = c => cf ? String(c[cf] || '').trim() : '';
   const order = KT.sortEntrants(DC.comps.map(c => ({ id: c.id, last: c.lastName, first: c.firstName, group: csGroup(c) })), cs).map(x => x.id);
   const pos = Object.fromEntries(order.map((id, i) => [id, i]));
@@ -227,15 +240,17 @@ function competitorsHTML() {
     const age = KT.ageOf(c, DC.asOf), miss = dir ? KT.validateCompetitor(c, DC.asOf) : [];
     const evs = tour ? (c.events || []).map(et => {
       const T = KT.EVENT_TYPES[et]; if (!T) return '';
-      if (T.team) { const tm = DC.teams.find(t => t.eventType === et && (t.memberIds || []).includes(c.id)); return `<span class="chip plain" title="${esc(tm ? tm.name : 'Not on a team yet')}">${esc(T.short)}${tm ? '' : ' ?'}</span>`; }
+      // v1.52: the division actually assigned (teams: the team and its division); otherwise the event with what is missing
+      if (T.team) { const tm = DC.teams.find(t => t.eventType === et && (t.memberIds || []).includes(c.id)), tdid = tm && (placedIn[tm.id] || [])[0];
+        return tm ? `<span class="chip plain ev-div" title="${esc(T.label)}">${esc(tm.name)}${tdid ? ' · ' + esc(DC.divBy[tdid].name) : ' · <i>no division</i>'}</span>` : `<span class="chip warn ev-div" title="${esc(T.label)}">${esc(T.short)} · no team yet</span>`; }
       const did = (placedIn[c.id] || []).find(d => DC.divBy[d] && DC.divBy[d].eventType === et);
-      return `<span class="chip ${did ? 'plain' : 'bad'}" title="${esc(did ? DC.divBy[did].name : 'No matching division')}">${esc(T.short)}</span>`;
+      return did ? `<span class="chip plain ev-div" title="${esc(T.label)}">${esc(DC.divBy[did].name)}</span>` : `<span class="chip bad ev-div" title="No matching division">${esc(T.short)} · no division</span>`;
     }).join(' ') : '';
     return head + `<tr class="${dir ? 'click' : ''}" ${dir ? `data-act="comp-edit" data-id="${esc(c.id)}"` : ''}>
-      <td><div class="name">${esc(c.lastName)}, ${esc(c.firstName)}</div><div class="dojo">${esc(c.dojo || '')}${c.state || c.country ? ' · ' + esc([c.state, c.country].filter(Boolean).join(', ')) : ''}</div></td>
+      <td><div class="name">${esc(c.lastName)}, ${esc(c.firstName)}</div><div class="dojo">${compWhere(c, ev.level)}</div></td>
       <td>${esc(c.gender === 'F' ? 'W' : c.gender === 'M' ? 'M' : '')}${age != null ? ` · <span class="num">${age}</span>` : ''}</td>
       <td>${esc(KT.rankLabel(c.rank))}</td>
-      ${tour ? `<td><div class="pill-list">${evs}</div></td>` : ''}
+      ${tour ? `<td class="ev-cell"><div class="pill-list">${evs}</div></td>` : ''}
       <td>${c.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : dir ? `<button class="sm ${c.checkedIn ? '' : 'ghost'}" data-act="checkin" data-id="${esc(c.id)}" aria-pressed="${!!c.checkedIn}">${c.checkedIn ? '✓ Checked in' : 'Check in'}</button>` : (c.checkedIn ? '<span class="chip ok">Checked in</span>' : '<span class="chip plain">Not checked in</span>')}
         ${miss.length ? `<span class="chip warn" title="Missing: ${esc(miss.join(', '))}">Incomplete</span>` : ''}</td></tr>`;
   }).join('');

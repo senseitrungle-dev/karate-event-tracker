@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.51.0 Requirements & Design
+# Karate Event Tracker · v1.53.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -774,3 +774,15 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
   - "Show checklist" opens the full box (with "▾ Hide checklist"); that is this person's view (`readyOpen`). Tapping "Ring is ready" folds it again. Unticking an item still makes the ring Not ready, which shows the full checklist.
 - matready.js checks the folded three lines and re-opens the checklist before unticking.
 **Verify.** test/judgefold.js (judge country headings fold one / all / reopen one, remembered after reload, Expand all; competitor folds as before). matready.js (folded 3 lines, Show checklist, untick → Not ready), golive, full e2e set and the other browser tests.
+
+## §79 Competitors tab: where from by event level; events show the division assigned (v1.52.0)
+**Requirement.** Competitors tab: display based on country / dojo / club. Events: show the actual division assigned (if assigned).
+**Design.**
+- `compWhere(c, level)`: the line under each name leads (in bold) with what the event separates by (International → country, National → region, otherwise dojo / club), then the other details. At International events the dojo is left out when it is just "Team <country>".
+- Events column: each individual event shows the division the competitor is placed in (`DC.assign.byDiv`), e.g. "Black Belt Senior Men Individual Kata". A team event shows "<team> · <team's division>". Missing ones say what is missing: "Kata · no division", "Team Kata · no team yet", "<team> · no division". This replaces the short chips with "?" and tooltips. On a phone the events cell spans the full card width so long division names wrap cleanly.
+**Verify.** test/compdiv.js (international @390, national @1280, local @360: the line leads with country / region / dojo; individual and team events show the assigned division; "no team yet"; fits the width). Full e2e set and the other browser tests.
+
+## §80 Competitors list opens grouped by country (collapsible) (v1.53.0)
+**Requirement.** Make the country (listing on the Competitors tab) collapsible — it should be there without first choosing a sort.
+**Design.** `compSortMode()`: the person's own choice (§75) if they made one, otherwise the event level's group: International → By country, National → By region, otherwise By club / dojo. So the list opens with collapsible group headings (§76: tap a heading, Collapse all / Expand all). Name A→Z / Z→A stay available in the sort select. The fold actions use the same effective mode.
+**Verify.** judgefold.js (international: opens By country with collapsible headings), fmtsort.js (national: opens By region with collapsible headings; A→Z / Z→A on choice), full e2e set and the other browser tests.
