@@ -187,11 +187,12 @@ const { fakeFetch, callLive } = require('./fakerest');
     ok('B: …the same dashboard as the director', (await stats(specs[0])).split(' Rings')[0] === (await stats(d)).split(' Rings')[0]);
     const fsReads = await Promise.all(specs.map(s => s.evaluate(() => window.__mockReads || 0)));
     ok('B: spectators read nothing from the database themselves', fsReads.every(n => n === 0));
-    requests = 0; misses = 0; dbReads.length = 0;
+    requests = 0; misses = 0; dbReads.length = 0; const t0 = Date.now();
     await specs[0].waitForTimeout(6000);
+    const periods = Math.ceil((Date.now() - t0) / (10000 * TTL_SCALE)) + 1;
     console.log(`  6 s with 4 spectators polling every 1 s: ${requests} requests to /api/live, ${misses} reached the function, ${dbReads.length} database reads`);
     ok('B: the cache answers most requests', requests >= 12 && misses * 2 < requests);
-    ok('B: database reads do not grow with spectators (≤ 3 per cache period)', dbReads.length <= Math.ceil(6 / (10 * TTL_SCALE) + 1) * 3);
+    ok('B: database reads do not grow with spectators (≤ 3 per cache period)', misses <= periods && dbReads.length <= periods * 3);
     // a change on the mat reaches everyone through the cache
     const s0 = await stats(d);
     ok('B: director scores a match', await scoreOne(d)); await tab(d, 'Dashboard');
