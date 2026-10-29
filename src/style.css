@@ -738,3 +738,7 @@ tr.grp-tog.shut td { opacity: .8; }
 .grp-btn .fold { display: inline-block; width: 1em; }
 .ready-box.folded { gap: 6px; }
 .ready-sum { overflow-wrap: anywhere; }
+/* v1.52: competitors — where from (by event level) and the division assigned per event */
+.dojo .where { font-weight: 600; color: var(--ink-2); }
+.ev-div { white-space: normal; text-align: left; overflow-wrap: anywhere; max-width: 100%; }
+@media (max-width: 760px) { table.mcards td.ev-cell { grid-column: 1 / -1; } }
