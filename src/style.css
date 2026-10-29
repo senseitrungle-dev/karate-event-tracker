@@ -733,3 +733,8 @@ tr.grp-tog { cursor: pointer; user-select: none; }
 tr.grp-tog .fold { display: inline-block; width: 1em; }
 tr.grp-tog.shut td { opacity: .8; }
 .fold-ctl { gap: 6px; flex-wrap: wrap; margin: -4px 0 8px; }
+/* v1.50: judge groups fold; a ready ring's box shows three lines */
+.grp-btn { display: flex; align-items: center; gap: 4px; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 6px 0 4px; min-height: 0; cursor: pointer; font: inherit; color: inherit; }
+.grp-btn .fold { display: inline-block; width: 1em; }
+.ready-box.folded { gap: 6px; }
+.ready-sum { overflow-wrap: anywhere; }

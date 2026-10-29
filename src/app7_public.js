@@ -251,12 +251,16 @@ function ringReadyHTML(r, named) {
   const rr = S.d.ringready[r.id] || {}, checks = rr.checks || {}, ready = ringIsReady(r.id);
   const done = KT.ringChecksDone(checks), all = KT.RING_CHECKS.length;
   const nJ = ringJudges(r.id).filter(j => j.checkedIn).length, need = ringNeed(r.id);
+  // v1.50: once ready, three lines only — title & Ready, judges / manager / checklist / helpers, then the buttons (the checklist can be opened again)
+  if (ready && !(S.ui.readyOpen || {})[r.id]) return `<div class="ready-box on folded" data-ring="${esc(r.id)}"><div class="row between"><b>${named ? `<span class="ready-ring">${esc(r.name)}</span> · ` : ''}Before the start</b><span class="chip ok">Ready</span></div>
+    <div class="tiny muted ready-sum">Judges ${nJ}/${need || '—'} · Manager ${(r.managerIds || []).length ? '✓' : '—'} · Checklist ${done}/${all} ✓${rr.helpers ? ' · Helpers: ' + esc(rr.helpers) : ''}</div>
+    <div class="row" style="gap:6px"><button class="sm ghost" data-act="ready-open" data-ring="${esc(r.id)}" aria-expanded="false">▸ Show checklist</button><button class="sm" data-act="ring-ready" data-ring="${esc(r.id)}">Mark not ready</button></div></div>`;
   return `<div class="ready-box ${ready ? 'on' : ''}" data-ring="${esc(r.id)}"><div class="row between"><b>${named ? `<span class="ready-ring">${esc(r.name)}</span> · ` : ''}Before the start</b>${ready ? '<span class="chip ok">Ready</span>' : '<span class="chip warn">Not ready</span>'}</div>
     <div class="tiny muted">Judges checked in ${nJ}/${need || '—'} · Manager ${(r.managerIds || []).length ? '✓' : '—'}</div>
     <div class="ready-checks"><div class="row between"><span class="label">Ring manager checklist</span><span class="tiny muted">${done}/${all}</span></div>
     ${KT.RING_CHECKS.map(c => `<label class="check-in"><input type="checkbox" data-change="ring-check" data-ring="${esc(r.id)}" data-k="${c.k}" ${checks[c.k] ? 'checked' : ''}> <span>${esc(c.label)}</span></label>`).join('')}</div>
     <label class="f"><span>Helpers (scorekeeper, timekeeper…)</span><input id="helpers-${esc(r.id)}" data-change="ring-helpers" data-ring="${esc(r.id)}" value="${esc(rr.helpers || '')}" placeholder="Names"></label>
-    <button class="sm ${ready ? '' : 'go'}" data-act="ring-ready" data-ring="${esc(r.id)}" ${ready || done === all ? '' : 'disabled'}>${ready ? 'Mark not ready' : 'Ring is ready'}</button>${ready || done === all ? '' : `<span class="tiny muted">Tick all ${all} items to mark ${esc(r.name)} ready.</span>`}</div>`;
+    <div class="row" style="gap:6px">${ready ? `<button class="sm ghost" data-act="ready-open" data-ring="${esc(r.id)}" aria-expanded="true">▾ Hide checklist</button>` : ''}<button class="sm ${ready ? '' : 'go'}" data-act="ring-ready" data-ring="${esc(r.id)}" ${ready || done === all ? '' : 'disabled'}>${ready ? 'Mark not ready' : 'Ring is ready'}</button></div>${ready || done === all ? '' : `<span class="tiny muted">Tick all ${all} items to mark ${esc(r.name)} ready.</span>`}</div>`;
 }
 async function setRingReady(rid, patch) {
   const cur = S.d.ringready[rid] || {};

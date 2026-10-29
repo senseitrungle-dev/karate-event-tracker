@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.50.0 Requirements & Design
+# Karate Event Tracker · v1.51.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -762,3 +762,15 @@ test/rules-emulator.js (`npm run test:rules`; needs Java and firebase-tools; 61 
 - `api/live.js` against the emulator's REST API (`FIRESTORE_EMULATOR_HOST`): bundle, real value decoding, part, paused → 403.
 
 Full browser regression: all 55 browser test files pass (access.js and publink.js needed a re-run: their sign-in steps are timing-sensitive under load, the same as before this change); unit 137 + 28.
+
+## §78 Judges country groups fold; a ready ring's checklist folds to three lines (v1.51.0)
+**Requirement.** Judges card: collapsible country. Mat card: after the ring is ready, collapse the checklist and display only the top 3 lines.
+**Design.**
+- **Judges tab:** when sorted by country, region or dojo (§76), each group heading in a card (Unassigned or a ring) is a button (▾ / ▸ "Country · n", `aria-expanded`). Tapping it hides or shows that group's judges in that card. "Collapse all" / "Expand all" sit above the cards. Folds are kept per sort mode and card (`judgeClosed[mode]["card|group"]` in the person's view, §72) and survive a reload.
+- **Ring readiness box** (Mat tab, before going live): when the ring is Ready, the box shows three lines only:
+  1. "<Ring> · Before the start" with the Ready chip.
+  2. Judges n/need · Manager · Checklist 7/7 ✓ · Helpers.
+  3. "▸ Show checklist" and "Mark not ready".
+  - "Show checklist" opens the full box (with "▾ Hide checklist"); that is this person's view (`readyOpen`). Tapping "Ring is ready" folds it again. Unticking an item still makes the ring Not ready, which shows the full checklist.
+- matready.js checks the folded three lines and re-opens the checklist before unticking.
+**Verify.** test/judgefold.js (judge country headings fold one / all / reopen one, remembered after reload, Expand all; competitor folds as before). matready.js (folded 3 lines, Show checklist, untick → Not ready), golive, full e2e set and the other browser tests.
