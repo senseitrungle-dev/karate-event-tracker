@@ -437,18 +437,18 @@ function divForm(id) {
       <label class="f span"><span>Division name</span><input name="name" id="d-name" value="${esc(d.name || '')}" placeholder="Leave blank to name automatically"></label>
     </div>
     <fieldset><legend>Bracket</legend><div class="fgrid">
-      <label class="f"><span>Format</span><select name="format" id="d-fmt" ${bs.results ? 'disabled' : ''}>${Object.entries(KT.FORMATS).filter(([x]) => x !== 'KP' || k === 'kata').map(([x, l]) => opt(x, l, d.format)).join('')}</select></label>
-      <label class="f"><span>Draw chart</span><select name="chart" id="d-chart">${opt('', 'Automatic — WTKF charts at National / International', d.chart || '')}${opt('wtkf', 'WTKF charts (Exhibit A / E / F)', d.chart || '')}${opt('standard', 'Standard draw', d.chart || '')}</select><span class="tiny muted">WTKF charts: kumite / fuku-go in four pools A-1, A-2, B-1, B-2; kata in charts of up to 12 (single elimination and score pools only)</span></label>
-      <label class="f"><span>Third place (single elim. / playoff)</span><select name="bronze" id="d-bronze">${opt('two', 'Two bronzes', d.bronze)}${opt('match', 'Bronze match', d.bronze)}</select></label>
-      <label class="f"><span>Double elim.: number of pools</span><input type="number" name="poolCount" id="d-pools" min="0" max="16" value="${esc(d.poolCount || '')}" placeholder="Auto (8 per pool)"><span class="tiny muted">Top 2 of each pool go to a single-elimination playoff</span></label>
-      <label class="f"><span>Round robin: pool size</span><select name="rrPoolSize" id="d-rrsize">${opt('', '4 (default)', String(d.rrPoolSize || ''))}${[3, 5, 6, 7, 8].map(x => opt(String(x), 'Up to ' + x, String(d.rrPoolSize || ''))).join('')}</select></label>
+      <label class="f"><span>Format</span><select name="format" id="d-fmt" data-change="div-fmt" ${bs.results ? 'disabled' : ''}>${Object.entries(KT.FORMATS).filter(([x]) => x !== 'KP' || k === 'kata').map(([x, l]) => opt(x, l, d.format)).join('')}</select></label>
+      <label class="f" data-fmts="SE,KP"><span>Draw chart</span><select name="chart" id="d-chart">${opt('', 'Automatic — WTKF charts at National / International', d.chart || '')}${opt('wtkf', 'WTKF charts (Exhibit A / E / F)', d.chart || '')}${opt('standard', 'Standard draw', d.chart || '')}</select><span class="tiny muted">WTKF charts: kumite / fuku-go in four pools A-1, A-2, B-1, B-2; kata in charts of up to 12 (single elimination and score pools only)</span></label>
+      <label class="f" data-fmts="SE,RR,DE,DES"><span>Third place (single elim. / playoff)</span><select name="bronze" id="d-bronze">${opt('two', 'Two bronzes', d.bronze)}${opt('match', 'Bronze match', d.bronze)}</select></label>
+      <label class="f" data-fmts="DE,DES"><span>Double elim.: number of pools</span><input type="number" name="poolCount" id="d-pools" min="0" max="16" value="${esc(d.poolCount || '')}" placeholder="Auto (8 per pool)"><span class="tiny muted">Top 2 of each pool go to a single-elimination playoff</span></label>
+      <label class="f" data-fmts="RR"><span>Round robin: pool size</span><select name="rrPoolSize" id="d-rrsize">${opt('', '4 (default)', String(d.rrPoolSize || ''))}${[3, 5, 6, 7, 8].map(x => opt(String(x), 'Up to ' + x, String(d.rrPoolSize || ''))).join('')}</select></label>
       ${k === 'kata' ? `<label class="f span"><span>Allowed kata (comma separated, optional)</span><input name="kataList" id="d-kata" value="${esc((d.kataList || []).join(', '))}" placeholder="e.g. Heian Shodan, Heian Nidan"></label>` : ''}
-      <label class="f"><span>Round robin: advance per pool</span><select name="advance" id="d-adv">${opt('', 'Auto (2 if two pools, else 1)', d.advance || '')}${opt('1', '1', d.advance)}${opt('2', '2', d.advance)}</select></label>
+      <label class="f" data-fmts="RR"><span>Round robin: advance per pool</span><select name="advance" id="d-adv">${opt('', 'Auto (2 if two pools, else 1)', d.advance || '')}${opt('1', '1', d.advance)}${opt('2', '2', d.advance)}</select></label>
       <label class="f"><span>Ring</span><select name="ringId" id="d-ring">${opt('', 'No ring yet', d.ringId)}${DC.rings.map(r => opt(r.id, r.name, d.ringId)).join('')}</select></label>
     </div>${bs.results ? '<p class="tiny muted">Format is locked because results exist.</p>' : ''}</fieldset>
     <fieldset><legend>Scoring (WTKF 2009)</legend><div class="fgrid">
-      ${k === 'kata' ? `<label class="f"><span>Decision</span><select name="method" id="d-method">${opt('flags', 'Flags (judges’ majority)', sc.method)}${opt('scores', 'Scores 0–10 (drop high & low with 5)', sc.method)}</select></label>` : ''}
-      ${k === 'kata' ? `<label class="f"><span>Kata pools: max per pool</span><input type="number" name="poolSize" id="d-pool" min="4" max="12" value="${esc(d.poolSize || 8)}"><span class="tiny muted">Kata score pools only · WTKF allows up to 12</span></label>` : ''}
+      ${k === 'kata' ? `<label class="f" data-fmts="SE,RR,DE,DES"><span>Decision</span><select name="method" id="d-method">${opt('flags', 'Flags (judges’ majority)', sc.method)}${opt('scores', 'Scores 0–10 (drop high & low with 5)', sc.method)}</select></label>` : ''}
+      ${k === 'kata' ? `<label class="f" data-fmts="KP"><span>Kata pools: max per pool</span><input type="number" name="poolSize" id="d-pool" min="4" max="12" value="${esc(d.poolSize || 8)}"><span class="tiny muted">Kata score pools only · WTKF allows up to 12</span></label>` : ''}
       ${k === 'kumite' || k === 'teamkumite' || k === 'fukugo' ? `<label class="f"><span>Kumite style</span><select name="style" id="d-style">${opt('shobu', 'Shobu Ippon (1:30)', sc.style)}${opt('kogo', 'Ko-go Kumite (6 exchanges)', sc.style)}${k === 'kumite' ? opt('kyux', 'Kyu exchanges (list below)', sc.style) + opt('ncr1', 'NCR kyu Level 1 (4 exchanges, flags)', sc.style) + opt('ncr2', 'NCR kyu Level 2 (6 exchanges, flags)', sc.style) + opt('ncr3', 'NCR kyu Level 3 (6 exchanges, Waza-ari)', sc.style) : ''}</select></label>
       ${k === 'kumite' && d.belt === 'kyu' ? `<label class="f span"><span>Kyu exchanges — one technique per line (each side attacks through the list: Aka first, then Shiro)</span><textarea name="exchanges" id="d-ex" rows="3" placeholder="Jodan oi-tsuki&#10;Chudan oi-tsuki">${esc((sc.exchanges || []).map(e => Array.isArray(e) ? e[1] : e).join('\n'))}</textarea></label>
         <label class="f"><span>Winner decided by</span><select name="decide" id="d-decide">${opt('flags', 'Court Judges’ flags (no points)', sc.decide || 'flags')}${opt('points', 'Waza-ari points, tie → flags', sc.decide || 'flags')}</select></label>` : ''}` : ''}
@@ -462,6 +462,7 @@ function divForm(id) {
       <p class="notice bad small" id="seed-msg" hidden style="margin-top:6px"></p>
       <p class="tiny muted" style="margin-top:6px">Each seed number can be given to one entrant only. ${d.chart !== 'standard' && (d.chart === 'wtkf' || ['International', 'National'].includes(ev.level)) ? 'WTKF charts: seeds 1–4 = last championship’s 1st–4th (kumite: 1st A-1, 2nd B-1, 3rd B-2, 4th A-2 with byes first; kata: at the bottom of their chart).' : ''} Seeded entrants are kept apart in the draw; the others are placed at random, with entrants from the same ${esc(sepLabel())} put in different pools and bracket halves wherever possible.</p>` : '<p class="small muted">No entrants match this division yet.</p>'}</fieldset>` : ''}</form>`,
     `${id ? `<button class="danger" data-act="div-delete" style="margin-right:auto">Delete</button>${bs.drawn ? `<button class="danger" data-act="bracket-clear">Clear bracket</button>` : ''}` : ''}<button data-act="modal-close">Cancel</button>${id && ents.length ? `<button data-act="draw" data-id="${esc(id)}" ${bs.results ? 'disabled' : ''}>${bs.drawn ? 'Save & redraw' : 'Save & draw'}</button>` : ''}<button class="primary" type="submit" form="f-div">Save</button>`));
+  fmtApplies();
 }
 /** v1.44: entrant rows of the division form in list order; group headings (club / region / country) before each group. */
 function entRowsSorted(ids, mode) {
@@ -476,6 +477,19 @@ function reorderEntRows(mode) {
   const rows = Object.fromEntries($$('.ent-row', box).map(r => [r.dataset.id, r]));
   $$('.ent-grp', box).forEach(h => h.remove());
   for (const { id, head } of entRowsSorted(Object.keys(rows), mode)) { if (head) box.insertAdjacentHTML('beforeend', head); box.appendChild(rows[id]); }
+}
+/** v1.48: grey out the bracket settings the chosen format does not use (the values are kept and still saved). */
+function fmtApplies(form) {
+  form = form || $('#f-div'); if (!form) return;
+  const fmt = (form.querySelector('#d-fmt') || {}).value || 'SE', name = KT.FORMATS[fmt] || fmt;
+  for (const lb of form.querySelectorAll('[data-fmts]')) {
+    const on = lb.dataset.fmts.split(',').includes(fmt);
+    lb.classList.toggle('na', !on);
+    lb.querySelectorAll('input, select, textarea').forEach(x => { x.disabled = !on; });
+    let note = lb.querySelector('.na-note');
+    if (!on && !note) { lb.insertAdjacentHTML('beforeend', '<span class="tiny na-note"></span>'); note = lb.querySelector('.na-note'); }
+    if (note) note.textContent = on ? '' : `Not used by ${name}`;
+  }
 }
 /** What the draw keeps apart, by event level. */
 function sepLabel(level) { level = level || (curEvent() || {}).level; return level === 'International' ? 'country' : level === 'National' ? 'region' : 'dojo'; }

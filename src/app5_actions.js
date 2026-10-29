@@ -423,6 +423,8 @@ const CHANGE = {
   divFilter: el => { S.ui.divFilter = el.value; render(); },
   'div-order': el => { S.ui.divOrder = Object.assign({}, divOrder(), { [el.dataset.k]: el.value }); render(); },   // v1.46: this person's view only
   'team-mem-sort': el => { S.ui.teamMemSort = el.value; saveView(); reorderTeamMems(el.value); },
+  'comp-sort': el => { S.ui.compSort = el.value; render(); },
+  'div-fmt': el => fmtApplies(el.form),
   'team-sort': el => { S.ui.teamSort = Object.assign({}, S.ui.teamSort, { [el.dataset.et]: el.value }); render(); },
   ring: el => { S.ui.ring = el.value; S.ui.ringPicked = true; render(); },
   'call-present': el => ringPresent(el.dataset.rid, el.dataset.k, el.checked),

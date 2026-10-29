@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.47.1 Requirements & Design
+# Karate Event Tracker · v1.48.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -674,3 +674,16 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 **Requirement.** The bracket format label for kata score pools reads "Kata score pools (12 max per pool)".
 **Design.** `KT.FORMATS.KP` changed from "Kata score pools (8 per pool)". The label shows in the format picker (division settings, ring "Bracket format for this ring"), the Divisions table and the bracket header. Pool size behaviour is unchanged: the per-division "Kata pools: max per pool" setting (4–12, default 8; WTKF allows up to 12), and a pool of 9–12 is one first round (§64).
 **Verify.** Unit 137; e2e set, v15, public, demos, cloud, fb, divorder, entsort, worlds2026, wtkfcharts, v117, bracketback, prevkata, ringcall, golive, mobile.
+
+## §75 Competitors list sort; greyed-out bracket settings the format does not use (v1.48.0)
+**Requirement.** Competitors card: sort by country / region / dojo-club, and by name ascending / descending. Division bracket settings: when a format is selected, grey out the settings of the other formats, because they do not apply.
+**Design.**
+- **Competitors tab:** a sort select beside the filter: Name A→Z (default), Name Z→A, By club / dojo, By region, By country (`KT.sortEntrants`). Group modes add a heading row per group with its count ("No region" etc. last). It works together with search and the filter. The choice is the person's own view (`compSort` in `VIEW_KEYS`, §72).
+- **Division settings:** each format-specific setting carries `data-fmts`. `fmtApplies()` runs when the form opens and when Format changes; settings the format does not use are dimmed, disabled and labelled "Not used by <format>". Their values are kept and still saved (`fd` reads disabled fields), so switching back restores them.
+  - Draw chart: SE, KP.
+  - Third place: SE, RR, DE, DES (pool playoffs).
+  - Double elim. number of pools: DE, DES.
+  - Round robin pool size and advance per pool: RR.
+  - Kata decision (flags / scores): head-to-head formats (kata score pools always use scores).
+  - Kata pools max per pool: KP.
+**Verify.** test/fmtsort.js (national demo, desktop and 390 px: A→Z default, Z→A, region / club / country headings in order with counts adding up, sort + filter, no horizontal scroll; SE / RR / DE grey out exactly the others' settings with the reason; a greyed value is kept and saved; kata score pools greys out the head-to-head settings; form fits). Full e2e set and the other browser tests.

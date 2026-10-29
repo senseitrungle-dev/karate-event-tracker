@@ -733,16 +733,20 @@ table.kp tr.live td { background: color-mix(in srgb, var(--ai-soft) 60%, transpa
 .tm-who { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .tm-info { overflow-wrap: anywhere; }
 .tm-on { align-self: flex-start; margin-top: 2px; }
+/* v1.48: bracket settings that the chosen format does not use */
+label.f.na > span:first-child, label.f.na select, label.f.na input, label.f.na .tiny:not(.na-note) { opacity: .45; }
+label.f.na select, label.f.na input { cursor: not-allowed; }
+.na-note { color: var(--ink-3); font-style: italic; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.47.1 */
+<script>/* Karate Event Tracker v1.48.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.47.1';
+  const VERSION = '1.48.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -4444,7 +4448,7 @@ const S = {
 function readUIPrefs() { try { const p = JSON.parse(localStorage.getItem('kt-ui') || '{}'); if (p.simRole) S.ui.simRole = p.simRole; if (p.simRing) S.ui.simRing = p.simRing; if (p.evId) S.lastEv = p.evId; } catch (e) { /* ignore */ } }
 /* v1.46: each person's view of an event — tab, filters, selections and sort order of every card — is kept on their own
    device (per event), never in the shared data, so one user's choices never change another user's screen. */
-const VIEW_KEYS = ['tab', 'filter', 'divFilter', 'ring', 'ringPicked', 'bracketDiv', 'session', 'divOrder', 'teamSort', 'teamMemSort'];
+const VIEW_KEYS = ['tab', 'filter', 'divFilter', 'ring', 'ringPicked', 'bracketDiv', 'session', 'divOrder', 'teamSort', 'teamMemSort', 'compSort'];
 function saveView() {
   if (!S.evId || S.pub) return;
   const v = {}; for (const k of VIEW_KEYS) if (S.ui[k] !== undefined && S.ui[k] !== null && S.ui[k] !== '') v[k] = S.ui[k];
@@ -5166,7 +5170,12 @@ function competitorsHTML() {
   const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'competitor').map(u => u.id));
   const placedIn = {};
   for (const did in DC.assign.byDiv) for (const id of DC.assign.byDiv[did]) (placedIn[id] = placedIn[id] || []).push(did);
-  let list = DC.comps.slice().sort((a, b) => String(a.lastName).localeCompare(String(b.lastName)) || String(a.firstName).localeCompare(String(b.firstName)));
+  // v1.48: list order — name A→Z / Z→A, or grouped by country / region / club (dojo); the person's own view (§72)
+  const cs = KT.ENT_SORTS[S.ui.compSort] ? S.ui.compSort : 'name', cf = { country: 'country', region: 'state', club: 'dojo' }[cs];
+  const csGroup = c => cf ? String(c[cf] || '').trim() : '';
+  const order = KT.sortEntrants(DC.comps.map(c => ({ id: c.id, last: c.lastName, first: c.firstName, group: csGroup(c) })), cs).map(x => x.id);
+  const pos = Object.fromEntries(order.map((id, i) => [id, i]));
+  let list = DC.comps.slice().sort((a, b) => pos[a.id] - pos[b.id]);
   if (q) list = list.filter(c => `${c.firstName} ${c.lastName} ${c.dojo} ${c.country || ''} ${c.state || ''}`.toLowerCase().includes(q));
   if (f === 'out') list = list.filter(c => !c.checkedIn && c.status !== 'withdrawn');
   if (f === 'in') list = list.filter(c => c.checkedIn);
@@ -5175,12 +5184,16 @@ function competitorsHTML() {
   if (f === 'withdrawn') list = list.filter(c => c.status === 'withdrawn');
   const word = tour ? 'competitor' : 'participant';
   const tools = `<div class="row"><input id="comp-q" class="search" type="search" placeholder="Search name, dojo…" value="${esc(S.ui.q)}" data-input="q" aria-label="Search">
+    <select id="comp-s" data-change="comp-sort" aria-label="Sort">${Object.entries(KT.ENT_SORTS).map(([k, l]) => opt(k, k === 'name' ? 'Name A→Z' : k === 'name-desc' ? 'Name Z→A' : 'By ' + l.toLowerCase(), cs)).join('')}</select>
     <select id="comp-f" data-change="filter" aria-label="Filter">${opt('all', 'All', f)}${opt('out', 'Not checked in', f)}${opt('in', 'Checked in', f)}${dir ? opt('incomplete', 'Missing information', f) : ''}${tour && dir ? opt('unplaced', 'No division match', f) : ''}${opt('withdrawn', 'Withdrawn', f)}</select></div>`;
   const acts = dir ? `<button data-act="import-open">Import CSV</button><button data-act="export-comps">Export CSV</button>${DC.comps.length ? '<button class="danger" data-act="rm-group">Remove group…</button>' : ''}<button class="primary" data-act="comp-new">Add ${word}</button>` : '';
   const fullDob = dir && ev.level === 'International' ? DC.comps.filter(c => c.dob).length : 0;
   const yobNote = fullDob ? `<div class="notice info" style="display:block"><b>${plural(fullDob, 'competitor')}</b> ${fullDob === 1 ? 'has' : 'have'} a full date of birth stored. International events only need the year (ages count on 31 Dec) — keep only what is needed. <button class="sm" data-act="keep-year">Keep year only</button></div>` : '';
   if (!DC.comps.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No ${word}s registered</h2><p class="muted">${dir ? `Add ${word}s one at a time or import a spreadsheet (CSV).` : 'Registrations will appear here.'}</p>${dir ? `<div class="row">${acts}</div>` : ''}</div>`;
+  let lastG = null;
   const rows = list.map(c => {
+    const g = cf ? (csGroup(c) || 'No ' + (cs === 'club' ? 'club' : cs)) : null;
+    const head = g !== null && g.toLowerCase() !== lastG ? `<tr class="grp-row"><td colspan="5">${esc(g)} · ${list.filter(x => (csGroup(x) || 'No ' + (cs === 'club' ? 'club' : cs)).toLowerCase() === g.toLowerCase()).length}</td></tr>` : ''; lastG = g === null ? null : g.toLowerCase();
     const age = KT.ageOf(c, DC.asOf), miss = dir ? KT.validateCompetitor(c, DC.asOf) : [];
     const evs = tour ? (c.events || []).map(et => {
       const T = KT.EVENT_TYPES[et]; if (!T) return '';
@@ -5188,7 +5201,7 @@ function competitorsHTML() {
       const did = (placedIn[c.id] || []).find(d => DC.divBy[d] && DC.divBy[d].eventType === et);
       return `<span class="chip ${did ? 'plain' : 'bad'}" title="${esc(did ? DC.divBy[did].name : 'No matching division')}">${esc(T.short)}</span>`;
     }).join(' ') : '';
-    return `<tr class="${dir ? 'click' : ''}" ${dir ? `data-act="comp-edit" data-id="${esc(c.id)}"` : ''}>
+    return head + `<tr class="${dir ? 'click' : ''}" ${dir ? `data-act="comp-edit" data-id="${esc(c.id)}"` : ''}>
       <td><div class="name">${esc(c.lastName)}, ${esc(c.firstName)}</div><div class="dojo">${esc(c.dojo || '')}${c.state || c.country ? ' · ' + esc([c.state, c.country].filter(Boolean).join(', ')) : ''}</div></td>
       <td>${esc(c.gender === 'F' ? 'W' : c.gender === 'M' ? 'M' : '')}${age != null ? ` · <span class="num">${age}</span>` : ''}</td>
       <td>${esc(KT.rankLabel(c.rank))}</td>
@@ -6161,18 +6174,18 @@ function divForm(id) {
       <label class="f span"><span>Division name</span><input name="name" id="d-name" value="${esc(d.name || '')}" placeholder="Leave blank to name automatically"></label>
     </div>
     <fieldset><legend>Bracket</legend><div class="fgrid">
-      <label class="f"><span>Format</span><select name="format" id="d-fmt" ${bs.results ? 'disabled' : ''}>${Object.entries(KT.FORMATS).filter(([x]) => x !== 'KP' || k === 'kata').map(([x, l]) => opt(x, l, d.format)).join('')}</select></label>
-      <label class="f"><span>Draw chart</span><select name="chart" id="d-chart">${opt('', 'Automatic — WTKF charts at National / International', d.chart || '')}${opt('wtkf', 'WTKF charts (Exhibit A / E / F)', d.chart || '')}${opt('standard', 'Standard draw', d.chart || '')}</select><span class="tiny muted">WTKF charts: kumite / fuku-go in four pools A-1, A-2, B-1, B-2; kata in charts of up to 12 (single elimination and score pools only)</span></label>
-      <label class="f"><span>Third place (single elim. / playoff)</span><select name="bronze" id="d-bronze">${opt('two', 'Two bronzes', d.bronze)}${opt('match', 'Bronze match', d.bronze)}</select></label>
-      <label class="f"><span>Double elim.: number of pools</span><input type="number" name="poolCount" id="d-pools" min="0" max="16" value="${esc(d.poolCount || '')}" placeholder="Auto (8 per pool)"><span class="tiny muted">Top 2 of each pool go to a single-elimination playoff</span></label>
-      <label class="f"><span>Round robin: pool size</span><select name="rrPoolSize" id="d-rrsize">${opt('', '4 (default)', String(d.rrPoolSize || ''))}${[3, 5, 6, 7, 8].map(x => opt(String(x), 'Up to ' + x, String(d.rrPoolSize || ''))).join('')}</select></label>
+      <label class="f"><span>Format</span><select name="format" id="d-fmt" data-change="div-fmt" ${bs.results ? 'disabled' : ''}>${Object.entries(KT.FORMATS).filter(([x]) => x !== 'KP' || k === 'kata').map(([x, l]) => opt(x, l, d.format)).join('')}</select></label>
+      <label class="f" data-fmts="SE,KP"><span>Draw chart</span><select name="chart" id="d-chart">${opt('', 'Automatic — WTKF charts at National / International', d.chart || '')}${opt('wtkf', 'WTKF charts (Exhibit A / E / F)', d.chart || '')}${opt('standard', 'Standard draw', d.chart || '')}</select><span class="tiny muted">WTKF charts: kumite / fuku-go in four pools A-1, A-2, B-1, B-2; kata in charts of up to 12 (single elimination and score pools only)</span></label>
+      <label class="f" data-fmts="SE,RR,DE,DES"><span>Third place (single elim. / playoff)</span><select name="bronze" id="d-bronze">${opt('two', 'Two bronzes', d.bronze)}${opt('match', 'Bronze match', d.bronze)}</select></label>
+      <label class="f" data-fmts="DE,DES"><span>Double elim.: number of pools</span><input type="number" name="poolCount" id="d-pools" min="0" max="16" value="${esc(d.poolCount || '')}" placeholder="Auto (8 per pool)"><span class="tiny muted">Top 2 of each pool go to a single-elimination playoff</span></label>
+      <label class="f" data-fmts="RR"><span>Round robin: pool size</span><select name="rrPoolSize" id="d-rrsize">${opt('', '4 (default)', String(d.rrPoolSize || ''))}${[3, 5, 6, 7, 8].map(x => opt(String(x), 'Up to ' + x, String(d.rrPoolSize || ''))).join('')}</select></label>
       ${k === 'kata' ? `<label class="f span"><span>Allowed kata (comma separated, optional)</span><input name="kataList" id="d-kata" value="${esc((d.kataList || []).join(', '))}" placeholder="e.g. Heian Shodan, Heian Nidan"></label>` : ''}
-      <label class="f"><span>Round robin: advance per pool</span><select name="advance" id="d-adv">${opt('', 'Auto (2 if two pools, else 1)', d.advance || '')}${opt('1', '1', d.advance)}${opt('2', '2', d.advance)}</select></label>
+      <label class="f" data-fmts="RR"><span>Round robin: advance per pool</span><select name="advance" id="d-adv">${opt('', 'Auto (2 if two pools, else 1)', d.advance || '')}${opt('1', '1', d.advance)}${opt('2', '2', d.advance)}</select></label>
       <label class="f"><span>Ring</span><select name="ringId" id="d-ring">${opt('', 'No ring yet', d.ringId)}${DC.rings.map(r => opt(r.id, r.name, d.ringId)).join('')}</select></label>
     </div>${bs.results ? '<p class="tiny muted">Format is locked because results exist.</p>' : ''}</fieldset>
     <fieldset><legend>Scoring (WTKF 2009)</legend><div class="fgrid">
-      ${k === 'kata' ? `<label class="f"><span>Decision</span><select name="method" id="d-method">${opt('flags', 'Flags (judges’ majority)', sc.method)}${opt('scores', 'Scores 0–10 (drop high & low with 5)', sc.method)}</select></label>` : ''}
-      ${k === 'kata' ? `<label class="f"><span>Kata pools: max per pool</span><input type="number" name="poolSize" id="d-pool" min="4" max="12" value="${esc(d.poolSize || 8)}"><span class="tiny muted">Kata score pools only · WTKF allows up to 12</span></label>` : ''}
+      ${k === 'kata' ? `<label class="f" data-fmts="SE,RR,DE,DES"><span>Decision</span><select name="method" id="d-method">${opt('flags', 'Flags (judges’ majority)', sc.method)}${opt('scores', 'Scores 0–10 (drop high & low with 5)', sc.method)}</select></label>` : ''}
+      ${k === 'kata' ? `<label class="f" data-fmts="KP"><span>Kata pools: max per pool</span><input type="number" name="poolSize" id="d-pool" min="4" max="12" value="${esc(d.poolSize || 8)}"><span class="tiny muted">Kata score pools only · WTKF allows up to 12</span></label>` : ''}
       ${k === 'kumite' || k === 'teamkumite' || k === 'fukugo' ? `<label class="f"><span>Kumite style</span><select name="style" id="d-style">${opt('shobu', 'Shobu Ippon (1:30)', sc.style)}${opt('kogo', 'Ko-go Kumite (6 exchanges)', sc.style)}${k === 'kumite' ? opt('kyux', 'Kyu exchanges (list below)', sc.style) + opt('ncr1', 'NCR kyu Level 1 (4 exchanges, flags)', sc.style) + opt('ncr2', 'NCR kyu Level 2 (6 exchanges, flags)', sc.style) + opt('ncr3', 'NCR kyu Level 3 (6 exchanges, Waza-ari)', sc.style) : ''}</select></label>
       ${k === 'kumite' && d.belt === 'kyu' ? `<label class="f span"><span>Kyu exchanges — one technique per line (each side attacks through the list: Aka first, then Shiro)</span><textarea name="exchanges" id="d-ex" rows="3" placeholder="Jodan oi-tsuki&#10;Chudan oi-tsuki">${esc((sc.exchanges || []).map(e => Array.isArray(e) ? e[1] : e).join('\n'))}</textarea></label>
         <label class="f"><span>Winner decided by</span><select name="decide" id="d-decide">${opt('flags', 'Court Judges’ flags (no points)', sc.decide || 'flags')}${opt('points', 'Waza-ari points, tie → flags', sc.decide || 'flags')}</select></label>` : ''}` : ''}
@@ -6186,6 +6199,7 @@ function divForm(id) {
       <p class="notice bad small" id="seed-msg" hidden style="margin-top:6px"></p>
       <p class="tiny muted" style="margin-top:6px">Each seed number can be given to one entrant only. ${d.chart !== 'standard' && (d.chart === 'wtkf' || ['International', 'National'].includes(ev.level)) ? 'WTKF charts: seeds 1–4 = last championship’s 1st–4th (kumite: 1st A-1, 2nd B-1, 3rd B-2, 4th A-2 with byes first; kata: at the bottom of their chart).' : ''} Seeded entrants are kept apart in the draw; the others are placed at random, with entrants from the same ${esc(sepLabel())} put in different pools and bracket halves wherever possible.</p>` : '<p class="small muted">No entrants match this division yet.</p>'}</fieldset>` : ''}</form>`,
     `${id ? `<button class="danger" data-act="div-delete" style="margin-right:auto">Delete</button>${bs.drawn ? `<button class="danger" data-act="bracket-clear">Clear bracket</button>` : ''}` : ''}<button data-act="modal-close">Cancel</button>${id && ents.length ? `<button data-act="draw" data-id="${esc(id)}" ${bs.results ? 'disabled' : ''}>${bs.drawn ? 'Save & redraw' : 'Save & draw'}</button>` : ''}<button class="primary" type="submit" form="f-div">Save</button>`));
+  fmtApplies();
 }
 /** v1.44: entrant rows of the division form in list order; group headings (club / region / country) before each group. */
 function entRowsSorted(ids, mode) {
@@ -6200,6 +6214,19 @@ function reorderEntRows(mode) {
   const rows = Object.fromEntries($$('.ent-row', box).map(r => [r.dataset.id, r]));
   $$('.ent-grp', box).forEach(h => h.remove());
   for (const { id, head } of entRowsSorted(Object.keys(rows), mode)) { if (head) box.insertAdjacentHTML('beforeend', head); box.appendChild(rows[id]); }
+}
+/** v1.48: grey out the bracket settings the chosen format does not use (the values are kept and still saved). */
+function fmtApplies(form) {
+  form = form || $('#f-div'); if (!form) return;
+  const fmt = (form.querySelector('#d-fmt') || {}).value || 'SE', name = KT.FORMATS[fmt] || fmt;
+  for (const lb of form.querySelectorAll('[data-fmts]')) {
+    const on = lb.dataset.fmts.split(',').includes(fmt);
+    lb.classList.toggle('na', !on);
+    lb.querySelectorAll('input, select, textarea').forEach(x => { x.disabled = !on; });
+    let note = lb.querySelector('.na-note');
+    if (!on && !note) { lb.insertAdjacentHTML('beforeend', '<span class="tiny na-note"></span>'); note = lb.querySelector('.na-note'); }
+    if (note) note.textContent = on ? '' : `Not used by ${name}`;
+  }
 }
 /** What the draw keeps apart, by event level. */
 function sepLabel(level) { level = level || (curEvent() || {}).level; return level === 'International' ? 'country' : level === 'National' ? 'region' : 'dojo'; }
@@ -8910,6 +8937,8 @@ const CHANGE = {
   divFilter: el => { S.ui.divFilter = el.value; render(); },
   'div-order': el => { S.ui.divOrder = Object.assign({}, divOrder(), { [el.dataset.k]: el.value }); render(); },   // v1.46: this person's view only
   'team-mem-sort': el => { S.ui.teamMemSort = el.value; saveView(); reorderTeamMems(el.value); },
+  'comp-sort': el => { S.ui.compSort = el.value; render(); },
+  'div-fmt': el => fmtApplies(el.form),
   'team-sort': el => { S.ui.teamSort = Object.assign({}, S.ui.teamSort, { [el.dataset.et]: el.value }); render(); },
   ring: el => { S.ui.ring = el.value; S.ui.ringPicked = true; render(); },
   'call-present': el => ringPresent(el.dataset.rid, el.dataset.k, el.checked),

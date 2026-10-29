@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.47.1';
+  const VERSION = '1.48.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
