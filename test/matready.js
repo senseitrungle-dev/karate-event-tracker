@@ -28,6 +28,10 @@ const path = require('path');
     await d.click(`${B} button[data-act="ring-ready"]`); await d.waitForTimeout(150);
     ok(`${width}: tap → Ready on the readiness card and the mat card`, (await d.textContent(`${B} .chip`)) === 'Ready' && (await d.textContent(`.ring-card[data-ring="${rid}"] .mat-status`)) === 'Ready');
     ok(`${width}: other ring still Not ready`, (await d.$$('.ring-card .mat-status:text("Not ready")')).length === 1);
+    // v1.50: once ready the checklist folds to three lines; open it to change an item
+    ok(`${width}: ready ring shows only 3 lines (checklist folded)`, await d.$eval(B, x => x.classList.contains('folded') && x.children.length === 3) && !(await d.$(`${B} input[data-change="ring-check"]`)) && /Checklist 7\/7/.test(await d.textContent(B)));
+    await d.click(`${B} button[data-act="ready-open"]`); await d.waitForTimeout(150);
+    ok(`${width}: Show checklist opens it again`, (await d.$$(`${B} input[data-change="ring-check"]:checked`)).length === 7 && !!(await d.$(`${B} button:has-text("Hide checklist")`)));
     await d.click(`${B} input[data-change="ring-check"]:checked`); await d.waitForTimeout(150);
     ok(`${width}: unticking an item makes the ring Not ready again`, (await d.textContent(`${B} .chip`)) === 'Not ready' && await d.$eval(`${B} button[data-act="ring-ready"]`, x => x.disabled));
     ok(`${width}: no horizontal scroll`, await d.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));

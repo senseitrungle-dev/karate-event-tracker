@@ -72,14 +72,25 @@ function judgesHTML() {
   // v1.49: judges in each card sorted by name, or grouped by country / region / dojo (this person's view)
   const js0 = { name: 'By name', country: 'By country', region: 'By region', dojo: 'By dojo / club' }, jsm = js0[S.ui.judgeSort] ? S.ui.judgeSort : 'name';
   const jg = j => jsm === 'name' ? '' : String(j[jsm] || '').trim();
-  const rowsOf = js => { let last = null; return KT.sortEntrants(js.map(j => ({ id: j.id, last: j.name, first: '', group: jg(j) })), jsm === 'name' ? 'name' : 'club').map(x => { const j = S.d.judges[x.id];
-    const g = jsm === 'name' ? null : (jg(j) || 'No ' + (jsm === 'dojo' ? 'dojo' : jsm)), head = g !== null && g.toLowerCase() !== last ? `<div class="ent-grp label">${esc(g)}</div>` : ''; last = g === null ? null : g.toLowerCase(); return head + judgeRow(j); }).join(''); };
+  // v1.50: each group heading folds / unfolds its judges (per card; this person's view)
+  const jClosed = (S.ui.judgeClosed || {})[jsm] || {}, allKeys = [];
+  const rowsOf = (js, card) => { let last = null; const sorted = KT.sortEntrants(js.map(j => ({ id: j.id, last: j.name, first: '', group: jg(j) })), jsm === 'name' ? 'name' : 'club');
+    const gOf = j => jg(j) || 'No ' + (jsm === 'dojo' ? 'dojo' : jsm);
+    return sorted.map(x => { const j = S.d.judges[x.id];
+      if (jsm === 'name') return judgeRow(j);
+      const g = gOf(j), gk = card + '|' + g.toLowerCase(), shut = !!jClosed[gk];
+      let head = '';
+      if (g.toLowerCase() !== last) { allKeys.push(gk); const n = js.filter(y => gOf(y).toLowerCase() === g.toLowerCase()).length;
+        head = `<button type="button" class="ent-grp label grp-btn${shut ? ' shut' : ''}" data-act="judge-grp" data-g="${esc(gk)}" aria-expanded="${!shut}"><span class="fold" aria-hidden="true">${shut ? '▸' : '▾'}</span> ${esc(g)} · ${n}</button>`; }
+      last = g.toLowerCase(); return head + (shut ? '' : judgeRow(j)); }).join(''); };
   const sortSel = list.length > 1 ? `<label class="f ent-sort"><span>Sort judges</span><select id="judge-sort" data-change="judge-sort">${Object.entries(js0).map(([k, l]) => opt(k, l, jsm)).join('')}</select></label>` : '';
   const ringCards = DC.rings.map(r => { const js = ringJudges(r.id); return `<div class="card stack"><div class="row between"><h3>${esc(r.name)}</h3><span class="chip ${js.length ? '' : 'plain'}">${plural(js.length, 'judge')}</span></div>
-    <div class="jlist">${rowsOf(js) || '<span class="small muted">No judges on this ring yet.</span>'}</div></div>`; }).join('');
+    <div class="jlist">${rowsOf(js, r.id) || '<span class="small muted">No judges on this ring yet.</span>'}</div></div>`; }).join('');
+  const unRows = rowsOf(un, 'un');
+  const foldCtl = jsm !== 'name' && allKeys.length > 1 ? `<div class="row fold-ctl"><button class="sm ghost" data-act="judge-grp-all" data-v="close" data-gs="${esc(JSON.stringify(allKeys))}">Collapse all</button><button class="sm ghost" data-act="judge-grp-all" data-v="open">Expand all</button><span class="tiny muted">Tap a ${jsm === 'dojo' ? 'dojo' : jsm} to show or hide its judges</span></div>` : '';
   return fab('judge-new', 'Add judge') + eventHeader(`<button data-act="judge-import">Import judges</button>${list.length ? '<button data-act="judge-export">Export</button>' : ''}<button class="primary" data-act="judge-new">Add judge</button>`)
     + `<p class="small muted">${esc(ev.level)} event · judges shown with their ${where}. Each judge works on one ring until moved; every division, pool and round run on that ring uses the ring’s judges. Credential levels 1–7; levels 3–7 may judge National and International events, levels 1–2 Regional and Local only.${need >= 3 ? '' : ''}</p>`
-    + sortSel + (list.length ? `<div class="card stack"><div class="row between"><h3>Unassigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${rowsOf(un) || '<span class="small muted">Every judge is assigned to a ring.</span>'}</div></div>
+    + sortSel + foldCtl + (list.length ? `<div class="card stack"><div class="row between"><h3>Unassigned</h3><span class="chip ${un.length ? 'warn' : 'ok'}">${un.length}</span></div><div class="jlist">${unRows || '<span class="small muted">Every judge is assigned to a ring.</span>'}</div></div>
       ${DC.rings.length ? `<div class="grid2">${ringCards}</div>` : '<p class="small muted">Create rings on the Rings tab, then assign judges to them.</p>'}`
       : `<div class="card empty"><div class="mark-lg"></div><h2>No judges yet</h2><p class="muted">Add the judges pool, then assign each judge to a ring.</p><button class="primary" data-act="judge-new">Add judge</button></div>`);
 }

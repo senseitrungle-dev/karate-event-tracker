@@ -186,6 +186,7 @@ const ACT = {
   'ring-ready': el => { const rid = el.dataset.ring, rr = S.d.ringready[rid] || {};
     if (ringIsReady(rid)) return setRingReady(rid, { ready: false });
     if (!KT.ringReadyOk(rr.checks)) { toast('Tick every item on the checklist first.', true); return; }
+    S.ui.readyOpen = Object.assign({}, S.ui.readyOpen, { [rid]: false });   // v1.50: fold the checklist once ready
     setRingReady(rid, { ready: true }); },
   'judge-in': (el, e) => { if (e) e.stopPropagation(); const j = S.d.judges[el.dataset.id]; if (j) guard(() => S.store.update(P.doc(S.evId, 'judges', j.id), { checkedIn: !j.checkedIn })); },
   'share-on': () => shareOn(), 'share-off': () => shareOff(), 'share-copy': () => shareCopy(),
@@ -360,6 +361,12 @@ const ACT = {
   // v1.49: fold / unfold a group (country, region, club) of the Competitors list — this person's view only
   'comp-grp': el => { const m = S.ui.compSort, g = el.dataset.g, c = Object.assign({}, S.ui.compClosed || {}), cur = Object.assign({}, c[m] || {});
     if (cur[g]) delete cur[g]; else cur[g] = 1; c[m] = cur; S.ui.compClosed = c; render(); },
+  'judge-grp': el => { const m = S.ui.judgeSort, g = el.dataset.g, c = Object.assign({}, S.ui.judgeClosed || {}), cur = Object.assign({}, c[m] || {});
+    if (cur[g]) delete cur[g]; else cur[g] = 1; c[m] = cur; S.ui.judgeClosed = c; render(); },
+  'judge-grp-all': el => { const m = S.ui.judgeSort, c = Object.assign({}, S.ui.judgeClosed || {});
+    c[m] = el.dataset.v === 'close' ? Object.fromEntries(JSON.parse(el.dataset.gs || '[]').map(g => [g, 1])) : {}; S.ui.judgeClosed = c; render(); },
+  // v1.50: a ready ring's checklist is folded to three lines; this person can open it again
+  'ready-open': el => { S.ui.readyOpen = Object.assign({}, S.ui.readyOpen, { [el.dataset.ring]: !(S.ui.readyOpen || {})[el.dataset.ring] }); render(); },
   'comp-grp-all': el => { const m = S.ui.compSort, c = Object.assign({}, S.ui.compClosed || {});
     c[m] = el.dataset.v === 'close' ? Object.fromEntries(JSON.parse(el.dataset.gs || '[]').map(g => [g, 1])) : {}; S.ui.compClosed = c; render(); },
   // v1.41: bracket of the current division from a mat card or a scoresheet, then back to the match

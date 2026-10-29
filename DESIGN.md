@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.49.0 Requirements & Design
+# Karate Event Tracker · v1.50.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -696,3 +696,15 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Competitors tab:** with the list grouped (country, region or club, §75), each group heading is a button (▾ / ▸, `aria-expanded`, Enter / Space). Tapping it hides or shows that group's competitors. "Collapse all" / "Expand all" sit above the list. Folds are kept per grouping (`compClosed[mode][group]` in the person's view): changing the grouping and back restores them, and they survive a reload.
 - Tests that use the App admin card open it first (access, appaccess, appinvite, emails, emailsignin, adminphone). access.js checks it starts collapsed and stays open after a reload once opened. fmtsort.js ignores the fold arrow in headings.
 **Verify.** test/judgefold.js (international demo, desktop and 390 px: judges grouped by country in order in each card, A→Z by name; country headings fold one / all / reopen one; another grouping has its own folds; same folds after switching back and after reload; Expand all; keyboard Enter; no horizontal scroll; judge sort remembered). access.js, full e2e set and the other browser tests.
+
+## §77 Judges country groups fold; a ready ring's checklist folds to three lines (v1.50.0)
+**Requirement.** Judges card: collapsible country. Mat card: after the ring is ready, collapse the checklist and display only the top 3 lines.
+**Design.**
+- **Judges tab:** when sorted by country, region or dojo (§76), each group heading in a card (Unassigned or a ring) is a button (▾ / ▸ "Country · n", `aria-expanded`). Tapping it hides or shows that group's judges in that card. "Collapse all" / "Expand all" sit above the cards. Folds are kept per sort mode and card (`judgeClosed[mode]["card|group"]` in the person's view, §72) and survive a reload.
+- **Ring readiness box** (Mat tab, before going live): when the ring is Ready, the box shows three lines only:
+  1. "<Ring> · Before the start" with the Ready chip.
+  2. Judges n/need · Manager · Checklist 7/7 ✓ · Helpers.
+  3. "▸ Show checklist" and "Mark not ready".
+  - "Show checklist" opens the full box (with "▾ Hide checklist"); that is this person's view (`readyOpen`). Tapping "Ring is ready" folds it again. Unticking an item still makes the ring Not ready, which shows the full checklist.
+- matready.js checks the folded three lines and re-opens the checklist before unticking.
+**Verify.** test/judgefold.js (judge country headings fold one / all / reopen one, remembered after reload, Expand all; competitor folds as before). matready.js (folded 3 lines, Show checklist, untick → Not ready), golive, full e2e set and the other browser tests.
