@@ -752,4 +752,4 @@ test/rules-emulator.js (`npm run test:rules`; needs Java and firebase-tools; 61 
 - paused: event document only, nothing else for spectators, team unaffected; resumed; before Go live; sharing off; archived (no writes);
 - `api/live.js` against the emulator's REST API (`FIRESTORE_EMULATOR_HOST`): bundle, real value decoding, part, paused → 403.
 
-Full browser regression: see the commit.
+Full browser regression: all 55 browser test files pass (access.js and publink.js needed a re-run: their sign-in steps are timing-sensitive under load, the same as before this change); unit 137 + 28.
