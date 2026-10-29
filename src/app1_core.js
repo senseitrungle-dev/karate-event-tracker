@@ -38,6 +38,8 @@ function LocalStore() {
     async set(p, d) { docs[p] = clone(d); save(); notify(); },
     async update(p, d) { if (!docs[p]) throw { code: 'invalid_argument', message: 'Document does not exist' }; docs[p] = deepMerge(Object.assign({}, docs[p]), d); save(); notify(); },
     async del(p) { delete docs[p]; save(); notify(); },
+    /** v1.50: replace (or remove, null) single entries of one map field, leaving the rest of the document as it is. */
+    async patch(p, field, kv, top) { const d = Object.assign({}, docs[p] || {}, top || {}), m = Object.assign({}, d[field] || {}); for (const k in kv) { if (kv[k] === null) delete m[k]; else m[k] = clone(kv[k]); } d[field] = m; d.at = new Date().toISOString(); docs[p] = d; save(); notify(); },
     async get(p) { return docs[p] ? clone(docs[p]) : null; },
     watchDoc(p, cb) {
       const l = { fire() { cb(docs[p] ? clone(docs[p]) : null); } };

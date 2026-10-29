@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.49.0 Requirements & Design
+# Karate Event Tracker · v1.50.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -696,3 +696,69 @@ Tests: unit tests (seed clashes; halves and quarters spread; seeds and byes kept
 - **Competitors tab:** with the list grouped (country, region or club, §75), each group heading is a button (▾ / ▸, `aria-expanded`, Enter / Space). Tapping it hides or shows that group's competitors. "Collapse all" / "Expand all" sit above the list. Folds are kept per grouping (`compClosed[mode][group]` in the person's view): changing the grouping and back restores them, and they survive a reload.
 - Tests that use the App admin card open it first (access, appaccess, appinvite, emails, emailsignin, adminphone). access.js checks it starts collapsed and stays open after a reload once opened. fmtsort.js ignores the fold arrow in headings.
 **Verify.** test/judgefold.js (international demo, desktop and 390 px: judges grouped by country in order in each card, A→Z by name; country headings fold one / all / reopen one; another grouping has its own folds; same folds after switching back and after reload; Expand all; keyboard Enter; no horizontal scroll; judge sort remembered). access.js, full e2e set and the other browser tests.
+
+## §77 Spectators don't load the database: compact copy, website cache, pause switch; follow a division (v1.50.0)
+**Requirement.** Large crowds of spectators must not use up the Firestore quota or slow the database down for the people running the event (directors, ring managers, staff). Firestore cannot give signed-in users priority, so the app itself keeps spectator load small: (#2) spectators read a compact summary instead of every document, (#3) a website cache answers spectators so database use does not grow with the crowd, (#4) the director can cut spectators off at once. Spectators can also follow (☆) a division.
+**Why.** Before this version every spectator page listened to 10 collections. Opening the page read every competitor, team, judge, division, ring, session and bracket (about 400 documents for 300 competitors), and every change was sent to every open page. On the Spark plan (50,000 reads a day for the whole project) about 120 spectators used up the day's quota, and then reads failed for everyone, staff included.
+**Design.**
+- **Compact copy (#2)**, kept by the staff's own app (no server):
+  - `pubsnap/{e}/parts/{col}~{n}` = `{ col, d: { id: doc } }` for competitors (8 parts), teams (2), divisions (2), rings, sessions, judges (2), attendance (`PUB_COLS`). A document's part = FNV hash of its id mod the part count. Judges lose email, notes and phone. Private details stay in `pv/` and never reach the copy.
+  - `pubsnap/{e}` = `{ v: { "p~<part>": version, "b~<division>": version } }`: one version per part and per bracket.
+  - Brackets (`live/{e}/brackets`) and ring boards (`live/{e}/ringstate`) are not copied. Spectators read them as they are, so a score is not written twice.
+  - Writing: the store is wrapped (`pubInstall`). After each write by this person to a copied collection or a bracket of the open event, the document is marked. 0.7 s later (when the local copy has the merged result) `pubFlush` writes the changed entries. `store.patch` uses Firestore `set` with `mergeFields` on `d.<id>` (null = `FieldValue.delete()`), so two people changing different entries of one part never overwrite each other. Then it bumps the versions in the manifest (random, unique for each write). This only happens while the event is shared (`public`) and not archived. Ring managers and staff publish only what they may write (brackets, attendance); directors publish everything.
+  - Full sync (`pubSync`, director): compares every part with the event and writes the differences, adds missing versions and removes deleted brackets. It runs when a director opens a shared event, on Create public link and Go live (both give every part and bracket a new version, because changes made while unshared were not published), and from **Refresh spectators' data**.
+  - Delete event also deletes the copy.
+- **Who reads what** (`spectatorFeed`): the event's team (directors, ring managers, staff), local mode and claude.ai keep reading the event's own collections as before. Public-link visitors and signed-in people who are not on the team read the copy.
+- **Website cache (#3)**, `api/live.js` (Vercel function, Firestore REST API without signing in, so the security rules apply exactly as for a visitor):
+  - `GET /api/live?t=<token>` → event, versions, ring boards, logo. The CDN keeps it for 10 s (`s-maxage=10, stale-while-revalidate=20`, `max-age=0` in the browser). It costs 3 reads per cache period (event, manifest, ring boards); the share token and logo are kept in a warm instance.
+  - `GET /api/live?t=<token>&k=<key>&v=<version>` → one part or bracket, cached for good (`immutable`). A new version is a new address, so each version is read from the database once per cache region.
+  - Only `p~` (part) and `b~` (bracket) keys are served. Other paths are refused and the characters are cleaned.
+  - Config: `FIREBASE_PROJECT_ID` / `FIREBASE_API_KEY` environment variables, otherwise `vercel/firebase-config.js` (`vercel.json` → `functions.includeFiles`).
+- **Public page.** On http(s) it first asks `/api/live`; when the site has no function (file, local test) it falls back to the database.
+  - Website cache (default, event `pubFeed: 'cdn'`): one request every 10 s (60 s while the tab is hidden). Only changed parts and brackets are fetched. The page makes no Firestore reads.
+  - Direct (`pubFeed: 'direct'`, "instant (small events)"): listeners on the parts, brackets and ring boards. The director can switch at any time and open pages follow (cache → direct as soon as the bundle shows it; direct → cache through the event document).
+- **Pause spectators (#4).** Live card → Spectators: **Pause spectators** / **Resume spectators** (`pubPaused`).
+  - Rules: `isPublic(e)` = public && live && not paused, so paused spectators can read nothing but the event document.
+  - The public page and signed-in spectators show "Live results are paused for a moment" and come back by themselves on Resume. Signed-in spectators' listeners are stopped and restarted (`feedPauseCheck`).
+  - The team is not affected. Go live clears the pause.
+- **Rules** (`firestore.rules` v1.50.0 — **redeploy the rules**):
+  - event subcollections, `live/{e}/ringready` and `live/{e}/attendance`: event team only (no longer public);
+  - `live/{e}/brackets`, `live/{e}/ringstate`, `pubsnap/{e}` and its parts: team, or public while live and not paused;
+  - writes: manifest by the team; parts by directors; `attendance~n` parts also by staff / ring managers.
+- **Follow a division**: Follow search lists divisions (☆). There is also a ☆ on every row of the spectators' Divisions list (it follows without opening the bracket).
+  - A followed division's card shows its entrants, rings and status chip. While running: "On the mat now" per ring and the next three matches or performances (tap → match view / bracket). When finished: 1st / 2nd / 3rd. **Bracket ›** opens the bracket.
+  - Follows are kept on the device (`divs` in `kt-follow-<event>`).
+- **Cost** for the local demo (32 competitors, 11 brackets): spectator first load 29 reads (the event has 125 documents). With 300 competitors and 60 divisions, about 80 reads instead of about 400. In cache mode a spectator makes no reads at all: about 3 reads per 10 s for everyone together (≈11,000 over a 10-hour day), plus one read per changed part or bracket.
+- **Limits.**
+  - A part holds at most 1 MiB. A competitor is about 300 bytes and a division about 350 bytes (world demo), so 8 competitor parts hold about 25,000 competitors and 2 division parts about 6,000 divisions.
+  - An older app version still open on a staff device does not publish its changes. Direct-mode spectators still see brackets and ring boards, but website-cache spectators only see the change after the next change from an up-to-date app, a director opening the event, or Refresh.
+  - A visitor that opens inside the 10 s cache period after the director switches the feed may start on the old feed and switches over by itself.
+**Verify.** test/livefn.js (in `npm test`, 28 checks):
+- live / wait / paused / off / unknown states, value decoding, versions, ring boards, logo;
+- cache headers; reads per bundle (5 cold, 3 warm); a part / bracket at a version (1 read, immutable);
+- other keys and path tricks refused; paused → 403 for parts; old token after a new link; database down → 502; environment variables override the config file.
+
+test/spectfeed.js (added to `npm run test:e2e`):
+- Part A (Firebase mock, direct):
+  - Go live writes every competitor into the copy, manifest complete; judges without email; no private data;
+  - spectator 29 reads vs 125 documents, same dashboard as the director;
+  - rules deny the event's collections, ring readiness and attendance, allow the copy, brackets and ring boards;
+  - a check-in and a scored match reach the spectator;
+  - follow a division (search, card, kept after reload, Bracket ›, ☆ on the Divisions list, phone width);
+  - signed-in non-team spectator uses the copy;
+  - Pause → paused page for both kinds of spectator, rules closed, director keeps reading and scoring; Resume → latest results;
+  - Direct saved; Refresh rebuilds a deleted part.
+- Part B (http site, real function over a stand-in REST API, emulated CDN):
+  - 4 spectators, no Firestore reads of their own; 24 requests → 4 function calls → 12 database reads in 6 s;
+  - a result and a check-in reach all of them; pause / resume;
+  - Direct → pages move to listeners; Website cache → back to polling; a new visitor reads nothing;
+  - site without the function → falls back to the database.
+
+test/rules-emulator.js (`npm run test:rules`; needs Java and firebase-tools; 61 checks in the real Firestore emulator — the first run of `firestore.rules` in the emulator, see §6):
+- signed out and signed-in non-team: event document, copy, brackets and ring boards allowed; competitors, judges, private details, ring readiness and attendance denied; no writes;
+- team: director reads and patches parts and manifest; ring manager patches the manifest and the attendance part, not the competitors part; staff only the attendance part;
+- field-level writes (`set` + `mergeFields` + `FieldValue.delete`): other entries kept, entry replaced whole, two writers on one manifest both kept, null deletes, works on a new document;
+- paused: event document only, nothing else for spectators, team unaffected; resumed; before Go live; sharing off; archived (no writes);
+- `api/live.js` against the emulator's REST API (`FIRESTORE_EMULATOR_HOST`): bundle, real value decoding, part, paused → 403.
+
+Full browser regression: all 55 browser test files pass (access.js and publink.js needed a re-run: their sign-in steps are timing-sensitive under load, the same as before this change); unit 137 + 28.

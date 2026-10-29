@@ -104,6 +104,7 @@ function mainHTML() {
   if (!S.evId) return homeHTML();
   const ev = curEvent();
   if (!ev) return `<div class="empty"><p>This event is no longer available.</p><button data-act="home">All events</button></div>`;
+  if (S.feed === 'direct' && !S.pub && ev.pubPaused) return pausedHTML(ev);   // v1.50: signed-in spectator, results paused
   const dirV = isDirector();
   const v = { overview: overviewHTML, competitors: competitorsHTML, teams: teamsHTML, divisions: dirV ? divisionsHTML : viewerDivisionsHTML, rings: dirV ? ringsHTML : viewerRingsHTML, people: dirV ? peopleHTML : overviewHTML, judges: judgesHTML, follow: followHTML, mat: matHTML,
     brackets: bracketsHTML, results: resultsHTML, sessions: sessionsHTML, attendance: attendanceHTML, staff: staffHTML }[S.ui.tab] || overviewHTML;

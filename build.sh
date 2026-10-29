@@ -14,7 +14,7 @@ cat src/logic.js
 cat src/vendor_qrcode.js
 echo '(function () {'
 echo "'use strict';"
-cat src/app1_core.js src/logos.js src/app0_firebase.js src/app2_views.js src/app3_forms.js src/app4_score.js src/app6_live.js src/app7_public.js src/app8_people.js src/app9_access.js src/app10_call.js src/app5_actions.js
+cat src/app1_core.js src/logos.js src/app0_firebase.js src/app2_views.js src/app3_forms.js src/app4_score.js src/app6_live.js src/app7_public.js src/app8_people.js src/app9_access.js src/app10_call.js src/app11_spect.js src/app5_actions.js
 echo 'init();'
 echo '})();'
 echo '</script>'
