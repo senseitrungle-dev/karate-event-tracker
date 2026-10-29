@@ -746,14 +746,14 @@ tr.grp-tog.shut td { opacity: .8; }
 .ready-sum { overflow-wrap: anywhere; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.50.0 */
+<script>/* Karate Event Tracker v1.51.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.50.0';
+  const VERSION = '1.51.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -4411,6 +4411,8 @@ function LocalStore() {
     async set(p, d) { docs[p] = clone(d); save(); notify(); },
     async update(p, d) { if (!docs[p]) throw { code: 'invalid_argument', message: 'Document does not exist' }; docs[p] = deepMerge(Object.assign({}, docs[p]), d); save(); notify(); },
     async del(p) { delete docs[p]; save(); notify(); },
+    /** v1.50: replace (or remove, null) single entries of one map field, leaving the rest of the document as it is. */
+    async patch(p, field, kv, top) { const d = Object.assign({}, docs[p] || {}, top || {}), m = Object.assign({}, d[field] || {}); for (const k in kv) { if (kv[k] === null) delete m[k]; else m[k] = clone(kv[k]); } d[field] = m; d.at = new Date().toISOString(); docs[p] = d; save(); notify(); },
     async get(p) { return docs[p] ? clone(docs[p]) : null; },
     watchDoc(p, cb) {
       const l = { fire() { cb(docs[p] ? clone(docs[p]) : null); } };
@@ -4793,6 +4795,13 @@ function FirestoreStore(fs) {
     // Firestore update() replaces nested maps; set(merge) deep-merges like the claude.ai store
     update: (p, d) => run(p, () => wrap(fs.doc(p).set(d, { merge: true }))),
     del: p => run(p, () => wrap(fs.doc(p).delete())),
+    // v1.50: replace (or delete, null) single entries of a map field — two writers changing different entries never overwrite each other
+    patch: (p, field, kv, top) => run(p, () => {
+      const FP = firebase.firestore.FieldPath, del = firebase.firestore.FieldValue.delete();
+      const data = Object.assign({}, top || {}, { [field]: {}, at: new Date().toISOString() }), paths = Object.keys(top || {}).concat(['at']);
+      for (const k in kv) { data[field][k] = kv[k] === null ? del : kv[k]; paths.push(new FP(field, k)); }
+      return wrap(fs.doc(p).set(data, { mergeFields: paths }));
+    }),
     async get(p) { const s = await fs.doc(p).get(); return s.exists ? s.data() : null; },
     watchDoc(p, cb, onErr) { return fs.doc(p).onSnapshot(s => cb(s.exists ? s.data() : null), e => { if (onErr) onErr(fbErr(e)); }); },
   };
@@ -5090,6 +5099,7 @@ function mainHTML() {
   if (!S.evId) return homeHTML();
   const ev = curEvent();
   if (!ev) return `<div class="empty"><p>This event is no longer available.</p><button data-act="home">All events</button></div>`;
+  if (S.feed === 'direct' && !S.pub && ev.pubPaused) return pausedHTML(ev);   // v1.50: signed-in spectator, results paused
   const dirV = isDirector();
   const v = { overview: overviewHTML, competitors: competitorsHTML, teams: teamsHTML, divisions: dirV ? divisionsHTML : viewerDivisionsHTML, rings: dirV ? ringsHTML : viewerRingsHTML, people: dirV ? peopleHTML : overviewHTML, judges: judgesHTML, follow: followHTML, mat: matHTML,
     brackets: bracketsHTML, results: resultsHTML, sessions: sessionsHTML, attendance: attendanceHTML, staff: staffHTML }[S.ui.tab] || overviewHTML;
@@ -7370,7 +7380,7 @@ function renderDivPanel() {
 
 /* ---------- follow: competitors, dojos, regions, countries ---------- */
 function followKey() { return 'kt-follow-' + S.evId; }
-function getFollow() { if (S.follow && S.follow.ev === S.evId) return S.follow; let f = {}; try { f = JSON.parse(localStorage.getItem(followKey()) || '{}') || {}; } catch (e) { /* ignore */ } S.follow = Object.assign({ ev: S.evId, comps: [], dojos: [], regions: [], countries: [] }, f, { ev: S.evId }); return S.follow; }
+function getFollow() { if (S.follow && S.follow.ev === S.evId) return S.follow; let f = {}; try { f = JSON.parse(localStorage.getItem(followKey()) || '{}') || {}; } catch (e) { /* ignore */ } S.follow = Object.assign({ ev: S.evId, comps: [], dojos: [], regions: [], countries: [], divs: [] }, f, { ev: S.evId }); return S.follow; }
 function toggleFollow(kind, val) { const f = getFollow(); const a = f[kind] || (f[kind] = []); const i = a.indexOf(val); if (i >= 0) a.splice(i, 1); else a.push(val); try { localStorage.setItem(followKey(), JSON.stringify(f)); } catch (e) { /* ignore */ } render(); }
 const star = (kind, val) => { const on = (getFollow()[kind] || []).includes(val); return `<button class="star ${on ? 'on' : ''}" data-act="follow" data-k="${kind}" data-v="${esc(val)}" aria-pressed="${on}" aria-label="${on ? 'Unfollow' : 'Follow'}">${on ? '★' : '☆'}</button>`; };
 /** Where a competitor (or team) stands in one division. */
@@ -7437,10 +7447,12 @@ function followHTML() {
   let results = '';
   if (q) {
     const cm = comps.filter(c => `${c.firstName} ${c.lastName}`.toLowerCase().includes(q)).slice(0, 12);
+    const dm = DC.divs.filter(d => divEntrants(d.id).length && String(d.name || '').toLowerCase().includes(q)).sort(divSortCmp).slice(0, 12);   // v1.50: follow a division
     const grp = (title, kind, list) => list.length ? `<div class="label" style="margin-top:8px">${title}</div>${list.map(v => `<div class="frow">${star(kind, v)}<span>${esc(v)}</span><span class="tiny muted">${comps.filter(c => (kind === 'dojos' ? c.dojo : kind === 'regions' ? c.state : c.country) === v).length} competitors</span></div>`).join('')}` : '';
     results = `<div class="card stack" style="gap:4px">${cm.length ? `<div class="label">Competitors</div>${cm.map(c => `<div class="frow">${star('comps', c.id)}<span><b>${esc(c.lastName)}, ${esc(c.firstName)}</b> <span class="tiny muted">${esc(c.dojo || '')}</span></span></div>`).join('')}` : ''}
+      ${dm.length ? `<div class="label" style="margin-top:8px">Divisions</div>${dm.map(d => `<div class="frow">${star('divs', d.id)}<span>${esc(d.name)}</span><span class="tiny muted">${plural(divEntrants(d.id).length, 'entrant')}</span></div>`).join('')}` : ''}
       ${grp('Dojos / clubs', 'dojos', dojos.filter(d => d.toLowerCase().includes(q)))}${grp('Regions', 'regions', regions.filter(d => d.toLowerCase().includes(q)))}${grp('Countries', 'countries', countries.filter(d => d.toLowerCase().includes(q)))}
-      ${!cm.length && ![...dojos, ...regions, ...countries].some(d => d.toLowerCase().includes(q)) ? '<p class="small muted">No matches.</p>' : ''}</div>`;
+      ${!cm.length && !dm.length && ![...dojos, ...regions, ...countries].some(d => d.toLowerCase().includes(q)) ? '<p class="small muted">No matches.</p>' : ''}</div>`;
   }
   const fc = f.comps.map(id => DC.compBy[id]).filter(Boolean);
   const groupCard = (kind, v, key) => {
@@ -7451,9 +7463,10 @@ function followHTML() {
       <div class="stack" style="gap:8px">${members.map(c => `<div><div class="name">${esc(c.lastName)}, ${esc(c.firstName)}</div>${compStatusHTML(c, true)}</div>`).join('')}</div></div>`;
   };
   const followed = fc.map(c => `<div class="card stack"><div class="row between"><div class="row" style="gap:6px;min-width:0">${star('comps', c.id)}<div style="min-width:0"><div class="name">${esc(c.lastName)}, ${esc(c.firstName)}</div><div class="dojo">${esc([c.dojo, c.state, c.country].filter(Boolean).join(' · '))}</div></div></div></div>${compStatusHTML(c)}</div>`).join('')
+    + (f.divs || []).filter(d => DC.divBy[d]).map(divFollowCardHTML).join('')
     + f.dojos.map(v => groupCard('dojos', v, 'dojo')).join('') + f.regions.map(v => groupCard('regions', v, 'state')).join('') + f.countries.map(v => groupCard('countries', v, 'country')).join('');
-  return eventHeader() + `<div class="section-h"><input id="follow-q" class="search" type="search" placeholder="Find a competitor, dojo, region or country…" value="${esc(S.ui.fq || '')}" data-input="fq" aria-label="Search to follow"></div>${results}
-    ${followed ? `<div class="grid2">${followed}</div>` : `<div class="card empty"><div class="mark-lg"></div><h2>Follow competitors</h2><p class="muted" style="max-width:48ch">Search above and tap ☆ to follow a competitor, a dojo, a region or a country. You’ll see their rings, next matches, live status and medals here. Follows are saved on this device.</p></div>`}`;
+  return eventHeader() + `<div class="section-h"><input id="follow-q" class="search" type="search" placeholder="Find a competitor, division, dojo, region or country…" value="${esc(S.ui.fq || '')}" data-input="fq" aria-label="Search to follow"></div>${results}
+    ${followed ? `<div class="grid2">${followed}</div>` : `<div class="card empty"><div class="mark-lg"></div><h2>Follow competitors</h2><p class="muted" style="max-width:48ch">Search above and tap ☆ to follow a competitor, a division, a dojo, a region or a country. You’ll see their rings, next matches, live status and medals here. Follows are saved on this device.</p></div>`}`;
 }
 
 /* ===== v1.10: import judges & credentials (CSV / pasted list), copy from another event, export ===== */
@@ -7624,8 +7637,14 @@ function publicLink(token) {
   try { base = location.origin && location.origin !== 'null' ? location.origin + location.pathname : location.href.split('#')[0].split('?')[0]; } catch (e) { base = ''; }
   return base ? `${base}#watch=${token}` : '';
 }
+/** v1.50: the public page uses the website cache (/api/live) where the site has it, otherwise the database directly. */
 async function startPublic() {
-  watchBranding();
+  if (cdnUsable()) return cdnStart();
+  return startPublicDirect();
+}
+async function startPublicDirect() {
+  S.pub.mode = 'direct';
+  if (!S.pub.brand) { S.pub.brand = true; watchBranding(); }
   let sh = null;
   try { sh = await S.store.get('share/' + S.pub.token); } catch (e) { sh = null; }
   if (!sh || !sh.eventId) { S.pub.error = 'This link is not valid, or the event is no longer shared publicly.'; S.loadedEvents = true; render(); return; }
@@ -7633,8 +7652,12 @@ async function startPublic() {
   const id = sh.eventId;
   const closeEv = () => { if (S.evId) { S.unsub.forEach(u => { try { u(); } catch (e) { /* ignore */ } }); S.unsub = []; S.evId = null; } };
   S.pubUnsub = S.store.watchDoc(P.event(id), d => {
+    if (S.pub.mode !== 'direct') return;
+    S.pub.paused = null;
     if (!d || !d.public || d.shareToken !== S.pub.token) { S.events = {}; S.pub.error = 'This event is no longer shared publicly.'; S.pub.wait = null; closeEv(); }
     else if (!d.live) { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; S.pub.wait = Object.assign({}, d, { id }); closeEv(); }   // v1.25: link handed out before the start
+    else if (d.pubPaused) { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; S.pub.wait = null; S.pub.paused = S.events[id]; closeEv(); }   // v1.50: director paused the spectators
+    else if (d.pubFeed !== 'direct' && S.pub.cdnOk) { if (S.pubUnsub) { S.pubUnsub(); S.pubUnsub = null; } closeEv(); cdnStart(); return; }   // back to the website cache
     else { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; S.pub.wait = null; if (S.evId !== id) openEvent(id); }
     S.loadedEvents = true; render();
   }, e => { S.pub.error = 'This event is not shared publicly.'; S.loadedEvents = true; render(); dbErr(e); });
@@ -7651,6 +7674,7 @@ function publicWaitHTML(ev) {
     <p class="tiny muted">Karate Event Tracker · no sign-in needed</p></div>`;
 }
 function publicMissingHTML() {
+  if (S.pub && S.pub.paused && !S.pub.error) return pausedHTML(S.pub.paused);
   if (S.pub && S.pub.wait && !S.pub.error) return publicWaitHTML(S.pub.wait);
   return `<div class="card empty" style="margin-top:40px"><div class="mark-lg"></div><h2>${S.pub.error ? 'Event not available' : 'Opening the event…'}</h2><p class="muted" style="max-width:48ch">${esc(S.pub.error || 'Loading the live results.')}</p></div>`;
 }
@@ -7697,7 +7721,7 @@ async function shareOn() {
   const token = newShareToken();
   if (!(await guard(() => S.store.set('share/' + token, { eventId: ev.id, at: new Date().toISOString() })))) return;
   if (ev.shareToken && ev.shareToken !== token) await guard(() => S.store.del('share/' + ev.shareToken));
-  await guard(() => S.store.update(P.event(ev.id), { public: true, shareToken: token }), ev.live ? 'Public link created' : 'Public link and QR code ready — the page waits for the start');
+  if (await guard(() => S.store.update(P.event(ev.id), { public: true, shareToken: token }), ev.live ? 'Public link created' : 'Public link and QR code ready — the page waits for the start')) setTimeout(() => pubSync(true, true), 300);
 }
 async function shareOff() {
   const ev = curEvent(); if (!ev) return;
@@ -7741,7 +7765,7 @@ function viewerDivisionsHTML() {
   const rows = divs.map(dv => {
     const br = S.d.brackets[dv.id], segs = KT.segList(br).filter(s => s.seg.startsWith('P:'));
     const pools = segs.map(s => `<span class="chip ring-chip">${esc(s.label)} · ${esc(ringName(KT.ringOf(dv, s.seg)))}</span>`).join('');
-    return `<div class="vrow" data-act="view-bracket" data-id="${esc(dv.id)}" role="button" tabindex="0"><span class="name">${esc(dv.name)}</span>
+    return `<div class="vrow" data-act="view-bracket" data-id="${esc(dv.id)}" role="button" tabindex="0"><span class="name">${star('divs', dv.id)} ${esc(dv.name)}</span>
       <span class="tiny muted">${plural(divEntrants(dv.id).length, 'entrant')} · ${esc(KT.FORMATS[dv.format] || dv.format || '')}${S.d.rings[dv.ringId] ? ' · ' + esc(ringName(dv.ringId)) : ''}</span>
       ${pools ? `<span class="pill-list">${pools}</span>` : ''}${divStatusChip(dv.id)}</div>`;
   }).join('');
@@ -7800,6 +7824,7 @@ function liveCardHTML() {
       ${link ? `<div class="share-link"><button class="sm primary" data-act="share-copy">Copy link</button><a class="btn go" id="share-open" href="${esc(link)}" target="_blank" rel="noopener">Open public page</a></div>
         <p class="tiny muted">Spectators open this link without signing in and see only this event.</p>`
         : `<p class="small muted">${S.store && S.store.mode === 'cloud' ? 'On claude.ai the event is live for the people you shared the page with. A public link for spectators without an account is created when you go live on the Vercel + Firebase site.' : 'Public link unavailable here.'}</p>`}
+      ${spectatorCtlHTML(ev)}
       <div class="row"><span class="small ${done ? '' : 'muted'}" style="margin-right:auto">${done ? 'Every division is finished.' : 'End live when the tournament is complete.'}</span><button class="${done ? 'danger primary' : 'danger'}" data-act="live-end">End live</button></div></div>`;
   }
   const checks = liveChecks(), hardOk = checks.every(c => c.ok || !c.hard);
@@ -7814,13 +7839,13 @@ async function goLive(force) {
   const open = liveChecks().filter(c => !c.ok && c.hard);
   if (open.length && !(force && (await confirmBox(`Not everything is ready:\n• ${open.map(c => c.label).join('\n• ')}\nGo live anyway?`, 'Go live anyway')))) return;
   if (!force && !(await confirmBox('Go live now? Spectators can follow the tournament as it happens.', 'Go live'))) return;
-  const up = { live: true, liveAt: new Date().toISOString(), endedAt: '' };
+  const up = { live: true, liveAt: new Date().toISOString(), endedAt: '', pubPaused: false };
   if (S.store.mode !== 'cloud') {
     const token = ev.shareToken || newShareToken();
     if (!ev.shareToken && !(await guard(() => S.store.set('share/' + token, { eventId: ev.id, at: up.liveAt })))) return;
     Object.assign(up, { public: true, shareToken: token });
   }
-  await guard(() => S.store.update(P.event(ev.id), up), 'The tournament is live');
+  if (await guard(() => S.store.update(P.event(ev.id), up), 'The tournament is live') && up.public) setTimeout(() => pubSync(!ev.public, true), 300);
 }
 async function endLive() {
   const ev = curEvent(); if (!ev) return;
@@ -8549,10 +8574,241 @@ function speakCall(rid) {
   const el = document.getElementById('announce-' + rid); const t = el ? el.textContent.replace(/ \*(\d+)/g, ', rank $1') : '';   // v1.45: "*2" is read as "rank 2"
   try { if (t && window.speechSynthesis && window.SpeechSynthesisUtterance && !navigator.webdriver) { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(t)); } } catch (e) { /* no speech on this device */ }
 }
+/* ===== v1.50: spectator feed — compact summary documents, website cache, pause switch ===== */
+/* Spectators (public link visitors, and signed-in people who are not on the event's team) no longer read the event's
+   collections one document per competitor. The staff's own app keeps a compact copy for them:
+     pubsnap/{e}/parts/{col}~{n}  { col, d: {id: doc} }   competitors, teams, divisions, rings, sessions, judges, attendance
+     pubsnap/{e}                  { v: {key: version} }   one version per part ("p~<part>") and per bracket ("b~<division>")
+   Brackets (live/{e}/brackets) and ring boards (live/{e}/ringstate) are read as they are.
+   Two ways to deliver it (event setting `pubFeed`):
+     'cdn' (default)  the page polls /api/live (Vercel function behind the CDN cache) every 10 s; Firestore reads stay the
+                      same however many spectators watch. Falls back to 'direct' where the function is not available.
+     'direct'         live listeners on the summary documents (instant; reads grow with the number of spectators).
+   `pubPaused` (director) closes the spectators' data at once (rules) while the event's team keeps working. */
+const PUB_COLS = { competitors: 8, teams: 2, divisions: 2, rings: 1, sessions: 1, judges: 2, attendance: 1 };
+const PUB_POLL = 10000;
+P.pub = e => `pubsnap/${e}`;
+P.pubParts = e => `pubsnap/${e}/parts`;
+P.pubPart = (e, part) => `pubsnap/${e}/parts/${part}`;
+const PUB = { dirty: new Set(), timer: null, busy: false };
+
+function pubHash(s) { let h = 0x811c9dc5; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h; }
+const pubPartOf = (col, id) => `${col}~${pubHash(id) % PUB_COLS[col]}`;
+const pubVer = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+/** What spectators get of a document: everything the public page shows (private details live in pv/ and never get here). */
+function pubProject(col, doc) {
+  const o = clone(doc); delete o.id;
+  if (col === 'judges') { delete o.email; delete o.notes; delete o.phone; }
+  return o;
+}
+/** Stable text of a value (sorted keys) — to compare what is published with what should be. */
+function pubStable(v) {
+  if (Array.isArray(v)) return '[' + v.map(pubStable).join(',') + ']';
+  if (v && typeof v === 'object') return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + pubStable(v[k])).join(',') + '}';
+  return JSON.stringify(v === undefined ? null : v);
+}
+
+/** Which way this person gets the event's data: '' = the event's own collections (team, local mode, claude.ai). */
+function spectatorFeed(ev) {
+  if (!S.store || S.store.mode === 'cloud' || !ev) return '';
+  if (S.pub) return S.pub.mode || 'direct';
+  if (FB.on && !eventRoleOf(ev)) return 'direct';
+  return '';
+}
+/** Subscribe to the spectators' copy (direct mode). Returns the unsubscribe functions. */
+function feedWatch(id) {
+  const offs = [];
+  offs.push(S.store.watch(P.pubParts(id), parts => {
+    const out = {}; for (const c in PUB_COLS) out[c] = {};
+    for (const pt of Object.values(parts || {})) { if (!pt || !PUB_COLS[pt.col]) continue; for (const k in pt.d || {}) if (pt.d[k]) out[pt.col][k] = Object.assign({}, pt.d[k], { id: k }); }
+    Object.assign(S.d, out); render();
+  }, dbErr));
+  for (const c of ['brackets', 'ringstate']) offs.push(S.store.watch(P.liveCol(id, c), o => { S.d[c] = o; render(); }, dbErr));
+  return offs;
+}
+
+/* ---------- staff side: keep the spectators' copy up to date ---------- */
+/** Publishing applies while the event is shared (public link on), not archived, and the store can patch fields. */
+const pubTeam = ev => isLocal() ? S.ui.simRole !== 'viewer' : !!eventRoleOf(ev);
+function pubActive(ev) { ev = ev || curEvent(); return !!(ev && ev.public && !ev.locked && S.store && S.store.patch && S.store.mode !== 'cloud' && pubTeam(ev) && !S.pub); }
+/** Every write this person makes is noted; changed documents are published a moment later (after the local copy has it). */
+function pubInstall() {
+  const st = S.store; if (!st || st.__pub || st.mode === 'cloud') return;
+  st.__pub = true;
+  for (const m of ['set', 'update', 'del']) {
+    const f = st[m];
+    st[m] = function (p) { const r = f.apply(st, arguments); Promise.resolve(r).then(() => pubNote(p), () => {}); return r; };
+  }
+}
+function pubNote(p) {
+  const m = /^(events|live)\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(String(p || ''));
+  if (!m || m[2] !== S.evId || PUB.skip || !pubActive()) return;
+  const col = m[3], id = m[4];
+  if (m[1] === 'live' && col === 'brackets') PUB.dirty.add('b~' + id);
+  else if (PUB_COLS[col] && (m[1] === 'live') === (col === 'attendance')) PUB.dirty.add(col + '|' + id);
+  else return;
+  clearTimeout(PUB.timer); PUB.timer = setTimeout(pubFlush, 700);
+}
+const pubMayWrite = col => col === 'attendance' || isLocal() || isEventDirector();
+async function pubFlush() {
+  if (PUB.busy) { clearTimeout(PUB.timer); PUB.timer = setTimeout(pubFlush, 400); return; }
+  const e = S.evId, keys = [...PUB.dirty]; PUB.dirty.clear();
+  if (!e || !keys.length || !pubActive()) return;
+  PUB.busy = true;
+  try {
+    const parts = {}, man = {};
+    for (const k of keys) {
+      if (k.startsWith('b~')) { man[k] = S.d.brackets[k.slice(2)] ? pubVer() : null; continue; }
+      const [col, id] = k.split('|'); if (!pubMayWrite(col)) continue;
+      const pt = pubPartOf(col, id), cur = (S.d[col] || {})[id];
+      (parts[pt] || (parts[pt] = { col, kv: {} })).kv[id] = cur ? pubProject(col, cur) : null;
+    }
+    for (const pt in parts) { await S.store.patch(P.pubPart(e, pt), 'd', parts[pt].kv, { col: parts[pt].col }); man['p~' + pt] = pubVer(); }
+    if (Object.keys(man).length) await S.store.patch(P.pub(e), 'v', man);
+  } catch (err) { console.warn('[pub] could not update the spectators’ copy', err); }
+  finally { PUB.busy = false; }
+}
+/** Director: bring the spectators' copy fully in line with the event (on opening a shared event, sharing, Go live, Refresh).
+    `all` gives every part and bracket a new version (after a time unshared, when changes were not published). */
+async function pubSync(all, quiet) {
+  const e = S.evId, ev = curEvent();
+  if (!e || !ev || !ev.public || ev.locked || !isEventDirector(ev) || !S.store.patch || S.store.mode === 'cloud' || S.pub) return false;
+  const have = await colOnce(P.pubParts(e));
+  let man = {}; try { man = (await S.store.get(P.pub(e))) || {}; } catch (err) { man = {}; }
+  const mv = man.v || {}, want = {}, upd = {};
+  for (const col in PUB_COLS) for (let n = 0; n < PUB_COLS[col]; n++) want[`${col}~${n}`] = { col, d: {} };
+  for (const col in PUB_COLS) for (const id in S.d[col] || {}) want[pubPartOf(col, id)].d[id] = pubProject(col, S.d[col][id]);
+  let wrote = 0;
+  try {
+    for (const pt in want) {
+      const old = ((have[pt] || {}).d) || {}, kv = {};
+      for (const id in want[pt].d) if (pubStable(want[pt].d[id]) !== pubStable(old[id])) kv[id] = want[pt].d[id];
+      for (const id in old) if (!(id in want[pt].d)) kv[id] = null;
+      const empty = !Object.keys(want[pt].d).length && !have[pt];
+      if (Object.keys(kv).length) { await S.store.patch(P.pubPart(e, pt), 'd', kv, { col: want[pt].col }); wrote++; }
+      if (Object.keys(kv).length || all || (!mv['p~' + pt] && !empty)) upd['p~' + pt] = pubVer();
+    }
+    for (const did in S.d.brackets) if (all || !mv['b~' + did]) upd['b~' + did] = pubVer();
+    for (const k in mv) if (k.startsWith('b~') && !S.d.brackets[k.slice(2)]) upd[k] = null;
+    if (Object.keys(upd).length) await S.store.patch(P.pub(e), 'v', upd);
+    if (!quiet) toast('Spectators’ data refreshed');
+    return true;
+  } catch (err) { console.warn('[pub] sync failed', err); if (!quiet) toast('Could not refresh the spectators’ data: ' + ((err && err.message) || err), true); return false; }
+}
+function pubSyncLater() { clearTimeout(PUB.syncT); PUB.syncT = setTimeout(() => pubSync(false, true), 2500); }
+
+/* ---------- spectator side: website cache (/api/live) ---------- */
+const PUB_API = '/api/live';
+function cdnUsable() { try { return /^https?:$/.test(location.protocol); } catch (e) { return false; } }
+async function cdnGet(q) {
+  const r = await fetch(PUB_API + '?' + q, { headers: { accept: 'application/json' } });
+  if (!r.ok && r.status !== 403) throw new Error('http ' + r.status);
+  const j = await r.json();
+  if (!j || typeof j !== 'object' || !('ok' in j)) throw new Error('not the live feed');
+  return j;
+}
+/** Public page, website-cache mode: one small request every 10 s; only changed parts / brackets are fetched (and those are cached for good). */
+async function cdnStart() {
+  S.pub.mode = 'cdn'; S.pub.have = {}; S.pub.part = {};
+  const tick = async () => {
+    if (!S.pub || S.pub.mode !== 'cdn') return;
+    let b = null;
+    try { b = await cdnGet('t=' + encodeURIComponent(S.pub.token)); S.pub.cdnOk = true; }
+    catch (e) { if (!S.pub.cdnOk) { S.pub.mode = 'direct'; startPublicDirect(); return; } }   // no function on this site: read the database directly (later failures: keep the last data, try again)
+    if (b) await cdnApply(b).catch(e => console.warn('[cdn]', e));
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+    const every = window.__ktPollMs || PUB_POLL;
+    S.pub.timer = setTimeout(tick, hidden ? every * 6 : every);
+  };
+  await tick();
+}
+function cdnStop() { if (S.pub) { clearTimeout(S.pub.timer); S.pub.mode = 'direct'; } }
+async function cdnApply(b) {
+  const id = b.eventId, ev = b.ev;
+  if (b.branding) S.branding = b.branding;
+  const closeEv = () => { if (S.evId) { S.unsub.forEach(u => { try { u(); } catch (e) { /* ignore */ } }); S.unsub = []; S.evId = null; } };
+  if (!b.ok || !ev || !ev.public || ev.shareToken !== S.pub.token) { S.events = {}; S.pub.error = b.state === 'paused' ? '' : 'This event is no longer shared publicly.'; S.pub.wait = null; S.pub.paused = b.state === 'paused' ? Object.assign({}, ev || {}, { id }) : null; closeEv(); S.loadedEvents = true; render(); return; }
+  S.pub.evId = id; S.pub.error = ''; S.pub.paused = null;
+  if (ev.pubFeed === 'direct') { cdnStop(); startPublicDirect(); return; }   // the director asked for instant updates
+  if (!ev.live) { S.events = { [id]: Object.assign({}, ev, { id }) }; S.pub.wait = Object.assign({}, ev, { id }); closeEv(); S.loadedEvents = true; render(); return; }
+  if (ev.pubPaused) { S.events = { [id]: Object.assign({}, ev, { id }) }; S.pub.wait = null; S.pub.paused = S.events[id]; closeEv(); S.loadedEvents = true; render(); return; }
+  S.pub.wait = null;
+  S.events = { [id]: Object.assign({}, ev, { id }) };
+  if (S.evId !== id) { S.pub.have = {}; S.pub.part = {}; openEvent(id); }
+  const v = b.v || {}, have = S.pub.have, want = Object.keys(v).filter(k => have[k] !== v[k]);
+  const gone = Object.keys(have).filter(k => !(k in v));
+  for (let i = 0; i < want.length; i += 6) {
+    const got = await Promise.all(want.slice(i, i + 6).map(k => cdnGet(`t=${encodeURIComponent(S.pub.token)}&k=${encodeURIComponent(k)}&v=${encodeURIComponent(v[k])}`).then(r => [k, r], () => [k, null])));
+    for (const [k, r] of got) if (r && r.ok) { cdnPut(k, r.d); have[k] = v[k]; }
+  }
+  for (const k of gone) { cdnPut(k, null); delete have[k]; }
+  S.d.ringstate = b.rs || {};
+  S.loadedEvents = true; render();
+}
+function cdnPut(k, d) {
+  if (k.startsWith('b~')) { const did = k.slice(2); if (d) S.d.brackets[did] = Object.assign({}, d, { id: did }); else delete S.d.brackets[did]; S.d.brackets = Object.assign({}, S.d.brackets); return; }
+  const pt = k.slice(2), col = pt.split('~')[0]; if (!PUB_COLS[col]) return;
+  const before = S.pub.part[pt] || [], o = Object.assign({}, S.d[col]);
+  for (const id of before) delete o[id];
+  const ids = Object.keys((d && d.d) || {});
+  for (const id of ids) if (d.d[id]) o[id] = Object.assign({}, d.d[id], { id });
+  S.pub.part[pt] = ids; S.d[col] = o;
+}
+
+/* ---------- paused page (#4) ---------- */
+function pausedHTML(ev) {
+  ev = ev || {};
+  return `<div class="card empty pub-wait" style="margin-top:32px" id="pub-paused"><div class="pub-logo">${logoHTML()}</div>
+    <h1>${esc(ev.name || 'Tournament')}</h1>
+    <p class="notice" style="display:block"><b>Live results are paused for a moment.</b> The tournament director paused the public results. Keep this page open — it comes back by itself.</p>
+    <p class="tiny muted">Karate Event Tracker · no sign-in needed</p></div>`;
+}
+/** Director, while live: how spectators get the data, pause / resume, refresh. */
+function spectatorCtlHTML(ev) {
+  if (!ev || !ev.public || !S.store || S.store.mode === 'cloud') return '';
+  const paused = !!ev.pubPaused, feed = ev.pubFeed === 'direct' ? 'direct' : 'cdn';
+  return `<div class="spect-ctl stack" id="spect-ctl" style="gap:8px;border-top:1px solid var(--line);padding-top:10px">
+    <div class="row between"><b>Spectators</b>${paused ? '<span class="chip warn" id="spect-state">Paused</span>' : '<span class="chip ok" id="spect-state">Seeing live results</span>'}</div>
+    <label class="f"><span>Spectator updates</span><select id="pub-feed" data-change="pub-feed">
+      <option value="cdn" ${feed === 'cdn' ? 'selected' : ''}>Website cache — every 10 s (best for big crowds)</option>
+      <option value="direct" ${feed === 'direct' ? 'selected' : ''}>Direct from the database — instant (small events)</option></select></label>
+    <p class="tiny muted">${feed === 'cdn' ? 'Spectators’ pages ask the website every 10 seconds; the website asks the database at most once per 10 seconds for everyone, so database use stays the same however many people watch.' : 'Each spectator’s page listens to the database itself: instant, but database use grows with every spectator.'} Directors, ring managers and staff always work straight on the database.</p>
+    <div class="row" style="flex-wrap:wrap;gap:6px">${paused ? '<button class="sm go" data-act="pub-resume">Resume spectators</button>' : '<button class="sm danger" data-act="pub-pause">Pause spectators</button>'}<button class="sm" data-act="pub-refresh">Refresh spectators’ data</button></div>
+    <p class="tiny muted">${paused ? 'Spectators see “Live results are paused” and read nothing from the database. Scoring is not affected.' : 'Pause cuts the public page off the database at once (e.g. if the database is overloaded) — the event’s team keeps working.'}</p></div>`;
+}
+async function pubPause(on) {
+  const ev = curEvent(); if (!ev) return;
+  await guard(() => S.store.update(P.event(ev.id), on ? { pubPaused: true, pausedAt: new Date().toISOString() } : { pubPaused: false }), on ? 'Spectators paused — the event’s team keeps working' : 'Spectators see live results again');
+}
+async function pubSetFeed(v) {
+  const ev = curEvent(); if (!ev) return;
+  await guard(() => S.store.update(P.event(ev.id), { pubFeed: v === 'direct' ? 'direct' : 'cdn' }), v === 'direct' ? 'Spectators get instant updates from the database' : 'Spectators get updates through the website cache');
+}
+
+/* ---------- follow a division ---------- */
+function divFollowCardHTML(did) {
+  const dv = DC.divBy[did]; if (!dv) return '';
+  const br = S.d.brackets[did], bs = bracketState(did), n = divEntrants(did).length;
+  const rings = [...new Set([dv.ringId, ...KT.segList(br).map(s => KT.ringOf(dv, s.seg))].filter(r => S.d.rings[r]))];
+  let body = '';
+  if (!br) body = `<div class="tiny muted">${plural(n, 'entrant')} · not drawn yet</div>`;
+  else if (bs.complete) {
+    const pl = DC.pl[did] || {}, row = (m, cls, id) => id ? `<div class="row" style="gap:8px"><span class="medal ${cls}" style="width:22px;height:22px">${m}</span><span class="name">${esc(entName(id, did))}</span></div>` : '';
+    body = `<div class="stack" style="gap:4px">${row(1, 'g', pl.gold)}${row(2, 's', pl.silver)}${(pl.bronze || []).map(b => row(3, 'b', b)).join('')}</div>`;
+  } else {
+    const now = rings.map(r => [r, S.d.ringstate[r]]).filter(([, rs]) => rs && rs.did === did);
+    const next = rings.flatMap(r => ringQueue(r).filter(x => x.did === did && !now.some(([, rs]) => x.kp ? rs.kp === x.kp.key : rs.mid === (x.m && x.m.id))).map(x => ({ r, x }))).slice(0, 3);
+    const nowH = now.map(([r, rs]) => `<div class="fstat" ${rs.kp ? `data-act="view-bracket" data-id="${esc(did)}"` : `data-act="match" data-did="${esc(did)}" data-mid="${esc(rs.mid)}"`} role="button" tabindex="0"><span class="tiny muted">${esc(ringName(r))}</span><span class="chip aka">On the mat now</span></div>`).join('');
+    const nextH = next.map(({ r, x }) => `<div class="fstat compact" ${x.kp ? `data-act="view-bracket" data-id="${esc(did)}"` : `data-act="match" data-did="${esc(did)}" data-mid="${esc(x.m.id)}"`} role="button" tabindex="0"><span class="tiny muted">${esc(ringName(r))} · ${esc(x.kp ? x.kp.label : KT.matchLabel(x.m, br))}</span><span class="chip">${x.kp ? esc(entName(x.kp.id, did)) : `${esc(entName(x.r.a, did))} vs ${esc(entName(x.r.b, did))}`}</span></div>`).join('');
+    body = `${nowH}${nextH ? `<div class="label" style="margin-top:4px">Up next</div>${nextH}` : ''}${!nowH && !nextH ? '<div class="tiny muted">Waiting for the next round</div>' : ''}`;
+  }
+  return `<div class="card stack follow-div" data-did="${esc(did)}"><div class="row between"><div class="row" style="gap:6px;min-width:0">${star('divs', did)}<div style="min-width:0"><h3>${esc(dv.name)}</h3><div class="dojo">${plural(n, 'entrant')}${rings.length ? ' · ' + esc(rings.map(ringName).join(', ')) : ''}</div></div></div>${divStatusChip(did)}</div>
+    ${body}<div><button class="sm" data-act="view-bracket" data-id="${esc(did)}">Bracket ›</button></div></div>`;
+}
 /* ===== actions, subscriptions, init ===== */
 function subscribeEvents() {
   watchBranding();
-  S.store.watch('events', o => { S.events = o; S.loadedEvents = true; if (S.lastEv && !S.evId && o[S.lastEv]) { const id = S.lastEv; S.lastEv = null; openEvent(id); } render(); }, dbErr);
+  S.store.watch('events', o => { S.events = o; S.loadedEvents = true; if (S.lastEv && !S.evId && o[S.lastEv]) { const id = S.lastEv; S.lastEv = null; openEvent(id); } feedPauseCheck(); render(); }, dbErr);
   subscribePeople();
 }
 /* people, directors and invites (v1.7) */
@@ -8580,6 +8836,27 @@ function subscribePeople() {
   if (S.canEditor) S.store.watch('orgRequests', o => { S.orgReqs = o; render(); }, quiet);
 }
 function dbErr(e) { console.warn('db', e); if (e && e.code === 'revoked') { S.readOnly = true; toast('Access changed. Reload the page to continue.', true); } }
+/** The event's data: its own collections for the event's team (and local mode / claude.ai); spectators get the compact copy (v1.50). */
+function subscribeEventData(id) {
+  const feed = spectatorFeed(S.events[id]);
+  S.feed = feed;
+  if (feed === 'cdn') return;   // the public page's poller fills S.d
+  if (feed === 'direct') { S.feedPaused = !!(S.events[id] || {}).pubPaused; if (!S.feedPaused) S.unsub.push(...feedWatch(id)); return; }
+  const w = (col, key) => S.unsub.push(S.store.watch(col, o => { S.d[key] = o; render(); }, dbErr));
+  ['competitors', 'teams', 'divisions', 'rings', 'sessions', 'judges'].forEach(c => w(P.col(id, c), c));
+  ['brackets', 'attendance', 'ringstate', 'ringready'].forEach(c => w(P.liveCol(id, c), c));
+  if (!S.pub && (isLocal() || isEventDirector(S.events[id]))) { w(P.pvCol(id), 'pv'); w(P.col(id, 'requests'), 'requests'); setTimeout(scheduleSync, 1500); }
+  if (!S.pub) { pubInstall(); if (isEventDirector(S.events[id]) && (S.events[id] || {}).public) pubSyncLater(); }
+}
+/** Signed-in spectators: the director paused or resumed the public results — stop reading, or start again. */
+function feedPauseCheck() {
+  if (!S.evId || S.pub || S.feed !== 'direct') return;
+  const ev = curEvent(), p = !!(ev && ev.pubPaused);
+  if (p === !!S.feedPaused) return;
+  S.feedPaused = p;
+  S.unsub.forEach(u => { try { u(); } catch (e) { /* ignore */ } }); S.unsub = [];
+  if (!p) S.unsub.push(...feedWatch(S.evId));
+}
 function openEvent(id) {
   if (id && S.events[id] && !canOpenEvent(S.events[id])) { toast('You don’t have access to this event. Use “Request access”.', true); return; }
   S.unsub.forEach(u => { try { u(); } catch (e) { /* ignore */ } }); S.unsub = [];
@@ -8588,10 +8865,7 @@ function openEvent(id) {
   if (id && !S.pub) loadView(id);   // v1.46: this person's last view of this event
   saveUIPrefs();
   if (!id) { render(); return; }
-  const w = (col, key) => S.unsub.push(S.store.watch(col, o => { S.d[key] = o; render(); }, dbErr));
-  ['competitors', 'teams', 'divisions', 'rings', 'sessions', 'judges'].forEach(c => w(P.col(id, c), c));
-  ['brackets', 'attendance', 'ringstate', 'ringready'].forEach(c => w(P.liveCol(id, c), c));
-  if (!S.pub && (isLocal() || isEventDirector(S.events[id]))) { w(P.pvCol(id), 'pv'); w(P.col(id, 'requests'), 'requests'); setTimeout(scheduleSync, 1500); }
+  subscribeEventData(id);
   window.scrollTo(0, 0);
   render();
 }
@@ -8641,9 +8915,11 @@ async function deleteEvent(id) {
   for (const c of ['competitors', 'teams', 'divisions', 'rings', 'sessions', 'judges']) Object.keys(S.d[c]).forEach(x => paths.push(P.doc(id, c, x)));
   Object.keys(S.d.pv).forEach(x => paths.push(P.pv(id, x)));
   for (const c of ['brackets', 'attendance', 'ringstate', 'ringready']) Object.keys(S.d[c]).forEach(x => paths.push(P.live(id, c, x)));
+  if (S.store.mode !== 'cloud') { for (const c in PUB_COLS) for (let n = 0; n < PUB_COLS[c]; n++) paths.push(P.pubPart(id, `${c}~${n}`)); paths.push(P.pub(id)); }   // v1.50: spectators' copy
   closeModal();
-  for (const p of paths) await guard(() => S.store.del(p));
-  await guard(() => S.store.del(P.event(id)), 'Event deleted');
+  PUB.skip = true; PUB.dirty.clear();
+  try { for (const p of paths) await guard(() => S.store.del(p)); await guard(() => S.store.del(P.event(id)), 'Event deleted'); }
+  finally { PUB.skip = false; PUB.dirty.clear(); }
   openEvent(null);
 }
 
@@ -8740,6 +9016,7 @@ const ACT = {
     S.ui.readyOpen = Object.assign({}, S.ui.readyOpen, { [rid]: false });   // v1.50: fold the checklist once ready
     setRingReady(rid, { ready: true }); },
   'judge-in': (el, e) => { if (e) e.stopPropagation(); const j = S.d.judges[el.dataset.id]; if (j) guard(() => S.store.update(P.doc(S.evId, 'judges', j.id), { checkedIn: !j.checkedIn })); },
+  'pub-pause': () => pubPause(true), 'pub-resume': () => pubPause(false), 'pub-refresh': () => pubSync(false),
   'share-on': () => shareOn(), 'share-off': () => shareOff(), 'share-copy': () => shareCopy(),
   'open-event': el => openEvent(el.dataset.id),
   'more-tabs': () => moreSheet(),
@@ -9022,6 +9299,7 @@ const CHANGE = {
     if (el.id === 'd-entsort') reorderEntRows(el.value); else if (S.modal && S.modal.refresh) S.modal.refresh(); },
   'ring-check': el => { const rid = el.dataset.ring, rr = S.d.ringready[rid] || {}, checks = Object.assign({}, rr.checks, { [el.dataset.k]: el.checked });
     setRingReady(rid, KT.ringReadyOk(checks) ? { checks } : { checks, ready: false }); },   // unticking an item makes the ring not ready again
+  'pub-feed': el => pubSetFeed(el.value),
   'ring-helpers': el => setRingReady(el.dataset.ring, { helpers: el.value.trim() }),
   'ring-addmgr': el => { if (el.value) setPersonRing(el.value, el.dataset.ring); },
   'inv-role': el => { const f = $('#inv-ring-f'); if (f) f.hidden = el.value !== 'manager'; },

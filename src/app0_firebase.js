@@ -23,6 +23,13 @@ function FirestoreStore(fs) {
     // Firestore update() replaces nested maps; set(merge) deep-merges like the claude.ai store
     update: (p, d) => run(p, () => wrap(fs.doc(p).set(d, { merge: true }))),
     del: p => run(p, () => wrap(fs.doc(p).delete())),
+    // v1.50: replace (or delete, null) single entries of a map field — two writers changing different entries never overwrite each other
+    patch: (p, field, kv, top) => run(p, () => {
+      const FP = firebase.firestore.FieldPath, del = firebase.firestore.FieldValue.delete();
+      const data = Object.assign({}, top || {}, { [field]: {}, at: new Date().toISOString() }), paths = Object.keys(top || {}).concat(['at']);
+      for (const k in kv) { data[field][k] = kv[k] === null ? del : kv[k]; paths.push(new FP(field, k)); }
+      return wrap(fs.doc(p).set(data, { mergeFields: paths }));
+    }),
     async get(p) { const s = await fs.doc(p).get(); return s.exists ? s.data() : null; },
     watchDoc(p, cb, onErr) { return fs.doc(p).onSnapshot(s => cb(s.exists ? s.data() : null), e => { if (onErr) onErr(fbErr(e)); }); },
   };

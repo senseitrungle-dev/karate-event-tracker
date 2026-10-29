@@ -2,3 +2,4 @@ node_modules/
 test/shots/
 .vercel/
 .DS_Store
+firestore-debug.log

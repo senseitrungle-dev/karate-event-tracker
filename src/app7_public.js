@@ -26,8 +26,14 @@ function publicLink(token) {
   try { base = location.origin && location.origin !== 'null' ? location.origin + location.pathname : location.href.split('#')[0].split('?')[0]; } catch (e) { base = ''; }
   return base ? `${base}#watch=${token}` : '';
 }
+/** v1.50: the public page uses the website cache (/api/live) where the site has it, otherwise the database directly. */
 async function startPublic() {
-  watchBranding();
+  if (cdnUsable()) return cdnStart();
+  return startPublicDirect();
+}
+async function startPublicDirect() {
+  S.pub.mode = 'direct';
+  if (!S.pub.brand) { S.pub.brand = true; watchBranding(); }
   let sh = null;
   try { sh = await S.store.get('share/' + S.pub.token); } catch (e) { sh = null; }
   if (!sh || !sh.eventId) { S.pub.error = 'This link is not valid, or the event is no longer shared publicly.'; S.loadedEvents = true; render(); return; }
@@ -35,8 +41,12 @@ async function startPublic() {
   const id = sh.eventId;
   const closeEv = () => { if (S.evId) { S.unsub.forEach(u => { try { u(); } catch (e) { /* ignore */ } }); S.unsub = []; S.evId = null; } };
   S.pubUnsub = S.store.watchDoc(P.event(id), d => {
+    if (S.pub.mode !== 'direct') return;
+    S.pub.paused = null;
     if (!d || !d.public || d.shareToken !== S.pub.token) { S.events = {}; S.pub.error = 'This event is no longer shared publicly.'; S.pub.wait = null; closeEv(); }
     else if (!d.live) { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; S.pub.wait = Object.assign({}, d, { id }); closeEv(); }   // v1.25: link handed out before the start
+    else if (d.pubPaused) { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; S.pub.wait = null; S.pub.paused = S.events[id]; closeEv(); }   // v1.50: director paused the spectators
+    else if (d.pubFeed !== 'direct' && S.pub.cdnOk) { if (S.pubUnsub) { S.pubUnsub(); S.pubUnsub = null; } closeEv(); cdnStart(); return; }   // back to the website cache
     else { S.events = { [id]: Object.assign({}, d, { id }) }; S.pub.error = ''; S.pub.wait = null; if (S.evId !== id) openEvent(id); }
     S.loadedEvents = true; render();
   }, e => { S.pub.error = 'This event is not shared publicly.'; S.loadedEvents = true; render(); dbErr(e); });
@@ -53,6 +63,7 @@ function publicWaitHTML(ev) {
     <p class="tiny muted">Karate Event Tracker · no sign-in needed</p></div>`;
 }
 function publicMissingHTML() {
+  if (S.pub && S.pub.paused && !S.pub.error) return pausedHTML(S.pub.paused);
   if (S.pub && S.pub.wait && !S.pub.error) return publicWaitHTML(S.pub.wait);
   return `<div class="card empty" style="margin-top:40px"><div class="mark-lg"></div><h2>${S.pub.error ? 'Event not available' : 'Opening the event…'}</h2><p class="muted" style="max-width:48ch">${esc(S.pub.error || 'Loading the live results.')}</p></div>`;
 }
@@ -99,7 +110,7 @@ async function shareOn() {
   const token = newShareToken();
   if (!(await guard(() => S.store.set('share/' + token, { eventId: ev.id, at: new Date().toISOString() })))) return;
   if (ev.shareToken && ev.shareToken !== token) await guard(() => S.store.del('share/' + ev.shareToken));
-  await guard(() => S.store.update(P.event(ev.id), { public: true, shareToken: token }), ev.live ? 'Public link created' : 'Public link and QR code ready — the page waits for the start');
+  if (await guard(() => S.store.update(P.event(ev.id), { public: true, shareToken: token }), ev.live ? 'Public link created' : 'Public link and QR code ready — the page waits for the start')) setTimeout(() => pubSync(true, true), 300);
 }
 async function shareOff() {
   const ev = curEvent(); if (!ev) return;
@@ -143,7 +154,7 @@ function viewerDivisionsHTML() {
   const rows = divs.map(dv => {
     const br = S.d.brackets[dv.id], segs = KT.segList(br).filter(s => s.seg.startsWith('P:'));
     const pools = segs.map(s => `<span class="chip ring-chip">${esc(s.label)} · ${esc(ringName(KT.ringOf(dv, s.seg)))}</span>`).join('');
-    return `<div class="vrow" data-act="view-bracket" data-id="${esc(dv.id)}" role="button" tabindex="0"><span class="name">${esc(dv.name)}</span>
+    return `<div class="vrow" data-act="view-bracket" data-id="${esc(dv.id)}" role="button" tabindex="0"><span class="name">${star('divs', dv.id)} ${esc(dv.name)}</span>
       <span class="tiny muted">${plural(divEntrants(dv.id).length, 'entrant')} · ${esc(KT.FORMATS[dv.format] || dv.format || '')}${S.d.rings[dv.ringId] ? ' · ' + esc(ringName(dv.ringId)) : ''}</span>
       ${pools ? `<span class="pill-list">${pools}</span>` : ''}${divStatusChip(dv.id)}</div>`;
   }).join('');
@@ -202,6 +213,7 @@ function liveCardHTML() {
       ${link ? `<div class="share-link"><button class="sm primary" data-act="share-copy">Copy link</button><a class="btn go" id="share-open" href="${esc(link)}" target="_blank" rel="noopener">Open public page</a></div>
         <p class="tiny muted">Spectators open this link without signing in and see only this event.</p>`
         : `<p class="small muted">${S.store && S.store.mode === 'cloud' ? 'On claude.ai the event is live for the people you shared the page with. A public link for spectators without an account is created when you go live on the Vercel + Firebase site.' : 'Public link unavailable here.'}</p>`}
+      ${spectatorCtlHTML(ev)}
       <div class="row"><span class="small ${done ? '' : 'muted'}" style="margin-right:auto">${done ? 'Every division is finished.' : 'End live when the tournament is complete.'}</span><button class="${done ? 'danger primary' : 'danger'}" data-act="live-end">End live</button></div></div>`;
   }
   const checks = liveChecks(), hardOk = checks.every(c => c.ok || !c.hard);
@@ -216,13 +228,13 @@ async function goLive(force) {
   const open = liveChecks().filter(c => !c.ok && c.hard);
   if (open.length && !(force && (await confirmBox(`Not everything is ready:\n• ${open.map(c => c.label).join('\n• ')}\nGo live anyway?`, 'Go live anyway')))) return;
   if (!force && !(await confirmBox('Go live now? Spectators can follow the tournament as it happens.', 'Go live'))) return;
-  const up = { live: true, liveAt: new Date().toISOString(), endedAt: '' };
+  const up = { live: true, liveAt: new Date().toISOString(), endedAt: '', pubPaused: false };
   if (S.store.mode !== 'cloud') {
     const token = ev.shareToken || newShareToken();
     if (!ev.shareToken && !(await guard(() => S.store.set('share/' + token, { eventId: ev.id, at: up.liveAt })))) return;
     Object.assign(up, { public: true, shareToken: token });
   }
-  await guard(() => S.store.update(P.event(ev.id), up), 'The tournament is live');
+  if (await guard(() => S.store.update(P.event(ev.id), up), 'The tournament is live') && up.public) setTimeout(() => pubSync(!ev.public, true), 300);
 }
 async function endLive() {
   const ev = curEvent(); if (!ev) return;

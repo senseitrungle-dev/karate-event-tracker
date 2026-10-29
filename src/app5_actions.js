@@ -1,7 +1,7 @@
 /* ===== actions, subscriptions, init ===== */
 function subscribeEvents() {
   watchBranding();
-  S.store.watch('events', o => { S.events = o; S.loadedEvents = true; if (S.lastEv && !S.evId && o[S.lastEv]) { const id = S.lastEv; S.lastEv = null; openEvent(id); } render(); }, dbErr);
+  S.store.watch('events', o => { S.events = o; S.loadedEvents = true; if (S.lastEv && !S.evId && o[S.lastEv]) { const id = S.lastEv; S.lastEv = null; openEvent(id); } feedPauseCheck(); render(); }, dbErr);
   subscribePeople();
 }
 /* people, directors and invites (v1.7) */
@@ -29,6 +29,27 @@ function subscribePeople() {
   if (S.canEditor) S.store.watch('orgRequests', o => { S.orgReqs = o; render(); }, quiet);
 }
 function dbErr(e) { console.warn('db', e); if (e && e.code === 'revoked') { S.readOnly = true; toast('Access changed. Reload the page to continue.', true); } }
+/** The event's data: its own collections for the event's team (and local mode / claude.ai); spectators get the compact copy (v1.50). */
+function subscribeEventData(id) {
+  const feed = spectatorFeed(S.events[id]);
+  S.feed = feed;
+  if (feed === 'cdn') return;   // the public page's poller fills S.d
+  if (feed === 'direct') { S.feedPaused = !!(S.events[id] || {}).pubPaused; if (!S.feedPaused) S.unsub.push(...feedWatch(id)); return; }
+  const w = (col, key) => S.unsub.push(S.store.watch(col, o => { S.d[key] = o; render(); }, dbErr));
+  ['competitors', 'teams', 'divisions', 'rings', 'sessions', 'judges'].forEach(c => w(P.col(id, c), c));
+  ['brackets', 'attendance', 'ringstate', 'ringready'].forEach(c => w(P.liveCol(id, c), c));
+  if (!S.pub && (isLocal() || isEventDirector(S.events[id]))) { w(P.pvCol(id), 'pv'); w(P.col(id, 'requests'), 'requests'); setTimeout(scheduleSync, 1500); }
+  if (!S.pub) { pubInstall(); if (isEventDirector(S.events[id]) && (S.events[id] || {}).public) pubSyncLater(); }
+}
+/** Signed-in spectators: the director paused or resumed the public results — stop reading, or start again. */
+function feedPauseCheck() {
+  if (!S.evId || S.pub || S.feed !== 'direct') return;
+  const ev = curEvent(), p = !!(ev && ev.pubPaused);
+  if (p === !!S.feedPaused) return;
+  S.feedPaused = p;
+  S.unsub.forEach(u => { try { u(); } catch (e) { /* ignore */ } }); S.unsub = [];
+  if (!p) S.unsub.push(...feedWatch(S.evId));
+}
 function openEvent(id) {
   if (id && S.events[id] && !canOpenEvent(S.events[id])) { toast('You don’t have access to this event. Use “Request access”.', true); return; }
   S.unsub.forEach(u => { try { u(); } catch (e) { /* ignore */ } }); S.unsub = [];
@@ -37,10 +58,7 @@ function openEvent(id) {
   if (id && !S.pub) loadView(id);   // v1.46: this person's last view of this event
   saveUIPrefs();
   if (!id) { render(); return; }
-  const w = (col, key) => S.unsub.push(S.store.watch(col, o => { S.d[key] = o; render(); }, dbErr));
-  ['competitors', 'teams', 'divisions', 'rings', 'sessions', 'judges'].forEach(c => w(P.col(id, c), c));
-  ['brackets', 'attendance', 'ringstate', 'ringready'].forEach(c => w(P.liveCol(id, c), c));
-  if (!S.pub && (isLocal() || isEventDirector(S.events[id]))) { w(P.pvCol(id), 'pv'); w(P.col(id, 'requests'), 'requests'); setTimeout(scheduleSync, 1500); }
+  subscribeEventData(id);
   window.scrollTo(0, 0);
   render();
 }
@@ -90,9 +108,11 @@ async function deleteEvent(id) {
   for (const c of ['competitors', 'teams', 'divisions', 'rings', 'sessions', 'judges']) Object.keys(S.d[c]).forEach(x => paths.push(P.doc(id, c, x)));
   Object.keys(S.d.pv).forEach(x => paths.push(P.pv(id, x)));
   for (const c of ['brackets', 'attendance', 'ringstate', 'ringready']) Object.keys(S.d[c]).forEach(x => paths.push(P.live(id, c, x)));
+  if (S.store.mode !== 'cloud') { for (const c in PUB_COLS) for (let n = 0; n < PUB_COLS[c]; n++) paths.push(P.pubPart(id, `${c}~${n}`)); paths.push(P.pub(id)); }   // v1.50: spectators' copy
   closeModal();
-  for (const p of paths) await guard(() => S.store.del(p));
-  await guard(() => S.store.del(P.event(id)), 'Event deleted');
+  PUB.skip = true; PUB.dirty.clear();
+  try { for (const p of paths) await guard(() => S.store.del(p)); await guard(() => S.store.del(P.event(id)), 'Event deleted'); }
+  finally { PUB.skip = false; PUB.dirty.clear(); }
   openEvent(null);
 }
 
@@ -189,6 +209,7 @@ const ACT = {
     S.ui.readyOpen = Object.assign({}, S.ui.readyOpen, { [rid]: false });   // v1.50: fold the checklist once ready
     setRingReady(rid, { ready: true }); },
   'judge-in': (el, e) => { if (e) e.stopPropagation(); const j = S.d.judges[el.dataset.id]; if (j) guard(() => S.store.update(P.doc(S.evId, 'judges', j.id), { checkedIn: !j.checkedIn })); },
+  'pub-pause': () => pubPause(true), 'pub-resume': () => pubPause(false), 'pub-refresh': () => pubSync(false),
   'share-on': () => shareOn(), 'share-off': () => shareOff(), 'share-copy': () => shareCopy(),
   'open-event': el => openEvent(el.dataset.id),
   'more-tabs': () => moreSheet(),
@@ -471,6 +492,7 @@ const CHANGE = {
     if (el.id === 'd-entsort') reorderEntRows(el.value); else if (S.modal && S.modal.refresh) S.modal.refresh(); },
   'ring-check': el => { const rid = el.dataset.ring, rr = S.d.ringready[rid] || {}, checks = Object.assign({}, rr.checks, { [el.dataset.k]: el.checked });
     setRingReady(rid, KT.ringReadyOk(checks) ? { checks } : { checks, ready: false }); },   // unticking an item makes the ring not ready again
+  'pub-feed': el => pubSetFeed(el.value),
   'ring-helpers': el => setRingReady(el.dataset.ring, { helpers: el.value.trim() }),
   'ring-addmgr': el => { if (el.value) setPersonRing(el.value, el.dataset.ring); },
   'inv-role': el => { const f = $('#inv-ring-f'); if (f) f.hidden = el.value !== 'manager'; },
