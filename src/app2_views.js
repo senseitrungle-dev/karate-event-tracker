@@ -197,6 +197,11 @@ function compWhere(c, level) {
   const [lead, ...rest] = parts.filter(Boolean);
   return lead ? `<b class="where">${esc(lead)}</b>${rest.length ? ' · ' + esc(rest.join(' · ')) : ''}` : '';
 }
+/** v1.53: the Competitors list order — this person's choice, else grouped (collapsible) by the event level's group. */
+function compSortMode() {
+  if (KT.ENT_SORTS[S.ui.compSort]) return S.ui.compSort;
+  const lv = (curEvent() || {}).level; return lv === 'International' ? 'country' : lv === 'National' ? 'region' : 'club';
+}
 function competitorsHTML() {
   const ev = curEvent(), dir = isDirector(), tour = ev.kind === 'tournament';
   const q = S.ui.q.toLowerCase(), f = S.ui.filter;
@@ -204,7 +209,7 @@ function competitorsHTML() {
   const placedIn = {};
   for (const did in DC.assign.byDiv) for (const id of DC.assign.byDiv[did]) (placedIn[id] = placedIn[id] || []).push(did);
   // v1.48: list order — name A→Z / Z→A, or grouped by country / region / club (dojo); the person's own view (§72)
-  const cs = KT.ENT_SORTS[S.ui.compSort] ? S.ui.compSort : 'name', cf = { country: 'country', region: 'state', club: 'dojo' }[cs];
+  const cs = compSortMode(), cf = { country: 'country', region: 'state', club: 'dojo' }[cs];
   const csGroup = c => cf ? String(c[cf] || '').trim() : '';
   const order = KT.sortEntrants(DC.comps.map(c => ({ id: c.id, last: c.lastName, first: c.firstName, group: csGroup(c) })), cs).map(x => x.id);
   const pos = Object.fromEntries(order.map((id, i) => [id, i]));

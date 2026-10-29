@@ -41,6 +41,7 @@ const path = require('path');
     await p.selectOption('#judge-sort', 'country'); await W(200);
     // --- competitors: fold / unfold country groups
     await tab('Competitors');
+    ok(`${width}: international event: Competitors grouped by country by default, collapsible`, (await p.$eval('#comp-s', s => s.value)) === 'country' && (await p.$$('#main tr.grp-tog')).length >= 5);
     await p.selectOption('#comp-s', 'country'); await W(300);
     const rowsN = () => p.$$eval('#main tr[data-act="comp-edit"]', x => x.length);
     const all = await rowsN(), heads = await p.$$eval('#main tr.grp-tog', x => x.map(y => y.dataset.g));

@@ -12,9 +12,11 @@ const path = require('path');
     await p.goto('file://' + path.resolve('dist/karate-event-tracker.html'));
     await p.click('button:has-text("Create demo tournament")'); await p.click('button[data-kind="national"]'); await p.waitForSelector('text=Director checklist', { timeout: 60000 });
     await tab('Competitors');
+    ok(`${width}: national event: Competitors grouped by region by default (collapsible)`, (await p.$eval('#comp-s', s => s.value)) === 'region' && (await p.$$('#main tr.grp-tog')).length >= 2);
+    await p.selectOption('#comp-s', 'name'); await W(250);
     const names = () => p.$$eval('#main table.mcards tr[data-act="comp-edit"] .name', x => x.map(y => y.textContent.trim().toLowerCase()));
     let n = await names();
-    ok(`${width}: competitors A→Z by default`, n.length > 20 && n.every((x, i) => i === 0 || n[i - 1].localeCompare(x) <= 0));
+    ok(`${width}: competitors A→Z`, n.length > 20 && n.every((x, i) => i === 0 || n[i - 1].localeCompare(x) <= 0));
     await p.selectOption('#comp-s', 'name-desc'); await W(250); n = await names();
     ok(`${width}: Z→A`, n.every((x, i) => i === 0 || n[i - 1].localeCompare(x) >= 0));
     for (const [m, re] of [['region', /^(Central|Eastern|Mountain|Pacific|Southern) · \d+$/], ['club', /(Dojo|Karate|Budokan|Club) · \d+$/], ['country', /^Example · \d+$/]]) {
