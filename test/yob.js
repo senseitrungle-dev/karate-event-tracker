@@ -55,7 +55,7 @@ const path = require('path');
   const [dl] = await Promise.all([p.waitForEvent('download'), p.click('button[data-act="export-comps"]')]);
   const csv = require('fs').readFileSync(await dl.path(), 'utf8').replace(/^\ufeff/, '');
   ok('export downloads as a file (not a copy box)', /competitors\.csv$/.test(dl.suggestedFilename()) && !(await p.$('#export-text')));
-  ok('export has birth_year, no dob', /^first_name,last_name,gender,birth_year,age/.test(csv) && /Zoe,Year,F,2011,15/.test(csv));
+  ok('export has birth_year, no dob', /^First,Last,gender,birth_year,age/.test(csv) && /Zoe,Year,F,2011,15/.test(csv));
   // a local (US) event keeps full dates
   await p.click('.bar button.brand'); await p.waitForTimeout(300);
   await p.click('button:has-text("Create demo tournament") >> nth=0'); await p.click('button[data-kind="local"]'); await p.waitForSelector('text=Director checklist', { timeout: 60000 });
