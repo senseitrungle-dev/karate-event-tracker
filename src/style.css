@@ -745,3 +745,34 @@ tr.grp-tog.shut td { opacity: .8; }
 /* v1.54: competitor card — the division / team actually assigned */
 .assigned { text-align: left; white-space: normal; overflow-wrap: anywhere; min-height: 0; }
 .assigned-line { color: var(--ink-2); overflow-wrap: anywhere; }
+/* v1.56: division printout (per country / region / club) — preview on screen, pages on paper */
+.pr-preview { background: #e9e9e6; padding: 10px; border-radius: 10px; max-height: 60vh; overflow: auto; }
+.pr-preview .ppage { background: #fff; color: #111; margin: 0 auto 12px; padding: 12mm; box-shadow: 0 1px 6px rgba(0,0,0,.18); }
+.pr-preview.paper-letter .ppage { max-width: 8.5in; } .pr-preview.paper-a4 .ppage { max-width: 210mm; }
+.ppage { font: 11px/1.35 "IBM Plex Sans", Arial, sans-serif; color: #111; }
+.ppage h1 { font-size: 15px; margin: 0 0 2px; color: #111; }
+.ppage .pmeta { font-size: 10px; color: #555; margin-bottom: 8px; }
+.ppage .page-grp { margin-bottom: 8px; }
+.ppage .prow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 6px; break-inside: avoid; page-break-inside: avoid; margin-bottom: 6px; }
+.ppage .pblock { border: 1px solid #9a9a9a; min-width: 0; }
+.ppage .pblock.pempty { border: 0; }
+.ppage .ptitle { background: #fff35c; font-weight: 700; padding: 3px 6px; border-bottom: 1px solid #9a9a9a; color: #111; }
+.ppage .pgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.ppage, .ppage * { box-sizing: border-box; }
+.ppage .ph { font-weight: 700; padding: 3px 6px; border-bottom: 1px solid #c8c8c8; }
+.ppage .pgrid > .ph:nth-child(odd), .ppage .pgrid > .pc:nth-child(odd) { border-right: 1px solid #c8c8c8; }
+.ppage .pc { padding: 0 0 2px; min-width: 0; }
+.ppage .pn { padding: 2px 6px; border-bottom: 1px solid #e2e2e2; overflow-wrap: anywhere; }
+.ppage .pteam { font-weight: 700; } .ppage .pmem { padding-left: 12px; }
+.ppage .pmix { border-top: 1px solid #c8c8c8; }
+.ppage .pxgrid .pspan { grid-column: 1 / -1; }
+#print-root { display: none; }
+@media print {
+  body.printing > *:not(#print-root) { display: none !important; }
+  body.printing { background: #fff !important; }
+  body.printing #print-root { display: block; width: 100%; margin: 0; }
+  body.printing { margin: 0 !important; padding: 0 !important; }
+  #print-root .ppage { padding: 0 2px 0 1px; box-shadow: none; break-after: page; page-break-after: always; }
+  #print-root .ppage:last-child { break-after: auto; page-break-after: auto; }
+  #print-root .ptitle { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
