@@ -22,7 +22,10 @@ const path = require('path'), fs = require('fs');
   ok('real config: no notice', !(await p.$('#cfg-bad')));
   ok('real config: sign-in enabled', !(await p.$eval('button[data-act="fb-signin"]', x => x.disabled)));
   await p.click('button[data-act="fb-signin"]');
-  await p.waitForFunction(() => sessionStorage.getItem('fbprompt'), null, { timeout: 5000 }).catch(() => {});   // wait for the sign-in call, not a fixed time (slow machines)
+  // wait for the sign-in call, not a fixed time; under load the first click can land before the app is ready — click once more
+  if (!(await p.waitForFunction(() => sessionStorage.getItem('fbprompt'), null, { timeout: 5000 }).catch(() => null))) {
+    await p.click('button[data-act="fb-signin"]'); await p.waitForFunction(() => sessionStorage.getItem('fbprompt'), null, { timeout: 10000 }).catch(() => {});
+  }
   ok('Google is asked to show the account chooser', (await p.evaluate(() => sessionStorage.getItem('fbprompt'))) === 'select_account');
   await p.close();
   for (const [code, re] of [['auth/unauthorized-domain', /not authorized.*Authorized domains/], ['auth/api-key-not-valid.-please-pass-a-valid-api-key.', /API key is not valid/], ['auth/operation-not-allowed', /enable Google/], ['auth/popup-blocked', /Allow pop-ups/]]) {

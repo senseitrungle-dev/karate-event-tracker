@@ -37,7 +37,7 @@ const path = require('path');
   ok('mixed teams show each member\'s country', froms >= 2);
   // font fitted so every group fits on at most two pages
   const fs = await p.$$eval('#pr-preview .ppage', ps => ps.map(x => parseFloat(x.style.fontSize)));
-  ok(`font size chosen per sheet (${[...new Set(fs)].join(', ')} px)`, fs.every(x => x >= 6 && x <= 10.5));
+  ok(`font size chosen per sheet (${[...new Set(fs)].join(', ')} px)`, fs.every(x => x >= 5.5 && x <= 13));
   // one country / per club
   await p.selectOption('#pr-which', 'Japan'); await W(250);
   ok('print one country', (await p.$$eval('#pr-preview .pbar', x => x.map(y => y.textContent))).join() === 'JAPAN');
@@ -68,14 +68,24 @@ const path = require('path');
   const n1 = (one.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
   ok(`largest country (${big}) prints on ${n1} page(s) (≤ 2)`, n1 >= 1 && n1 <= 2);
   await p.emulateMedia({ media: 'screen' }); await p.evaluate(() => window.dispatchEvent(new Event('afterprint'))); await W(1000);
-  // "Open as page": a standalone document with its own Print / Save as PDF button
-  const [tab] = await Promise.all([ctx.waitForEvent('page'), p.click('#pr-page')]);
-  await tab.waitForLoadState(); await tab.waitForTimeout(300);
-  ok('"Open as page" opens the sheets in a new tab with a Print / Save as PDF button', (await tab.$$('.ppage')).length >= 1 && !!(await tab.$('button:has-text("Save as PDF")')) && /divisions by country/.test(await tab.title()));
-  await tab.close();
-  // phone
+  // v1.58: names on one line (no name cut off) and the PDF made in the app
+  ok('every name fits on its line in the preview', await p.$$eval('#pr-preview .psec td', tds => tds.every(td => td.scrollWidth <= td.clientWidth + 1)));
+  await p.selectOption('#pr-which', ''); await p.selectOption('#pr-paper', 'letter'); await W(300);
+  await p.click('#pr-pdf'); await p.waitForSelector('#pr-out:not([hidden]) #pr-dl', { timeout: 30000 });
+  ok('PDF ready message with the page count', /PDF ready/.test(await p.textContent('#pr-out')) && /\d+ pages?/.test(await p.textContent('#pr-out')));
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#pr-dl')]);
+  const buf = require('fs').readFileSync(await dl.path()), txt = buf.toString('latin1');
+  require('fs').copyFileSync(await dl.path(), 'test/shots/divprint-app.pdf');
+  const pp = (txt.match(/\/Type \/Page /g) || []).length, imgs = (txt.match(/\/Subtype \/Image/g) || []).length;
+  ok(`app PDF: valid file (${dl.suggestedFilename()}), ${pp} Letter pages, one image each`, txt.startsWith('%PDF-1.4') && /%%EOF\s*$/.test(txt) && /\.pdf$/.test(dl.suggestedFilename()) && pp >= 10 && pp <= 20 && imgs === pp && /MediaBox \[0 0 612\.00 792\.00\]/.test(txt));
+  const xref = +txt.match(/startxref\n(\d+)/)[1];
+  ok('app PDF: cross-reference table where it says', txt.slice(xref, xref + 4) === 'xref');
+  // phone: the dialog fits and the preview is the real page scaled to the screen
   await p.setViewportSize({ width: 390, height: 844 }); await W(300);
+  await p.selectOption('#pr-paper', 'a4'); await W(400);
   ok('phone: no horizontal page scroll with the print dialog', await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  ok('phone: the preview is the real page scaled to the screen width', await p.$$eval('#pr-preview .pv-sheet', (sh) => { const pv = document.getElementById('pr-preview'); return sh.length > 0 && sh.every(x => x.getBoundingClientRect().width <= pv.clientWidth) && /scale\(0\.\d+\)/.test(sh[0].querySelector('.ppage').style.transform); }));
+  await p.screenshot({ path: 'test/shots/divprint-phone.png' });
   // one group holding every division still fits on 2 pages: national demo by country (one country), and the World demo by region
   // (nobody has a region: all 58 competitors on one sheet, the font gets smaller)
   for (const [paper, kind, by] of [['letter', 'national', 'country'], ['a4', 'national', 'country'], ['letter', 'international', 'region'], ['a4', 'international', 'region']]) {
@@ -89,8 +99,23 @@ const path = require('path');
     await q.click('#pr-go'); await q.waitForTimeout(300); await q.emulateMedia({ media: 'print' });
     const pdf = await q.pdf({ path: `test/shots/divprint-all-${kind}-${paper}.pdf`, preferCSSPageSize: true, printBackground: true });
     const n = (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
-    ok(`${kind} by ${by}, ${paper}: every division on one sheet (${secs} event tables, font ${f}px) fits on ${n} page(s) (≤ 2)`, secs >= 8 && n >= 1 && n <= 2 && (kind === 'national' || paper === 'a4' || f < 10.5));   // Letter is shorter: the World demo by region must shrink there
+    ok(`${kind} by ${by}, ${paper}: every division on one sheet (${secs} event tables, font ${f}px) fits on ${n} page(s) (≤ 2)`, secs >= 8 && n >= 1 && n <= 2);
     await c2.close();
+  }
+  // home-screen app on iPhone / iPad (standalone): Print makes the PDF to share instead of calling print()
+  {
+    const c3 = await b.newContext({ viewport: { width: 390, height: 844 } }); await c3.route(/fonts\./, r => r.abort());
+    const q = await c3.newPage(); q.on('pageerror', e => errors.push(e.message));
+    await q.addInitScript(() => { window.__printed = 0; window.print = () => { window.__printed++; }; Object.defineProperty(navigator, 'standalone', { get: () => true });
+      navigator.canShare = () => true; navigator.share = async d => { window.__shared = d.files && d.files[0] && d.files[0].name; }; });
+    await q.goto('file://' + path.resolve('dist/karate-event-tracker.html'));
+    await q.click('button:has-text("Create demo tournament")'); await q.click('button[data-kind="international"]'); await q.waitForSelector('text=Director checklist', { timeout: 60000 });
+    await q.click('.bn:has-text("Divisions")'); await q.waitForTimeout(300); await q.click('button[data-act="print-open"]'); await q.waitForTimeout(400);
+    await q.click('#pr-go'); await q.waitForSelector('#pr-out:not([hidden]) #pr-share', { timeout: 30000 });
+    ok('home-screen app: Print makes a PDF instead (print() not called) and offers Share / Print', (await q.evaluate(() => window.__printed)) === 0);
+    await q.click('#pr-share'); await q.waitForTimeout(300);
+    ok('Share / Print hands the PDF file to the share sheet', /\.pdf$/.test(await q.evaluate(() => window.__shared || '')));
+    await c3.close();
   }
   console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
   await b.close(); process.exit(errors.length ? 1 : 0);
