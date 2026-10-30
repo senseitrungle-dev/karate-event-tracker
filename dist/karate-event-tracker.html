@@ -758,14 +758,14 @@ tr.grp-tog.shut td { opacity: .8; }
 .pr-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.58.0 */
+<script>/* Karate Event Tracker v1.59.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.58.0';
+  const VERSION = '1.59.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -6000,8 +6000,14 @@ function splitDate(s) {
   if ((k = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/))) return { ymd: true, y: k[1], a: +k[2], b: +k[3] };
   if ((k = s.match(/^(\d{1,2})[-/. ](\d{1,2})[-/. ](\d{4})$/))) return { a: +k[1], b: +k[2], y: k[3] };
   if ((k = s.match(/^(\d{2})(\d{2})(\d{4})$/))) return { a: +k[1], b: +k[2], y: k[3] };
+  // v1.59: two-digit years (5/12/06, 11/6/96 — Google / Numbers forms): the most recent year that is not in the future
+  if ((k = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/))) return { a: +k[1], b: +k[2], y: String(fullYear(+k[3])) };
   return null;
 }
+/** v1.59: a long form question as a column heading, shortened for the preview ("Waiver By filling out this form…") */
+function impShort(h) { h = String(h || '').replace(/\s+/g, ' ').trim(); return h.length > 48 ? h.slice(0, 45).replace(/\s+\S*$/, '') + '…' : h; }
+/** "06" → 2006, "96" → 1996: a birth year is never in the future (relative to today). */
+function fullYear(yy) { const now = new Date().getFullYear(), c = Math.floor(now / 100) * 100; return c + yy > now ? c - 100 + yy : c + yy; }
 /** decide day-first (DMY) or month-first (MDY) for a list of raw dates; returns { order, why, clash } */
 function dateOrder(raw, countries, choice) {
   if (choice === 'DMY' || choice === 'MDY') return { order: choice, why: 'chosen by you' };
@@ -6059,12 +6065,16 @@ function importRows(text) {
   }));
   const h = rows[hi].map(normH);
   const col = (...names) => h.findIndex(x => names.includes(x));
+  // v1.59: form questions often carry an explanation after the name ("Waiver By filling out this form…"): match the start of the heading
+  const colStart = (...names) => { const i = col(...names); return i >= 0 ? i : h.findIndex(x => x.length > 12 && names.some(n => n.length >= 6 && x.startsWith(n))); };
   const ix = { first: col(...FIRST), last: col(...LAST), name: col(...FULL), gender: col('gender', 'sex'),
     dob: col('dob', 'dateofbirth', 'birthdate', 'birthday', 'born'), age: col('age'), yob: col('yearofbirth', 'birthyear', 'yob', 'yearborn'),
     rank: col('rank', 'belt', 'grade', 'kyu', 'beltrank'), dojo: col('dojo', 'club', 'school', 'team'), state: col('state', 'region', 'province'), country: col('country', 'nation'), email: col('email'), phone: col('phone', 'mobile'),
-    en: col('emergencyname', 'emergencycontact', 'emergency', 'emergencycontactname', 'parentname', 'parent', 'guardian'), ep: col('emergencyphone', 'emergencycontactphone', 'parentphone', 'guardianphone'), waiver: col('waiver', 'waiversigned'), paid: col('paid', 'feepaid'), events: col('events', 'event', 'divisions'),
+    en: col('emergencyname', 'emergencycontact', 'emergency', 'emergencycontactname', 'parentname', 'parent', 'guardian'), ep: col('emergencyphone', 'emergencycontactphone', 'parentphone', 'guardianphone'), waiver: colStart('waiver', 'waiversigned', 'liabilitywaiver', 'releaseofliability'), paid: col('paid', 'feepaid'), events: col('events', 'event', 'divisions'),
     fee: h.findIndex(x => /^(participationfee|fee|entryfee)/.test(x)) };
-  const evCols = h.map((x, i) => [i, EV_COLS[x]]).filter(([, e]) => e);           // one column per event, ticked with X
+  // one column per event, ticked with X — or a form question whose heading starts with the event ("Team Kata (Name, Member's Names) …")
+  const evStart = x => Object.keys(EV_COLS).filter(k => k.length >= 6 && x.length > k.length && x.startsWith(k)).sort((a, b) => b.length - a.length)[0];
+  const evCols = h.map((x, i) => [i, EV_COLS[x] || (i !== ix.events && i !== ix.waiver && evStart(x) ? EV_COLS[evStart(x)] : null)]).filter(([, e]) => e);
   // v1.34: column scan — recognised, required but not in the file, ignored
   const LBL = { first: 'First name', last: 'Last name', name: 'Name', gender: 'Gender', dob: 'Date of birth', rank: 'Rank', dojo: 'Dojo / club', state: 'State / region', country: 'Country', email: 'Email', phone: 'Phone',
     en: 'Emergency contact', ep: 'Emergency phone', waiver: 'Waiver', paid: 'Paid', events: 'Events', fee: 'Fee' };
@@ -6084,7 +6094,7 @@ function importRows(text) {
     ix.en < 0 || ix.ep < 0 ? 'Emergency contact' : '', ix.waiver < 0 ? 'Waiver' : '', isT && ix.events < 0 && !evCols.length ? 'Events' : ''].filter(Boolean);
   const recs = [], errors = [];
   const g = (r, i) => (i >= 0 ? (r[i] || '').trim() : '');
-  const yes = s => /^(y|yes|true|1|x|✓|✔)$/i.test(s);
+  const yes = s => /^(y|yes|true|1|x|✓|✔|i agree|agree|agreed|i accept|accept|accepted|signed|i have read and agree)$/i.test(String(s || '').trim().replace(/[.!]+$/, ''));
   // v1.55: an event column counts as entered when it holds anything but a blank or a "no" (e.g. X, or the division name from our own export)
   const entered = s => !!String(s || '').trim() && !/^(n|no|false|0|-|–|—)$/i.test(String(s).trim());
   const body = rows.slice(hi + 1);
@@ -6110,12 +6120,14 @@ function importRows(text) {
     }
     const dob = importDate(rawDate(r), dord.order);   // the federation sheet puts the birth date under "Age"
     const gs = g(r, ix.gender).toLowerCase();
-    const evText = g(r, ix.events).split(/[;|]/).map(s => EV_ALIASES[s.trim().toLowerCase()] || (KT.EVENT_TYPES[s.trim().toUpperCase()] ? s.trim().toUpperCase() : null));
+    const evText = g(r, ix.events).split(/[;|,]/).map(s => EV_ALIASES[s.trim().toLowerCase()] || (KT.EVENT_TYPES[s.trim().toUpperCase()] ? s.trim().toUpperCase() : null));
     const fee = g(r, ix.fee).replace(/[^0-9.]/g, '');
     const rec = { firstName: nameCase(fn), lastName: nameCase(ln), gender: /^(m|male|man|men|boy)$/.test(gs) ? 'M' : /^(f|female|w|woman|women|girl)$/.test(gs) ? 'F' : '',
       dob, rank: parseRank(g(r, ix.rank)), dojo: g(r, ix.dojo) || info.federation, state: g(r, ix.state), country: titleWord(g(r, ix.country)) || info.country, email: g(r, ix.email), phone: g(r, ix.phone),
       emergencyName: g(r, ix.en), emergencyPhone: g(r, ix.ep), waiver: yes(g(r, ix.waiver)), feePaid: yes(g(r, ix.paid)), feeAmount: fee && +fee ? String(+fee) : '',
-      events: [...new Set([...evText, ...evCols.filter(([i]) => entered(g(r, i))).map(([, e]) => e)].filter(Boolean))] };
+      events: [...new Set([...evText, ...evCols.filter(([i]) => entered(g(r, i))).map(([, e]) => e)].filter(Boolean))],
+      // v1.59: what was written in a team-event column (team name, members) is kept in the director's notes for making the teams
+      notes: evCols.filter(([i, e]) => KT.EVENT_TYPES[e].team && entered(g(r, i)) && !yes(g(r, i))).map(([i, e]) => `${KT.EVENT_TYPES[e].label}: ${g(r, i)}`).join('\n') };
     // v1.34: never drop a named competitor for missing details — import what is there and flag the rest for entry later
     const miss = [], bad = (v, l) => (v ? `${l} (“${v}” not recognised)` : l);
     if (!rec.firstName) miss.push('First name'); if (!rec.lastName) miss.push('Last name');
@@ -6158,9 +6170,9 @@ function importPreviewHTML() {
   const fixes = recs.filter(r => r.fixId), adds = recs.length - fixes.length;
   const dd = info && info.dates, dline = dd ? `<div class="notice ${dd.clash ? 'warn' : 'info'}" style="display:block">Birth dates read as <b>${dd.order === 'MDY' ? 'month-day-year (USA, 07/27/2012 = July 27)' : 'day-month-year (Europe, 27.07.2012 = 27 July)'}</b> — ${esc(dd.why)}. ${dd.clash ? 'Rows that don’t fit are listed below. ' : ''}Change it with “Birth dates are” above if this is wrong.</div>` : '';
   const nInc = recs.filter(r => !r.fixId && (r.missing || []).length).length;
-  const colsBox = info && info.cols ? `<div class="imp-cols"><div><b>Columns found (${info.cols.length})</b><div class="pill-list">${info.cols.map(c => `<span class="chip ok" title="File heading: ${esc(c.header)}">${esc(c.label)}${normH(c.header) !== normH(c.label) ? ` <span class="tiny">← ${esc(c.header)}</span>` : ''}</span>`).join('') || '<span class="muted small">none</span>'}</div></div>
+  const colsBox = info && info.cols ? `<div class="imp-cols"><div><b>Columns found (${info.cols.length})</b><div class="pill-list">${info.cols.map(c => `<span class="chip ok" title="File heading: ${esc(c.header)}">${esc(c.label)}${normH(c.header) !== normH(c.label) ? ` <span class="tiny">← ${esc(impShort(c.header))}</span>` : ''}</span>`).join('') || '<span class="muted small">none</span>'}</div></div>
     ${info.missingCols.length ? `<div><b>Not in the file — enter later</b><div class="pill-list">${info.missingCols.map(c => `<span class="chip warn">${esc(c)}</span>`).join('')}</div></div>` : ''}
-    ${info.ignored.length ? `<div><b>Not used</b> <span class="tiny muted">(not recognised)</span><div class="pill-list">${info.ignored.map(c => `<span class="chip plain">${esc(c)}</span>`).join('')}</div></div>` : ''}</div>` : '';
+    ${info.ignored.length ? `<div><b>Not used</b> <span class="tiny muted">(not recognised)</span><div class="pill-list">${info.ignored.map(c => `<span class="chip plain" title="${esc(c)}">${esc(impShort(c))}</span>`).join('')}</div></div>` : ''}</div>` : '';
   const yline = info && info.yobOnly ? `<div class="notice info" style="display:block"><b>International event — year of birth only.</b> Ages count on 31 Dec (birth-year rule); the day and month in the file are not stored (data minimisation).</div>` : '';
   return `${head}${colsBox}${yline}${dline}${warn}<p><b>${plural(adds, 'competitor')} ready to import</b>${nInc ? ` — <span style="color:var(--warn)"><b>${nInc}</b> with details to enter later</span> (marked <span class="chip warn">Incomplete</span>; Competitors → filter “Missing information”)` : ''}.${fixes.length ? ` <b>${plural(fixes.length, 'name')} will be corrected</b> (${fixes.map(r => esc(r.was) + ' → ' + esc(r.firstName + ' ' + r.lastName)).join(', ')}).` : ''}${errors.length ? `<br><span class="small" style="color:var(--bad)">${errors.slice(0, 10).map(esc).join('<br>')}${errors.length > 10 ? '<br>…and ' + (errors.length - 10) + ' more' : ''}</span>` : ''}</p>${tbl}`;
 }
@@ -6176,7 +6188,7 @@ async function runImport() {
     const pub = { firstName: r.firstName, lastName: r.lastName, gender: r.gender, rank: r.rank, dojo: r.dojo, state: r.state, country: r.country, waiver: r.waiver, feePaid: r.feePaid,
       checkedIn: false, status: 'active', events: r.events, divOverride: {}, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : r.birthYear ? KT.ageFromYear(r.birthYear, DC.asOf) : null, createdAt: new Date().toISOString(),
       importId: batch.id, importName: batch.name, importAt: batch.at };     // v1.36: which import a competitor came from (bulk remove)
-    const ok = await guard(async () => { await S.store.set(P.doc(S.evId, 'competitors', id), pub); await S.store.set(P.pv(S.evId, id), { dob: r.dob || '', birthYear: r.birthYear || '', email: r.email, phone: r.phone, emergencyName: r.emergencyName, emergencyPhone: r.emergencyPhone, feeAmount: r.feeAmount || '', notes: '' }); return true; });
+    const ok = await guard(async () => { await S.store.set(P.doc(S.evId, 'competitors', id), pub); await S.store.set(P.pv(S.evId, id), { dob: r.dob || '', birthYear: r.birthYear || '', email: r.email, phone: r.phone, emergencyName: r.emergencyName, emergencyPhone: r.emergencyPhone, feeAmount: r.feeAmount || '', notes: r.notes || '' }); return true; });
     if (!ok) break;
     done++; $('#imp-preview').textContent = `Imported ${done} of ${recs.length}…`;
   }

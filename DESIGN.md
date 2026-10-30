@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.58.0 Requirements & Design
+# Karate Event Tracker · v1.59.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -871,3 +871,15 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
   - Phone: the preview is scaled to the screen, no sideways scroll.
   - Whole-event sheets ≤ 2 pages in Letter and A4 (font 10.5–13 px).
   - Plus the earlier layout checks, and the full e2e set and other browser tests.
+
+## §87 Import of a registration form export: DOB as M/D/YY, "Kata, Kumite", Team Kata question column, waiver "I agree" (v1.59.0)
+**Requirement.** Import the competitor's DOB in the format MM/DD/YY. Scan the file for events: individual events and the team event. Waiver column: signed when the content is "I agree". (Example: Oct 31 UMN Tournament form responses, 16 competitors.)
+**File.** A form export. Columns: Timestamp, First Name, Last Name, Gender (Woman / Man), Phone, Emergency Phone, DOB (5/12/06, 11/6/96), Dojo, Email, Rank (5th kyu (Purple), Shodan, White belt), Events (Kata | Kata, Kumite), "Team Kata (Name, Member's Names) (leave blank if not competing)" (e.g. "Empinada backup; Brian, Thi, Isaac"), "Kitei Kata (open ranks, single elimination)", and a waiver whose heading is the whole waiver text ("Waiver By filling out this form…"), answered "I agree".
+**Design** (`app3_forms.js`).
+- `splitDate`: also d/m/yy and m/d/yy with a two-digit year. `fullYear(yy)` gives the most recent year that is not in the future (06 → 2006, 96 → 1996, 87 → 1987). The day / month order is decided as before (§51); here "11/24/07" proves month first.
+- `colStart`: a column heading may start with a known name followed by the form's explanation (heading over 12 letters, name at least 6). Used for the waiver (waiver, liability waiver, release of liability) and for event columns (team kata, team kumite, individual kata / kumite, fukugo, enbu); the Events and Waiver columns themselves are excluded.
+- Events: the events cell is split on commas as well as ; and |, so "Kata, Kumite" gives Individual Kata and Individual Kumite.
+- A team-event column counts as entered when filled (§82). What was written there (team name, members) goes into the competitor's private notes ("Team Kata: Empinada backup; Brian, Thi, Isaac") for making the team.
+- Waiver / paid: "I agree", "agree(d)", "I accept", "accept(ed)", "signed" (a trailing "." or "!" is ignored) count as yes, as do y / yes / x / 1.
+- Preview: long headings are shortened ("Waiver By filling out this form and in…"; full heading on hover). "Kitei Kata" (no matching event in the app) and Timestamp are listed under "Not used".
+**Verify.** test/formimport.js (made-up rows in the same shape: columns found incl. Waiver and Team Kata, Kitei / Timestamp not used, month-day-year detected; DOB 5/12/06 → 2006-05-12, 11/24/07, 9/3/87 → 1987-09-03, 1/25/08; Kata, Kumite; Team Kata only where filled, details in notes; "I agree" / "I agree." signed, blank not; Woman / Man (trailing space), ranks). The real file converted to CSV imports all 16 competitors with DOB (1987–2008), kata 16, kumite 10, team kata 1, waiver 16. dates, lenient / federation / Worlds 2026 imports, yob, export round trip, full e2e set.
