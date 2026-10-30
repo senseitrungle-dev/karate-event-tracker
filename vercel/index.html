@@ -761,14 +761,14 @@ tr.grp-tog.shut td { opacity: .8; }
 .pr-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.59.1 */
+<script>/* Karate Event Tracker v1.60.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.59.1';
+  const VERSION = '1.60.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -777,9 +777,12 @@ const KT = (function () {
     TKATA:   { label: 'Team Kata',         short: 'Team Kata',  team: true,  genders: ['M', 'F', 'X'], kind: 'kata',       defMethod: 'scores', size: [3, 3] },
     TKUMITE: { label: 'Team Kumite',       short: 'Team Kumite',team: true,  genders: ['M', 'F'],      kind: 'teamkumite', size: [3, 5] },
     FUKUGO:  { label: 'Fukugo',            short: 'Fukugo',     team: false, genders: ['M', 'F'],      kind: 'fukugo' },
+    KITEI:   { label: 'Ki-tei Kata',       short: 'Ki-tei',     team: false, genders: ['M', 'F'],      kind: 'kata',       defMethod: 'flags' },   // v1.60: designated kata, open ranks, flags
     ENBU:    { label: 'Enbu',              short: 'Enbu',       team: true,  genders: ['M', 'F', 'X'], kind: 'kata',       defMethod: 'scores', size: [2, 2] },  // pair; a division can set its own size (WTKF 2026 Cadet & Junior Enbu = 3)
   };
-  const EVENT_ORDER = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'];
+  const EVENT_ORDER = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU', 'KITEI'];
+  /** v1.60: the six WTKF events — offered by default; Ki-tei Kata is added per event. */
+  const STD_EVENTS = EVENT_ORDER.filter(e => e !== 'KITEI');
   const GENDERS = { M: 'Men', F: 'Women', X: 'Mixed' };
   const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools)', DE: 'Double elimination', DES: 'Double elimination (simplified)', KP: 'Kata score pools (12 max per pool)' };
   const ELIM_POOL = 8;
@@ -820,7 +823,7 @@ const KT = (function () {
   /* ---------- divisions ---------- */
   function divisionName(dv) {
     const et = EVENT_TYPES[dv.eventType];
-    const who = dv.belt === 'black' ? 'Black Belt' : 'Kyu';
+    const who = dv.belt === 'black' ? 'Black Belt' : dv.belt === 'open' ? 'Open Rank' : 'Kyu';   // v1.60: open rank = kyu and dan together
     const grp = dv.group ? ' ' + dv.group : '';
     return `${who}${grp} ${dv.open ? 'Open' : GENDERS[dv.gender] || ''} ${et ? et.label : ''}`.replace(/\s+/g, ' ').trim();
   }
@@ -890,6 +893,11 @@ const KT = (function () {
   ];
   const NCR_KYU = { id: 'ncr-kyu', label: 'NCR kyu rules (v3.3)', source: 'Traditional Karate North Central Region (AAKF) — Tournament Rules for Kyu Rank Competitors, v3.3, Oct 2022',
     levels: NCR_LEVELS, events: ['IKATA', 'IKUMITE', 'TKATA', 'ENBU'], ages: { youth: ['Youth', null, 17], adult: ['Adult', 18, null] }, poolSize: 6 };
+  /** v1.60: Ki-tei Kata divisions — open ranks (kyu and dan), all ages, women and men, single elimination, judges' flags. */
+  function kiteiDivisions() {
+    return ['F', 'M'].map((g, i) => { const dv = { eventType: 'KITEI', gender: g, belt: 'open', group: '', minAge: null, maxAge: null, minRank: 'k10', maxRank: 'd10', format: 'SE', bronze: 'two', reset: false,
+      scoring: Object.assign(defaultScoring('KITEI'), { method: 'flags', judges: 5 }), order: 9000 + i }; dv.name = divisionName(dv); return dv; });
+  }
   /** NCR kyu divisions. o: { byAge: true, byGender: true, format: 'RR'|'DE', judges: 3|5, events: [...] } */
   function ncrDivisions(o) {
     o = Object.assign({ byAge: true, byGender: true, format: 'RR', judges: 3, events: NCR_KYU.events }, o || {});
@@ -1104,10 +1112,10 @@ const KT = (function () {
       block: { et, title, F: [ids], M: [ids], X: [ids], did: {F, M, X} } (X = mixed / open). Groups A→Z ("No …" last); only blocks with entrants. */
   const PRINT_PAIRS = [['IKATA', 'IKUMITE'], ['TKATA', 'TKUMITE'], ['FUKUGO', 'ENBU']];
   /** v1.57: event order within an age group on the printout (the Polish federation's sheet): kata, fukugo, kumite, team kata, enbu, team kumite. */
-  const PRINT_ORDER = ['IKATA', 'FUKUGO', 'IKUMITE', 'TKATA', 'ENBU', 'TKUMITE'];
+  const PRINT_ORDER = ['IKATA', 'FUKUGO', 'IKUMITE', 'TKATA', 'ENBU', 'TKUMITE', 'KITEI'];
   function printGroups(divs, placed, groupOf) {
     const ageOrder = BLACK_AGE_GROUPS.map(g => g.label);
-    const ageOf = d => (d.belt === 'kyu' ? 'Kyu ' : '') + (String(d.group || '').trim() || 'Open');
+    const ageOf = d => (d.belt === 'kyu' ? 'Kyu ' : d.belt === 'open' ? 'Open Rank ' : '') + (String(d.group || '').trim() || 'Open');
     const ageRank = a => { const i = ageOrder.indexOf(a); return i >= 0 ? i : 100; };
     const by = {};   // group → age → et → block
     for (const d of divs) for (const id of placed[d.id] || []) for (const g0 of [].concat(groupOf(id))) {
@@ -2111,7 +2119,7 @@ const KT = (function () {
   function toCSV(rows) { return rows.map(r => r.map(csvEscape).join(',')).join('\n'); }
 
   return {
-    VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
+    VERSION, EVENT_TYPES, EVENT_ORDER, STD_EVENTS, kiteiDivisions, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, ageFromYear, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
     seedOrder, nextPow2, orderEntrants, PRINT_PAIRS, PRINT_ORDER, printGroups, ENT_SORTS, sortEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, kpPrevious, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
@@ -5303,7 +5311,7 @@ function competitorsHTML() {
 /* ---------- teams ---------- */
 function teamsHTML() {
   const ev = curEvent();
-  const types = (ev.eventTypes || KT.EVENT_ORDER).filter(t => KT.EVENT_TYPES[t].team);
+  const types = (ev.eventTypes || KT.STD_EVENTS).filter(t => KT.EVENT_TYPES[t].team);
   const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'team').map(u => u.id));
   const placed = {}; for (const did in DC.assign.byDiv) for (const id of DC.assign.byDiv[did]) placed[id] = did;
   const secs = types.map(et => {
@@ -5338,7 +5346,7 @@ function divisionsHTML() {
   const ev = curEvent();
   const f = S.ui.divFilter;
   const list = DC.divs.filter(d => !f || d.eventType === f);
-  const acts = `<button data-act="div-preset" data-id="wtkf-worlds-2026" title="Divisions and rules from the WTKF 2026 Information Package">WTKF Worlds 2026 rules</button><button data-act="div-ncr" title="Kyu divisions by the North Central Region tournament rules v3.3">Kyu rules (NCR)</button><button data-act="div-std">Add black-belt divisions</button><button data-act="div-kyu">Add kyu divisions</button><button data-act="div-new">New division</button>
+  const acts = `<button data-act="div-preset" data-id="wtkf-worlds-2026" title="Divisions and rules from the WTKF 2026 Information Package">WTKF Worlds 2026 rules</button><button data-act="div-ncr" title="Kyu divisions by the North Central Region tournament rules v3.3">Kyu rules (NCR)</button><button data-act="div-std">Add black-belt divisions</button><button data-act="div-kyu">Add kyu divisions</button>${!DC.divs.some(d => d.eventType === 'KITEI') ? '<button data-act="div-kitei" title="Ki-tei Kata: open ranks (kyu and dan), women and men, single elimination, judges\' flags">Add Ki-tei divisions</button>' : ''}<button data-act="div-new">New division</button>
     <button data-act="print-open" title="One page per ${esc(({ International: 'country', National: 'region' })[ev.level] || 'club')} with all its divisions — Letter or A4">🖨 Print by ${esc(({ International: 'country', National: 'region' })[ev.level] || 'club')}</button>
     <button class="primary" data-act="draw-all">Draw all ready</button>`;
   if (!DC.divs.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No divisions yet</h2>
@@ -5356,7 +5364,7 @@ function divisionsHTML() {
     const g = grpOf(d), head = g !== lastG ? `<tr class="grp-row"><td colspan="6">${GRP[g]} · ${sorted.filter(x => grpOf(x) === g).length}</td></tr>` : ''; lastG = g;
     return head + divRowHTML(d);
   }).join('');
-  return eventHeader() + `<div class="section-h"><select id="div-f" data-change="divFilter" aria-label="Event filter" style="max-width:240px">${opt('', 'All events', f)}${(ev.eventTypes || KT.EVENT_ORDER).map(t => opt(t, KT.EVENT_TYPES[t].label, f)).join('')}</select><div class="row actions">${acts}</div></div>${orderCtl}
+  return eventHeader() + `<div class="section-h"><select id="div-f" data-change="divFilter" aria-label="Event filter" style="max-width:240px">${opt('', 'All events', f)}${(ev.eventTypes || KT.STD_EVENTS).map(t => opt(t, KT.EVENT_TYPES[t].label, f)).join('')}</select><div class="row actions">${acts}</div></div>${orderCtl}
     <div class="card flush"><div class="tw"><table class="mcards"><thead><tr><th>Division</th><th>Format</th><th>Ring</th><th class="n">Entrants</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 /** Division order: groups, age groups, kyu ranks. v1.46: each person's own choice (kept on their device); an order saved on the event by an older version is the starting point. */
@@ -5823,8 +5831,8 @@ function statBtn(tab, label, inner) {
 }
 /* ===== forms & modals ===== */
 function eventForm(id) {
-  const e = id ? S.events[id] : { kind: 'tournament', level: 'Local', startDate: todayISO(), eventTypes: KT.EVENT_ORDER.slice(), defaultFormat: 'SE', bronze: 'two' };
-  const et = new Set(e.eventTypes || KT.EVENT_ORDER);
+  const e = id ? S.events[id] : { kind: 'tournament', level: 'Local', startDate: todayISO(), eventTypes: KT.STD_EVENTS.slice(), defaultFormat: 'SE', bronze: 'two' };
+  const et = new Set(e.eventTypes || KT.STD_EVENTS);
   openModal(sheet(id ? 'Event settings' : 'New event', `<form id="f-event" data-form="event" data-id="${esc(id || '')}" class="stack">
     <div class="fgrid">
       <label class="f req span"><span>Event name</span><input name="name" id="ev-name" required value="${esc(e.name || '')}" placeholder="e.g. Great Lakes Traditional Karate Championship"></label>
@@ -5888,7 +5896,7 @@ function compForm(id) {
   const ev = curEvent(), tour = ev.kind === 'tournament';
   const c = id ? DC.compBy[id] : { gender: '', events: [], status: 'active' };
   const evs = new Set(c.events || []);
-  const offered = (ev.eventTypes || KT.EVENT_ORDER);
+  const offered = (ev.eventTypes || KT.STD_EVENTS);
   const evRows = tour ? offered.map(et => {
     const T = KT.EVENT_TYPES[et];
     // v1.54: the team (and its division) this competitor is actually on
@@ -5987,24 +5995,27 @@ function parseCSV(text) {
   return rows.filter(r => r.some(x => x.trim() !== ''));
 }
 const EV_ALIASES = { 'individual kata': 'IKATA', kata: 'IKATA', ikata: 'IKATA', 'individual kumite': 'IKUMITE', kumite: 'IKUMITE', ikumite: 'IKUMITE', 'team kata': 'TKATA', tkata: 'TKATA',
-  'team kumite': 'TKUMITE', tkumite: 'TKUMITE', fukugo: 'FUKUGO', fukogo: 'FUKUGO', enbu: 'ENBU' };
+  'team kumite': 'TKUMITE', tkumite: 'TKUMITE', fukugo: 'FUKUGO', fukogo: 'FUKUGO', enbu: 'ENBU',
+  kitei: 'KITEI', 'ki-tei': 'KITEI', 'kitei kata': 'KITEI', 'ki-tei kata': 'KITEI', 'kiteikata': 'KITEI' };
 /* v1.26: also reads the WTKF "Informational Spreadsheet for National Federations" (title rows, COUNTRY / National Federation,
    ATHLETES INFORMATION table with an X per event, then JUDGES/COACHES and PHOTOGRAPHER sections which are skipped). */
 const EV_COLS = { individualkata: 'IKATA', kata: 'IKATA', individualkumite: 'IKUMITE', kumite: 'IKUMITE', teamkata: 'TKATA', teamkumite: 'TKUMITE',
-  fukugo: 'FUKUGO', fukogo: 'FUKUGO', enbu: 'ENBU', mixedenbu: 'ENBU', manmanenbu: 'ENBU', womanwomanenbu: 'ENBU', menenbu: 'ENBU', womenenbu: 'ENBU' };
+  fukugo: 'FUKUGO', fukogo: 'FUKUGO', enbu: 'ENBU', mixedenbu: 'ENBU', manmanenbu: 'ENBU', womanwomanenbu: 'ENBU', menenbu: 'ENBU', womenenbu: 'ENBU',
+  kitei: 'KITEI', kiteikata: 'KITEI' };
 const normH = x => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
 /* v1.28: birth-date order per file. Europe and most of the world write day-month-year (27.07.2012), the USA month-day-year (07/27/2012).
    The separator says nothing, so the order is decided once per file: 1) the director's choice, 2) the dates themselves (a first number
    above 12 can only be a day, a second number above 12 can only be a day), 3) the country on the sheet / in the rows (USA → month first),
    4) otherwise day first. Year-first dates (2012-07-27) are always year-month-day. 8 digits without separators (27072012) follow the same order. */
 const US_NAMES = /^(us|usa|u\.s\.a?\.?|united states( of america)?|america|puerto rico|guam)$/i;
-function splitDate(s) {
+function splitDate(s, shortYear) {
   s = String(s || '').trim(); let k;
   if ((k = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/))) return { ymd: true, y: k[1], a: +k[2], b: +k[3] };
   if ((k = s.match(/^(\d{1,2})[-/. ](\d{1,2})[-/. ](\d{4})$/))) return { a: +k[1], b: +k[2], y: k[3] };
   if ((k = s.match(/^(\d{2})(\d{2})(\d{4})$/))) return { a: +k[1], b: +k[2], y: k[3] };
-  // v1.59: two-digit years (5/12/06, 11/6/96 — Google / Numbers forms): the most recent year that is not in the future
-  if ((k = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/))) return { a: +k[1], b: +k[2], y: String(fullYear(+k[3])) };
+  // v1.59: two-digit years (5/12/06, 11/6/96 — Google / Numbers forms): the most recent year that is not in the future.
+  // Imports only: on the competitor card "07/27/20" is still being typed (v1.60)
+  if (shortYear && (k = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/))) return { a: +k[1], b: +k[2], y: String(fullYear(+k[3])) };
   return null;
 }
 /** v1.59: a long form question as a column heading, shortened for the preview ("Waiver By filling out this form…") */
@@ -6014,7 +6025,7 @@ function fullYear(yy) { const now = new Date().getFullYear(), c = Math.floor(now
 /** decide day-first (DMY) or month-first (MDY) for a list of raw dates; returns { order, why, clash } */
 function dateOrder(raw, countries, choice) {
   if (choice === 'DMY' || choice === 'MDY') return { order: choice, why: 'chosen by you' };
-  const ps = raw.map(splitDate).filter(p => p && !p.ymd);
+  const ps = raw.map(x => splitDate(x, true)).filter(p => p && !p.ymd);
   const dayFirst = ps.find(p => p.a > 12 && p.b <= 12), monFirst = ps.find(p => p.b > 12 && p.a <= 12);
   const ex = p => `${String(p.a).padStart(2, '0')}·${String(p.b).padStart(2, '0')}·${p.y}`;
   const us = countries.filter(Boolean).some(c => US_NAMES.test(String(c).trim())), other = countries.filter(Boolean).some(c => !US_NAMES.test(String(c).trim()));
@@ -6030,8 +6041,8 @@ function dateOrder(raw, countries, choice) {
   return { order: 'DMY', why: 'nothing in the file decides it — day first assumed' };
 }
 /** raw date → yyyy-mm-dd in the given order ('' if impossible) */
-function importDate(s, order) {
-  const p = splitDate(s); if (!p) return '';
+function importDate(s, order, shortYear) {
+  const p = splitDate(s, shortYear); if (!p) return '';
   const [m, d] = p.ymd ? [p.a, p.b] : order === 'MDY' ? [p.a, p.b] : [p.b, p.a];
   const iso = `${p.y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, t = new Date(iso + 'T00:00:00Z');
   return !isNaN(t) && t.toISOString().slice(0, 10) === iso ? iso : '';
@@ -6101,7 +6112,7 @@ function importRows(text) {
   // v1.55: an event column counts as entered when it holds anything but a blank or a "no" (e.g. X, or the division name from our own export)
   const entered = s => !!String(s || '').trim() && !/^(n|no|false|0|-|–|—)$/i.test(String(s).trim());
   const body = rows.slice(hi + 1);
-  const rawDate = r => g(r, ix.dob) || (ix.age >= 0 && splitDate(g(r, ix.age)) ? g(r, ix.age) : '');
+  const rawDate = r => g(r, ix.dob) || (ix.age >= 0 && splitDate(g(r, ix.age), true) ? g(r, ix.age) : '');
   const dord = dateOrder(body.map(rawDate).filter(Boolean), [info.country, ...body.map(r => g(r, ix.country))], (($('#imp-dates') || {}).value) || 'auto');
   if (body.some(r => rawDate(r)) && !yobOnly()) info.dates = dord;     // only talk about date order when the file has dates (year-only events don't need it)
   const isTournament = curEvent().kind === 'tournament';
@@ -6124,7 +6135,7 @@ function importRows(text) {
       if (r.some((x, i) => String(x || '').trim() && !(i === 0 && /^\d+$/.test(String(x).trim())) && !/^(free|\$?0(\.00)?)$/i.test(String(x).trim()))) errors.push(`Row ${n + 1}: no name — not imported`);
       continue;
     }
-    const dob = importDate(rawDate(r), dord.order);   // the federation sheet puts the birth date under "Age"
+    const dob = importDate(rawDate(r), dord.order, true);   // the federation sheet puts the birth date under "Age"
     const gs = g(r, ix.gender).toLowerCase();
     const evText = g(r, ix.events).split(/[;|,]/).map(s => EV_ALIASES[s.trim().toLowerCase()] || (KT.EVENT_TYPES[s.trim().toUpperCase()] ? s.trim().toUpperCase() : null));
     const fee = g(r, ix.fee).replace(/[^0-9.]/g, '');
@@ -6214,10 +6225,12 @@ async function runImport() {
     if (!ok) break;
     done++; $('#imp-preview').textContent = `Imported ${done} of ${recs.length}…`;
   }
+  const brought = [...new Set(recs.flatMap(r => r.events || []))], newEts = brought.filter(e => !(curEvent().eventTypes || KT.STD_EVENTS).includes(e));
+  if (newEts.length) await offerEvents(newEts);   // v1.60: e.g. Ki-tei Kata entries turn the event on
   const nFix = recs.filter(r => r.fixId).length, nUpd = recs.filter(r => r.updId).length;
   const nInc = recs.filter(r => !r.fixId && !r.updId && (r.missing || []).length).length;
   if (nInc) S.ui.filter = 'incomplete';       // show who still needs details
-  closeModal(); toast(`Imported ${plural(done - nFix - nUpd, 'competitor')}${nUpd ? ` · ${plural(nUpd, 'competitor')} updated` : ''}${nInc ? ` · ${nInc} need details — showing “Missing information”` : ''}${nFix ? ` · ${plural(nFix, 'name')} corrected` : ''}${errors.length ? ` · ${errors.length} rows skipped` : ''}`);
+  closeModal(); toast(`Imported ${plural(done - nFix - nUpd, 'competitor')}${nUpd ? ` · ${plural(nUpd, 'competitor')} updated` : ''}${newEts.length ? ` · ${newEts.map(e => KT.EVENT_TYPES[e].label).join(', ')} now offered` : ''}${nInc ? ` · ${nInc} need details — showing “Missing information”` : ''}${nFix ? ` · ${plural(nFix, 'name')} corrected` : ''}${errors.length ? ` · ${errors.length} rows skipped` : ''}`);
 }
 
 function teamForm(id, et) {
@@ -6281,15 +6294,15 @@ async function saveTeam(form) {
 
 function divForm(id) {
   const ev = curEvent();
-  const d = id ? DC.divBy[id] : { eventType: (ev.eventTypes || KT.EVENT_ORDER)[0], gender: 'M', belt: 'black', group: 'Senior', minAge: 21, maxAge: '', minRank: 'd1', maxRank: 'd10', format: ev.defaultFormat || 'SE', bronze: ev.bronze || 'two', reset: true };
+  const d = id ? DC.divBy[id] : { eventType: (ev.eventTypes || KT.STD_EVENTS)[0], gender: 'M', belt: 'black', group: 'Senior', minAge: 21, maxAge: '', minRank: 'd1', maxRank: 'd10', format: ev.defaultFormat || 'SE', bronze: ev.bronze || 'two', reset: true };
   const sc = scoringOf(d), k = kindOf(d);
   const ents = id ? divEntrants(id) : [];
   const bs = id ? bracketState(id) : { drawn: false };
   openModal(sheet(id ? esc(d.name) : 'New division', `<form id="f-div" data-form="div" data-id="${esc(id || '')}" class="stack">
     <div class="fgrid">
-      <label class="f"><span>Event</span><select name="eventType" id="d-et" data-change="div-et">${(ev.eventTypes || KT.EVENT_ORDER).map(t => opt(t, KT.EVENT_TYPES[t].label, d.eventType)).join('')}</select></label>
+      <label class="f"><span>Event</span><select name="eventType" id="d-et" data-change="div-et">${(ev.eventTypes || KT.STD_EVENTS).map(t => opt(t, KT.EVENT_TYPES[t].label, d.eventType)).join('')}</select></label>
       <label class="f"><span>Gender</span><select name="gender" id="d-g">${KT.EVENT_TYPES[d.eventType].genders.map(g => opt(g, KT.GENDERS[g], d.open ? '' : d.gender)).join('')}${opt('open', 'Open (any gender)', d.open ? 'open' : '')}</select></label>
-      <label class="f"><span>Belt class</span><select name="belt" id="d-belt">${opt('black', 'Black belt (Dan)', d.belt)}${opt('kyu', 'Kyu belt', d.belt)}</select></label>
+      <label class="f"><span>Belt class</span><select name="belt" id="d-belt">${opt('black', 'Black belt (Dan)', d.belt)}${opt('kyu', 'Kyu belt', d.belt)}${opt('open', 'Open rank (kyu and dan)', d.belt)}</select></label>
       <label class="f"><span>Group label</span><input name="group" id="d-group" value="${esc(d.group || '')}" placeholder="Senior, Youth, Novice…"></label>
       <label class="f"><span>Minimum age</span><input type="number" name="minAge" id="d-min" min="0" max="99" value="${esc(d.minAge ?? '')}"></label>
       <label class="f"><span>Maximum age</span><input type="number" name="maxAge" id="d-max" min="0" max="120" value="${esc(d.maxAge ?? '')}" placeholder="No limit"></label>
@@ -6381,7 +6394,7 @@ async function saveDiv(form, thenDraw) {
   scoring.styleExplicit = !!v.style && (v.style === 'kyux' || KT.NCR_STYLES[v.style] || old.preset === 'ncr-kyu') || !!v.style && v.style !== KT.defaultStyle({ eventType: v.eventType, belt: v.belt, group: v.group, maxAge: v.maxAge === '' ? null : +v.maxAge, minRank: v.minRank, maxRank: v.maxRank });
   if (scoring.method === 'flags' && scoring.judges % 2 === 0) scoring.judges = 5;
   const dv = { eventType: v.eventType, gender: v.gender, belt: v.belt, group: v.group, minAge: v.minAge === '' ? null : +v.minAge, maxAge: v.maxAge === '' ? null : +v.maxAge,
-    minRank: v.minRank || (v.belt === 'black' ? 'd1' : 'k10'), maxRank: v.maxRank || (v.belt === 'black' ? 'd10' : 'k1'), format: v.format || old.format || 'SE', bronze: v.bronze, reset: false, poolCount: v.poolCount ? Math.max(0, +v.poolCount) : 0, advance: v.advance ? +v.advance : null,
+    minRank: v.minRank || (v.belt === 'black' ? 'd1' : 'k10'), maxRank: v.maxRank || (v.belt === 'kyu' ? 'k1' : 'd10'), format: v.format || old.format || 'SE', bronze: v.bronze, reset: false, poolCount: v.poolCount ? Math.max(0, +v.poolCount) : 0, advance: v.advance ? +v.advance : null,
     ringId: v.ringId || '', ringOrder: old.ringOrder ?? Date.now(), scoring, seeds, order: old.order || 0, poolSize: v.poolSize ? Math.min(12, Math.max(4, +v.poolSize)) : (old.poolSize || 8),
     rrPoolSize: v.rrPoolSize ? +v.rrPoolSize : null, chart: v.chart || '', kataList: String(v.kataList || '').split(',').map(x => x.trim()).filter(Boolean), open: isOpen, level: old.level || null, preset: old.preset || null, quota: old.quota || null, teamSize: old.teamSize || null };
   dv.name = v.name && v.name !== (old.eventType ? KT.divisionName(old) : '') ? v.name : KT.divisionName(dv);
@@ -6393,7 +6406,7 @@ async function saveDiv(form, thenDraw) {
 }
 function stdDivForm(kyu) {
   const ev = curEvent();
-  const ets = ev.eventTypes || KT.EVENT_ORDER;
+  const ets = ev.eventTypes || KT.STD_EVENTS;
   openModal(sheet(kyu ? 'Add kyu divisions' : 'Add black-belt divisions', `<form id="f-std" data-form="${kyu ? 'kyu' : 'std'}" class="stack">
     ${kyu ? `<p class="small muted">Define one kyu group. A division is created for every event and gender you pick.</p><div class="fgrid">
       <label class="f req"><span>Group label</span><input name="label" id="k-label" required placeholder="e.g. Youth Novice"></label>
@@ -6451,7 +6464,7 @@ async function applyPreset(form) {
   const list = KT.presetDivisions(pr), key = d => [d.eventType, d.gender, d.group].join('|');
   const mine = {}; DC.divs.forEach(d => { mine[key(d)] = d; });
   let added = 0, updated = 0, removed = 0;
-  if (v.settings) await guard(() => S.store.update(P.event(S.evId), { level: pr.level, ageAsOf: pr.ageAsOf, judgeMin: String(pr.judgeMin), preset: pr.id, eventTypes: KT.EVENT_ORDER.slice() }));
+  if (v.settings) await guard(() => S.store.update(P.event(S.evId), { level: pr.level, ageAsOf: pr.ageAsOf, judgeMin: String(pr.judgeMin), preset: pr.id, eventTypes: KT.STD_EVENTS.slice() }));
   for (const d of list) {
     const cur = mine[key(d)];
     if (cur && S.d.brackets[cur.id]) continue;
@@ -6516,9 +6529,21 @@ async function applyNcr(form) {
     if (cur) { const { ringId, ...rules } = d; await guard(() => S.store.update(P.doc(S.evId, 'divisions', cur.id), rules)); updated++; }
     else { d.ringId = ''; await guard(() => S.store.set(P.doc(S.evId, 'divisions', uid()), d)); added++; }
   }
-  const et = new Set(curEvent().eventTypes || KT.EVENT_ORDER); ets.forEach(x => et.add(x));
+  const et = new Set(curEvent().eventTypes || KT.STD_EVENTS); ets.forEach(x => et.add(x));
   await guard(() => S.store.update(P.event(S.evId), { eventTypes: KT.EVENT_ORDER.filter(x => et.has(x)) }));
   closeModal(); toast(`Kyu rules: ${plural(added, 'division')} added${updated ? `, ${updated} updated` : ''}${removed ? `, ${removed} replaced` : ''}`);
+}
+/** v1.60: add Ki-tei Kata divisions (open ranks, women and men) and offer the event. */
+async function addKiteiDivisions() {
+  const have = new Set(DC.divs.filter(d => d.eventType === 'KITEI').map(d => d.gender)); let added = 0;
+  for (const d of KT.kiteiDivisions()) { if (have.has(d.gender)) continue; d.ringId = ''; d.ringOrder = d.order; if (await guard(() => S.store.set(P.doc(S.evId, 'divisions', uid()), d))) added++; }
+  await offerEvents(['KITEI']);
+  toast(added ? `Ki-tei Kata: ${plural(added, 'division')} added (open ranks, women and men)` : 'Ki-tei Kata divisions already exist');
+}
+/** Make sure the event offers these events (kept in the standard order). */
+async function offerEvents(ets) {
+  const cur = curEvent().eventTypes || KT.STD_EVENTS, et = new Set(cur); ets.forEach(x => et.add(x));
+  if (et.size !== cur.length) await guard(() => S.store.update(P.event(S.evId), { eventTypes: KT.EVENT_ORDER.filter(x => et.has(x)) }));
 }
 /* ---------- v1.32: the event's own kyu rank groups & kumite exchanges ---------- */
 function kyuGroupsForm(draft) {
@@ -8913,7 +8938,7 @@ function divFollowCardHTML(did) {
    so the PDF goes to the share sheet (Print, Save to Files, Mail…) or is downloaded. ===== */
 const PRINT_BY = { country: 'Country', region: 'Region / federation', club: 'Club / dojo' };
 const PRINT_LEVEL = { country: 'International', region: 'National', club: 'Local' };
-const PRINT_EV = { IKATA: 'kata ind.', FUKUGO: 'fukugo', IKUMITE: 'kumite ind.', TKATA: 'kata team', ENBU: 'enbu', TKUMITE: 'kumite team' };
+const PRINT_EV = { IKATA: 'kata ind.', FUKUGO: 'fukugo', IKUMITE: 'kumite ind.', TKATA: 'kata team', ENBU: 'enbu', TKUMITE: 'kumite team', KITEI: 'ki-tei kata' };
 /** Paper in CSS px (96 / in) and PDF points, with 8 mm margins; area = printable width × height in CSS px. */
 const PRINT_MM = 96 / 25.4, PRINT_MARGIN = 8;
 const PRINT_PAPER = { letter: { w: 816, h: 1056, pt: [612, 792], css: 'letter' }, a4: { w: 794, h: 1123, pt: [595.28, 841.89], css: 'A4' } };
@@ -9312,7 +9337,7 @@ async function createDemo(kind) {
   const id = uid();
   const start = todayISO();
   const ev = { name: C.name, kind: 'tournament', level: C.level, startDate: start, endDate: start, location: C.location, host: C.host,
-    eventTypes: KT.EVENT_ORDER.slice(), defaultFormat: 'SE', bronze: 'two', demo: true, demoKind: kind, staffIds: [], createdAt: new Date().toISOString(),
+    eventTypes: KT.STD_EVENTS.slice(), defaultFormat: 'SE', bronze: 'two', demo: true, demoKind: kind, staffIds: [], createdAt: new Date().toISOString(),
     directorIds: S.myId ? [S.myId] : [], managerIds: [], createdBy: S.myId || '' };
   toast('Creating demo tournament…');
   if (!(await guard(() => S.store.set(P.event(id), ev)))) return;
@@ -9327,7 +9352,7 @@ async function createDemo(kind) {
   for (let i = 0; i < C.juniors; i++) mk('M', 16 + (i % 3), 'd1', ['IKATA', 'IKUMITE', 'TKUMITE']);
   for (let i = 0; i < C.kyu; i++) mk('F', 30 + i, 'k' + (1 + (i % 3)), ['IKATA', 'ENBU']);
   const fm = { M: 0, F: 0 };
-  const divs = KT.blackBeltDivisions(KT.EVENT_ORDER).concat(KT.kyuDivisions({ label: 'Adult', minRank: 'k5', maxRank: 'k1', minAge: 18, maxAge: null }, ['IKATA', 'ENBU']));
+  const divs = KT.blackBeltDivisions(KT.STD_EVENTS).concat(KT.kyuDivisions({ label: 'Adult', minRank: 'k5', maxRank: 'k1', minAge: 18, maxAge: null }, ['IKATA', 'ENBU']));
   const rings = Array.from({ length: C.rings }, (_, k) => ({ id: uid() + 'r' + (k + 1), name: 'Ring ' + (k + 1), order: k + 1, managerIds: [] }));
   for (const r of rings) await guard(() => S.store.set(P.doc(id, 'rings', r.id), r));
   const kata = d => d.eventType === 'IKATA' || d.eventType === 'TKATA' || d.eventType === 'ENBU';
@@ -9412,7 +9437,7 @@ const ACT = {
     // v1.55: fixed column order (the event columns hold the division actually assigned; team events: team · division);
     // women first, then men, each youngest → oldest. birth_year at International events (year only), otherwise dob.
     const dir = isDirector(), yo = yobOnly();
-    const ets = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'];
+    const ets = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'].concat((curEvent().eventTypes || []).includes('KITEI') ? ['KITEI'] : []);   // v1.60: Ki-tei Kata when offered
     const rows = [['First', 'Last', 'gender', yo ? 'birth_year' : 'dob', 'age', 'rank', 'dojo', 'state', 'country', ...ets.map(et => KT.EVENT_TYPES[et].label),
       'waiver', 'paid', 'checked_in', 'status', 'email', 'phone', 'emergency_name', 'emergency_phone']];
     const gOrd = g => g === 'F' ? 0 : g === 'M' ? 1 : 2, age = c => { const a = KT.ageOf(c, DC.asOf); return a == null ? 999 : a; };
@@ -9441,6 +9466,7 @@ const ACT = {
   'div-std': () => stdDivForm(false),
   'div-preset': el => presetForm(el.dataset.id),
   'div-ncr': () => ncrForm(),
+  'div-kitei': () => addKiteiDivisions(),
   'div-combine': el => combineForm(el.dataset.id),
   'rm-group': () => removeGroupForm(),
   'keep-year': () => keepYearOnly(),

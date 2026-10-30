@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.59.1 Requirements & Design
+# Karate Event Tracker · v1.60.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -903,3 +903,20 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
   - test/formimport.js: first import without birth dates → re-import updates (preview line, no duplicates, birth dates, waivers, events, divisions) → a third import skips both.
   - Note: a file whose dates are all ambiguous (e.g. only 5/12/06) is read day-first unless the event is in the USA or the director picks "Birth dates are: month first" — the preview always says which order it used.
   - Import tests, e2e set.
+
+## §89 Ki-tei Kata as a separate event (v1.60.0)
+**Requirement.** "Kitei Kata" (in the UMN form: "Kitei Kata (open ranks, single elimination)", answered "Yes, I want to have fun") counts as a separate event.
+**Design.**
+- `KT.EVENT_TYPES.KITEI` = Ki-tei Kata (short "Ki-tei"): individual, women / men, kind kata, judges' flags (head-to-head kata scoresheet).
+  - It is in `EVENT_ORDER` (after Enbu) but not in `STD_EVENTS`, the six WTKF events that new events, demos and the Worlds 2026 preset offer.
+  - It is turned on in Event settings → Events offered, by "Add Ki-tei divisions", or by an import that brings Ki-tei entries.
+- Open rank: divisions get belt class "Open rank (kyu and dan)" (`belt: 'open'`, no belt restriction in `fitsDivision`, name "Open Rank …").
+  - `KT.kiteiDivisions()` → Open Rank Women / Men Ki-tei Kata: all ages, white belt to 10th dan, single elimination, 5 judges' flags.
+  - The Divisions tab shows "Add Ki-tei divisions" until there are some.
+- Import: Ki-tei / Kitei / Kitei Kata in the events cell, and a column headed "Kitei Kata …" (`colStart`, §87) count as the event; any answer but blank / no counts as entered.
+  - Events a file brings that the event does not offer yet are turned on (toast "Ki-tei Kata now offered").
+  - The re-import update (§88) adds Ki-tei too.
+- Export (§82): a "Ki-tei Kata" column after Enbu when the event offers it.
+- Printout (§85): "ki-tei kata" after kumite team (`PRINT_ORDER`).
+- Fix (v1.59 regression): the competitor card read "07/27/20" while the year was still being typed as 2020. Two-digit years are now read by imports only (`splitDate(s, shortYear)`); the card still asks for 4 digits.
+**Verify.** logic.test (KITEI event, STD_EVENTS, Open Rank divisions fit white belt to dan at any age, print order). test/formimport.js (Kitei column → Ki-tei Kata for the two who answered; the event turned on; "Add Ki-tei divisions" → Open Rank Women / Men; 2nd kyu and white belt placed in Open Rank Men; re-import adds Ki-tei). combine.js (typing the year), the full e2e set and the other browser tests.

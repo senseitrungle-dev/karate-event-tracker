@@ -139,7 +139,7 @@ async function createDemo(kind) {
   const id = uid();
   const start = todayISO();
   const ev = { name: C.name, kind: 'tournament', level: C.level, startDate: start, endDate: start, location: C.location, host: C.host,
-    eventTypes: KT.EVENT_ORDER.slice(), defaultFormat: 'SE', bronze: 'two', demo: true, demoKind: kind, staffIds: [], createdAt: new Date().toISOString(),
+    eventTypes: KT.STD_EVENTS.slice(), defaultFormat: 'SE', bronze: 'two', demo: true, demoKind: kind, staffIds: [], createdAt: new Date().toISOString(),
     directorIds: S.myId ? [S.myId] : [], managerIds: [], createdBy: S.myId || '' };
   toast('Creating demo tournament…');
   if (!(await guard(() => S.store.set(P.event(id), ev)))) return;
@@ -154,7 +154,7 @@ async function createDemo(kind) {
   for (let i = 0; i < C.juniors; i++) mk('M', 16 + (i % 3), 'd1', ['IKATA', 'IKUMITE', 'TKUMITE']);
   for (let i = 0; i < C.kyu; i++) mk('F', 30 + i, 'k' + (1 + (i % 3)), ['IKATA', 'ENBU']);
   const fm = { M: 0, F: 0 };
-  const divs = KT.blackBeltDivisions(KT.EVENT_ORDER).concat(KT.kyuDivisions({ label: 'Adult', minRank: 'k5', maxRank: 'k1', minAge: 18, maxAge: null }, ['IKATA', 'ENBU']));
+  const divs = KT.blackBeltDivisions(KT.STD_EVENTS).concat(KT.kyuDivisions({ label: 'Adult', minRank: 'k5', maxRank: 'k1', minAge: 18, maxAge: null }, ['IKATA', 'ENBU']));
   const rings = Array.from({ length: C.rings }, (_, k) => ({ id: uid() + 'r' + (k + 1), name: 'Ring ' + (k + 1), order: k + 1, managerIds: [] }));
   for (const r of rings) await guard(() => S.store.set(P.doc(id, 'rings', r.id), r));
   const kata = d => d.eventType === 'IKATA' || d.eventType === 'TKATA' || d.eventType === 'ENBU';
@@ -239,7 +239,7 @@ const ACT = {
     // v1.55: fixed column order (the event columns hold the division actually assigned; team events: team · division);
     // women first, then men, each youngest → oldest. birth_year at International events (year only), otherwise dob.
     const dir = isDirector(), yo = yobOnly();
-    const ets = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'];
+    const ets = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'].concat((curEvent().eventTypes || []).includes('KITEI') ? ['KITEI'] : []);   // v1.60: Ki-tei Kata when offered
     const rows = [['First', 'Last', 'gender', yo ? 'birth_year' : 'dob', 'age', 'rank', 'dojo', 'state', 'country', ...ets.map(et => KT.EVENT_TYPES[et].label),
       'waiver', 'paid', 'checked_in', 'status', 'email', 'phone', 'emergency_name', 'emergency_phone']];
     const gOrd = g => g === 'F' ? 0 : g === 'M' ? 1 : 2, age = c => { const a = KT.ageOf(c, DC.asOf); return a == null ? 999 : a; };
@@ -268,6 +268,7 @@ const ACT = {
   'div-std': () => stdDivForm(false),
   'div-preset': el => presetForm(el.dataset.id),
   'div-ncr': () => ncrForm(),
+  'div-kitei': () => addKiteiDivisions(),
   'div-combine': el => combineForm(el.dataset.id),
   'rm-group': () => removeGroupForm(),
   'keep-year': () => keepYearOnly(),

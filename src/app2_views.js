@@ -259,7 +259,7 @@ function competitorsHTML() {
 /* ---------- teams ---------- */
 function teamsHTML() {
   const ev = curEvent();
-  const types = (ev.eventTypes || KT.EVENT_ORDER).filter(t => KT.EVENT_TYPES[t].team);
+  const types = (ev.eventTypes || KT.STD_EVENTS).filter(t => KT.EVENT_TYPES[t].team);
   const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'team').map(u => u.id));
   const placed = {}; for (const did in DC.assign.byDiv) for (const id of DC.assign.byDiv[did]) placed[id] = did;
   const secs = types.map(et => {
@@ -294,7 +294,7 @@ function divisionsHTML() {
   const ev = curEvent();
   const f = S.ui.divFilter;
   const list = DC.divs.filter(d => !f || d.eventType === f);
-  const acts = `<button data-act="div-preset" data-id="wtkf-worlds-2026" title="Divisions and rules from the WTKF 2026 Information Package">WTKF Worlds 2026 rules</button><button data-act="div-ncr" title="Kyu divisions by the North Central Region tournament rules v3.3">Kyu rules (NCR)</button><button data-act="div-std">Add black-belt divisions</button><button data-act="div-kyu">Add kyu divisions</button><button data-act="div-new">New division</button>
+  const acts = `<button data-act="div-preset" data-id="wtkf-worlds-2026" title="Divisions and rules from the WTKF 2026 Information Package">WTKF Worlds 2026 rules</button><button data-act="div-ncr" title="Kyu divisions by the North Central Region tournament rules v3.3">Kyu rules (NCR)</button><button data-act="div-std">Add black-belt divisions</button><button data-act="div-kyu">Add kyu divisions</button>${!DC.divs.some(d => d.eventType === 'KITEI') ? '<button data-act="div-kitei" title="Ki-tei Kata: open ranks (kyu and dan), women and men, single elimination, judges\' flags">Add Ki-tei divisions</button>' : ''}<button data-act="div-new">New division</button>
     <button data-act="print-open" title="One page per ${esc(({ International: 'country', National: 'region' })[ev.level] || 'club')} with all its divisions — Letter or A4">🖨 Print by ${esc(({ International: 'country', National: 'region' })[ev.level] || 'club')}</button>
     <button class="primary" data-act="draw-all">Draw all ready</button>`;
   if (!DC.divs.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No divisions yet</h2>
@@ -312,7 +312,7 @@ function divisionsHTML() {
     const g = grpOf(d), head = g !== lastG ? `<tr class="grp-row"><td colspan="6">${GRP[g]} · ${sorted.filter(x => grpOf(x) === g).length}</td></tr>` : ''; lastG = g;
     return head + divRowHTML(d);
   }).join('');
-  return eventHeader() + `<div class="section-h"><select id="div-f" data-change="divFilter" aria-label="Event filter" style="max-width:240px">${opt('', 'All events', f)}${(ev.eventTypes || KT.EVENT_ORDER).map(t => opt(t, KT.EVENT_TYPES[t].label, f)).join('')}</select><div class="row actions">${acts}</div></div>${orderCtl}
+  return eventHeader() + `<div class="section-h"><select id="div-f" data-change="divFilter" aria-label="Event filter" style="max-width:240px">${opt('', 'All events', f)}${(ev.eventTypes || KT.STD_EVENTS).map(t => opt(t, KT.EVENT_TYPES[t].label, f)).join('')}</select><div class="row actions">${acts}</div></div>${orderCtl}
     <div class="card flush"><div class="tw"><table class="mcards"><thead><tr><th>Division</th><th>Format</th><th>Ring</th><th class="n">Entrants</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 /** Division order: groups, age groups, kyu ranks. v1.46: each person's own choice (kept on their device); an order saved on the event by an older version is the starting point. */
