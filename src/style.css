@@ -746,7 +746,7 @@ tr.grp-tog.shut td { opacity: .8; }
 .assigned { text-align: left; white-space: normal; overflow-wrap: anywhere; min-height: 0; }
 .assigned-line { color: var(--ink-2); overflow-wrap: anywhere; }
 /* v1.56 / v1.57: division printout — the page styles live in app12_print.js (PRINT_CSS), shared with "Open as page" */
-.pr-preview { background: #e9e9e6; padding: 10px; border-radius: 10px; max-height: 60vh; overflow: auto; }
-.pr-preview .ppage { background: #fff; margin: 0 auto 12px; padding: 12mm; box-shadow: 0 1px 6px rgba(0,0,0,.18); }
-.pr-preview.paper-letter .ppage { max-width: 8.5in; } .pr-preview.paper-a4 .ppage { max-width: 210mm; }
+.pr-preview { background: #e9e9e6; padding: 10px; border-radius: 10px; max-height: 60vh; overflow: auto; overflow-x: hidden; }
+.pr-preview .pv-sheet { margin: 0 auto 12px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,.18); background: #fff; }
+.pr-out { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .pr-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

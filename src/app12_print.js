@@ -1,18 +1,23 @@
 /* ===== v1.56 division printout per country / region / club (Letter or A4).
    v1.57: laid out like the Polish federation's sheet — group bar, age groups side by side (Senior | Youth, Junior | Cadet),
    events stacked (kata ind., fukugo, kumite ind., kata team, enbu, kumite team), women | men numbered; the font shrinks so a
-   group fits on at most two pages. Printing keeps the pages until the print dialog is done (iPhone / iPad print later). ===== */
+   group fits on at most two pages. Printing keeps the pages until the print dialog is done (iPhone / iPad print later).
+   v1.58: 8 mm margins, names on one line (the font shrinks until every name fits), the preview is the real page scaled to the
+   screen, and "PDF" draws the pages itself and builds the PDF in the app — the home-screen app on iPhone / iPad cannot print,
+   so the PDF goes to the share sheet (Print, Save to Files, Mail…) or is downloaded. ===== */
 const PRINT_BY = { country: 'Country', region: 'Region / federation', club: 'Club / dojo' };
 const PRINT_LEVEL = { country: 'International', region: 'National', club: 'Local' };
 const PRINT_EV = { IKATA: 'kata ind.', FUKUGO: 'fukugo', IKUMITE: 'kumite ind.', TKATA: 'kata team', ENBU: 'enbu', TKUMITE: 'kumite team' };
-/** Printable area of one page in CSS px (12 mm margins). */
-const PRINT_AREA = { letter: { w: 816 - 91, h: 1056 - 91 }, a4: { w: 794 - 91, h: 1123 - 91 } };
+/** Paper in CSS px (96 / in) and PDF points, with 8 mm margins; area = printable width × height in CSS px. */
+const PRINT_MM = 96 / 25.4, PRINT_MARGIN = 8;
+const PRINT_PAPER = { letter: { w: 816, h: 1056, pt: [612, 792], css: 'letter' }, a4: { w: 794, h: 1123, pt: [595.28, 841.89], css: 'A4' } };
+const PRINT_AREA = Object.fromEntries(Object.entries(PRINT_PAPER).map(([k, p]) => [k, { w: Math.floor(p.w - 2 * PRINT_MARGIN * PRINT_MM), h: Math.floor(p.h - 2 * PRINT_MARGIN * PRINT_MM) }]));
 const PRINT_CSS = `
 .ppage { font: 10px/1.3 "IBM Plex Sans", Arial, Helvetica, sans-serif; color: #111; background: #fff; box-sizing: border-box; }
 .ppage * { box-sizing: border-box; }
 .ppage .pbar { background: #616161; color: #fff; font-weight: 700; font-size: 1.5em; text-align: center; padding: .25em .5em; letter-spacing: .02em; }
 .ppage .pmeta { font-size: .85em; color: #555; text-align: center; margin: .3em 0 .7em; }
-.ppage .pcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .9em 2.2em; align-items: start; }
+.ppage .pcols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .9em 1.4em; align-items: start; }
 .ppage .page-col { min-width: 0; }
 .ppage .pbar2 { break-after: avoid; page-break-after: avoid; background: #616161; color: #fff; font-weight: 700; font-size: 1.1em; text-align: center; padding: .2em .5em; margin-bottom: .55em; text-transform: uppercase; letter-spacing: .03em; }
 .ppage table.psec { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: .75em; font-size: 1em; }
@@ -20,7 +25,7 @@ const PRINT_CSS = `
 .ppage .psec thead { display: table-header-group; }
 .ppage .psec th { background: #d9d9d9; text-align: left; font-weight: 600; padding: .2em .35em; border-top: 1px solid #c3c3c3; text-transform: none; letter-spacing: normal; font-size: 1em; color: #111; position: static; }
 .ppage .psec th .sub { font-weight: 400; color: #555; font-size: .85em; margin-left: .35em; }
-.ppage .psec td { padding: .12em .3em; border-bottom: 1px solid #e3e3e3; vertical-align: top; overflow-wrap: anywhere; font-weight: 600; font-size: 1em; line-height: 1.3; color: #111; }
+.ppage .psec td { padding: .12em .3em; border-bottom: 1px solid #e3e3e3; vertical-align: top; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; font-size: 1em; line-height: 1.3; color: #111; }
 .ppage .psec td.pnum { text-align: right; color: #333; font-weight: 400; padding-right: .35em; overflow-wrap: normal; white-space: nowrap; }
 .ppage .psec td.pteam { font-weight: 700; font-style: italic; color: #333; }
 .ppage .psec .pfrom { font-weight: 400; font-style: italic; color: #555; }
@@ -83,68 +88,180 @@ function printPagesHTML(by, which) {
     return `<section class="ppage"><div class="pbar">${esc(g.label.toUpperCase())}</div><div class="pmeta">${esc(ev.name || '')}${ev.startDate ? ' · ' + esc(fmtDate(ev.startDate)) : ''} · ${plural(n, 'competitor')}</div>
       <div class="pcols">${g.ages.map(a => `<div class="page-col"><div class="pbar2">${esc(a.age)}</div>${a.blocks.map(printSection).join('')}</div>`).join('')}</div></section>`; }).join('');
 }
-/** Font size per group page so it fits on at most two pages of the paper (measured off screen at the printable width). */
+/** Font size per group page: the largest (13 → 5.5 px) at which every name fits on its line and the sheet fits on two pages. */
 function printFit(html, paper) {
   printStyles();
-  const A = PRINT_AREA[paper] || PRINT_AREA.letter, box = document.createElement('div');
-  box.style.cssText = `position:fixed;left:-20000px;top:0;width:${A.w}px;visibility:hidden;pointer-events:none`;
-  box.innerHTML = html; document.body.appendChild(box);
+  const A = PRINT_AREA[paper] || PRINT_AREA.letter, box = printMeasureBox(html, A);
   const sizes = [...box.querySelectorAll('.ppage')].map(pg => {
-    for (const fs of [10.5, 10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5, 6]) { pg.style.fontSize = fs + 'px'; if (pg.scrollHeight <= A.h * 2 * 0.94) return fs; }   // room for page breaks between tables
-    return 6;
+    let fitH = null;
+    for (const fs of [13, 12, 11, 10.5, 10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5, 6, 5.5]) {
+      pg.style.fontSize = fs + 'px';
+      if (pg.scrollHeight > A.h * 2 * 0.95) continue;   // room for page breaks between rows
+      if (fitH === null) fitH = fs;
+      if (![...pg.querySelectorAll('.psec td')].some(td => td.scrollWidth > td.clientWidth + 1)) return fs;
+    }
+    return fitH || 5.5;
   });
   box.remove();
   return sizes;
+}
+function printMeasureBox(html, A) {
+  const box = document.createElement('div');
+  box.style.cssText = `position:fixed;left:-20000px;top:0;width:${A.w}px;visibility:hidden;pointer-events:none`;
+  box.innerHTML = html; document.body.appendChild(box); return box;
 }
 function printApply(el, sizes) { [...el.querySelectorAll('.ppage')].forEach((pg, i) => { pg.style.fontSize = (sizes[i] || 10) + 'px'; }); }
 function printForm() {
   printStyles();
   const by = printByDefault(), groups = printData(by);
   openModal(sheet('Print divisions', `<div class="stack">
-    <p class="small muted">One ${esc(PRINT_BY[by].toLowerCase())} per sheet — age groups side by side, every division it has competitors in, women and men numbered. The text gets smaller as needed so each fits on at most two pages.</p>
+    <p class="small muted">One ${esc(PRINT_BY[by].toLowerCase())} per sheet — age groups side by side, every division it has competitors in, women and men numbered. The text gets smaller as needed so every name fits on its line and each sheet fits on at most two pages.</p>
     <div class="fgrid">
       <label class="f"><span>One sheet per</span><select id="pr-by" data-change="print-opt">${Object.entries(PRINT_BY).map(([k, l]) => opt(k, l, by)).join('')}</select></label>
       <label class="f"><span>Print</span><select id="pr-which" data-change="print-opt">${opt('', `All (${groups.length})`, '')}${groups.map(g => opt(g.label, g.label, '')).join('')}</select></label>
       <label class="f"><span>Paper</span><select id="pr-paper" data-change="print-opt">${opt('letter', 'Letter (8.5 × 11 in)', printPaper())}${opt('a4', 'A4 (210 × 297 mm)', printPaper())}</select></label></div>
-    <div id="pr-preview" class="pr-preview paper-${printPaper()}"></div>
-    <p class="tiny muted">Print opens your device's print dialog — choose your printer, or “Save as PDF” (on iPhone / iPad: Print, then share the preview to save it). If nothing opens here, use “Open as page”.</p></div>`,
-    '<button data-act="modal-close">Cancel</button><button data-act="print-page" id="pr-page">Open as page</button><button class="primary" data-act="print-go" id="pr-go">Print</button>'), { wide: true });
+    <div id="pr-preview" class="pr-preview"></div>
+    <div id="pr-out" class="pr-out" hidden></div>
+    <p class="tiny muted"><b>PDF</b> makes the file here — then share it (Print, Save to Files, Mail…) or download it. <b>Print</b> uses the browser's print dialog (computers; not available in the home-screen app on iPhone / iPad).</p></div>`,
+    '<button data-act="modal-close">Cancel</button><button data-act="print-go" id="pr-go">Print</button><button class="primary" data-act="print-pdf" id="pr-pdf">PDF</button>'), { wide: true });
   printRefresh();
 }
-/** Options changed: refresh the group list (when the grouping changed) and the preview. */
+/** Options changed: refresh the group list (when the grouping changed) and the preview (the real page, scaled to the screen). */
 function printRefresh(el) {
-  const by = $('#pr-by').value, w = $('#pr-which'), paper = $('#pr-paper').value;
+  const by = $('#pr-by').value, w = $('#pr-which'), paper = $('#pr-paper').value, A = PRINT_AREA[paper];
   try { localStorage.setItem('kt-paper', paper); } catch (e) { /* ignore */ }
   if (el && el.id === 'pr-by') { const gs = printData(by); w.innerHTML = opt('', `All (${gs.length})`, '') + gs.map(g => opt(g.label, g.label, '')).join(''); }
-  const pv = $('#pr-preview'), html = printPagesHTML(by, w.value);
-  pv.className = 'pr-preview paper-' + paper; pv.innerHTML = html; printApply(pv, printFit(html, paper));
+  const out = $('#pr-out'); if (out) { out.hidden = true; out.innerHTML = ''; }
+  const pv = $('#pr-preview'), html = printPagesHTML(by, w.value), sizes = printFit(html, paper);
+  pv.innerHTML = html.replace(/<section class="ppage">/g, '<div class="pv-sheet"><section class="ppage">').replace(/<\/section>/g, '</section></div>');
+  printApply(pv, sizes);
+  const inner = Math.max(120, pv.clientWidth - 20), sc = Math.min(1, inner / (A.w + 2 * PRINT_MARGIN * PRINT_MM));
+  pv.querySelectorAll('.pv-sheet').forEach(sh => { const pg = sh.querySelector('.ppage');
+    pg.style.width = A.w + 'px'; pg.style.padding = (PRINT_MARGIN * PRINT_MM) + 'px'; pg.style.boxSizing = 'content-box';
+    pg.style.transform = `scale(${sc})`; pg.style.transformOrigin = '0 0';
+    sh.style.width = Math.ceil((A.w + 2 * PRINT_MARGIN * PRINT_MM) * sc) + 'px'; sh.style.height = Math.ceil(pg.offsetHeight * sc) + 'px'; });
 }
 function printDoc() {
   const by = $('#pr-by').value, which = $('#pr-which').value, paper = $('#pr-paper').value, html = printPagesHTML(by, which);
   return { paper, html, sizes: printFit(html, paper), title: `${(curEvent() || {}).name || 'Event'} - divisions by ${PRINT_BY[by].toLowerCase()}` };
 }
 function printCleanup() { document.body.classList.remove('printing'); const r = document.getElementById('print-root'); if (r) r.remove(); }
+function printStandalone() { return !!(window.navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)); }
 function printGo() {
+  if (printStandalone()) { toast('The home-screen app cannot print — making a PDF to share or print instead.'); printPdf(); return; }
   const d = printDoc();
   printCleanup(); printStyles();
   const root = document.createElement('div'); root.id = 'print-root'; root.innerHTML = d.html; printApply(root, d.sizes); document.body.appendChild(root);
   let st = document.getElementById('print-page'); if (!st) { st = document.createElement('style'); st.id = 'print-page'; document.head.appendChild(st); }
-  st.textContent = `@page { size: ${d.paper === 'a4' ? 'A4' : 'letter'} portrait; margin: 12mm; }`;
+  st.textContent = `@page { size: ${PRINT_PAPER[d.paper].css} portrait; margin: ${PRINT_MARGIN}mm; }`;
   document.body.classList.add('printing');
   // the pages stay until the print dialog is done: on iPhone / iPad print() returns at once and the dialog reads the page later
   window.addEventListener('afterprint', function done() { window.removeEventListener('afterprint', done); setTimeout(printCleanup, 800); });
-  if (typeof window.print !== 'function') { toast('This browser cannot print from here — use “Open as page”.', true); return; }
-  try { window.print(); } catch (e) { toast('Printing is blocked here — use “Open as page”.', true); }
+  if (typeof window.print !== 'function') { toast('This browser cannot print from here — use PDF.', true); return; }
+  try { window.print(); } catch (e) { toast('Printing is blocked here — use PDF.', true); }
 }
-/** The same pages as a document of their own (new tab; or a file to open and print where tabs are blocked). */
-function printPage() {
-  const d = printDoc(), box = document.createElement('div'); box.innerHTML = d.html; printApply(box, d.sizes);
-  const doc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(d.title)}</title>
-<style>@page { size: ${d.paper === 'a4' ? 'A4' : 'letter'} portrait; margin: 12mm; } body { margin: 0; background: #e9e9e6; } .ppage { max-width: ${d.paper === 'a4' ? '210mm' : '8.5in'}; margin: 12px auto; padding: 12mm; box-shadow: 0 1px 6px rgba(0,0,0,.18); }
-@media print { body { background: #fff; } .ppage { margin: 0; padding: 0 2px 0 1px; box-shadow: none; max-width: none; break-after: page; page-break-after: always; } .ppage:last-child { break-after: auto; page-break-after: auto; } .bar-p { display: none; } }
-.bar-p { text-align: center; padding: 10px; font: 14px Arial, sans-serif; } .bar-p button { font: inherit; padding: 8px 16px; }${PRINT_CSS.replace(/#print-root[^}]*}/, '')}</style></head>
-<body><div class="bar-p"><button onclick="window.print()">Print / Save as PDF</button></div>${box.innerHTML}</body></html>`;
-  let w = null;
-  try { const url = URL.createObjectURL(new Blob([doc], { type: 'text/html' })); w = window.open(url, '_blank'); setTimeout(() => URL.revokeObjectURL(url), 60000); } catch (e) { w = null; }
-  if (!w) saveFile(d.title + '.html', doc);   // pop-ups blocked: download it, then open it and print
+
+/* ---------- v1.58: PDF made in the app (pages drawn on a canvas from the laid-out sheet, one JPEG per page) ---------- */
+/** Where to cut a sheet of height H into pages of height ph without cutting through a row, bar or header (boxes: [top, bottom]). */
+function printCuts(H, ph, boxes) {
+  const cuts = [0];
+  while (H - cuts[cuts.length - 1] > ph) {
+    const start = cuts[cuts.length - 1], lim = start + ph;
+    const inside = y => boxes.some(([t, b]) => t < y - 0.5 && y + 0.5 < b);
+    const cand = boxes.map(([, b]) => b).filter(b => b > start + ph * 0.3 && b <= lim && !inside(b)).sort((a, b) => b - a);
+    cuts.push(cand.length ? cand[0] : lim);
+  }
+  cuts.push(H); return cuts;
+}
+/** Draw the part [y0, y1) of a laid-out sheet onto a canvas context (backgrounds, borders, text word by word). */
+function printDraw(ctx, pg, y0, y1, A) {
+  const base = pg.getBoundingClientRect(), rel = r => ({ x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height });
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, A.w, y1 - y0);
+  ctx.save(); ctx.translate(0, -y0); ctx.beginPath(); ctx.rect(0, y0, A.w, y1 - y0); ctx.clip();
+  for (const el of [pg, ...pg.querySelectorAll('*')]) {
+    const r = rel(el.getBoundingClientRect()); if (r.y > y1 || r.y + r.h < y0 || !r.w) continue;
+    const cs = getComputedStyle(el);
+    if (cs.backgroundColor && !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor)) { ctx.fillStyle = cs.backgroundColor; ctx.fillRect(r.x, r.y, r.w, r.h); }
+    for (const [side, x, y, w, h] of [['Top', r.x, r.y, r.w, 0], ['Bottom', r.x, r.y + r.h, r.w, 0]]) {
+      const bw = parseFloat(cs['border' + side + 'Width']); if (!bw || cs['border' + side + 'Style'] === 'none') continue;
+      ctx.fillStyle = cs['border' + side + 'Color']; ctx.fillRect(x, side === 'Top' ? y : y - bw, w || bw, h || bw);
+    }
+  }
+  const tw = document.createTreeWalker(pg, NodeFilter.SHOW_TEXT), range = document.createRange();
+  ctx.textBaseline = 'middle';
+  for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+    const text = n.nodeValue; if (!/\S/.test(text)) continue;
+    const cs = getComputedStyle(n.parentElement), up = cs.textTransform === 'uppercase';
+    ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`; ctx.fillStyle = cs.color;
+    const cell = n.parentElement.closest('td'), cr = cell ? rel(cell.getBoundingClientRect()) : null;
+    if (cr) { ctx.save(); ctx.beginPath(); ctx.rect(cr.x, cr.y, cr.w - 2, cr.h); ctx.clip(); }
+    for (const m of text.matchAll(/\S+/g)) {
+      range.setStart(n, m.index); range.setEnd(n, m.index + m[0].length);
+      const r = rel(range.getBoundingClientRect()); if (!r.w || r.y > y1 || r.y + r.h < y0) continue;
+      ctx.fillText(up ? m[0].toUpperCase() : m[0], r.x, r.y + r.h / 2);
+    }
+    if (cr) ctx.restore();
+  }
+  ctx.restore();
+}
+/** A PDF with one full-page JPEG per page (pages: [{jpg: Uint8Array, w, h}]), placed inside the 8 mm margins. */
+function printPdfBytes(pages, paper) {
+  const [W, H] = PRINT_PAPER[paper].pt, m = PRINT_MARGIN * 72 / 25.4, parts = [], offs = [];
+  let len = 0;
+  const put = x => { const b = typeof x === 'string' ? Uint8Array.from(x, c => c.charCodeAt(0) & 255) : x; parts.push(b); len += b.length; };
+  const obj = (i, body) => { offs[i] = len; put(`${i} 0 obj\n`); body(); put('\nendobj\n'); };
+  put('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n');
+  const n = pages.length, kids = pages.map((_, i) => `${3 + 3 * i} 0 R`).join(' ');
+  obj(1, () => put('<< /Type /Catalog /Pages 2 0 R >>'));
+  obj(2, () => put(`<< /Type /Pages /Kids [${kids}] /Count ${n} >>`));
+  pages.forEach((p, i) => {
+    const iw = W - 2 * m, ih = iw * p.h / p.w, f = x => x.toFixed(2);
+    const cmd = `q ${f(iw)} 0 0 ${f(ih)} ${f(m)} ${f(H - m - ih)} cm /Im0 Do Q`;
+    obj(3 + 3 * i, () => put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f(W)} ${f(H)}] /Resources << /XObject << /Im0 ${5 + 3 * i} 0 R >> >> /Contents ${4 + 3 * i} 0 R >>`));
+    obj(4 + 3 * i, () => { put(`<< /Length ${cmd.length} >>\nstream\n`); put(cmd); put('\nendstream'); });
+    obj(5 + 3 * i, () => { put(`<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.jpg.length} >>\nstream\n`); put(p.jpg); put('\nendstream'); });
+  });
+  const xref = len, total = 3 + 3 * n;
+  put(`xref\n0 ${total}\n0000000000 65535 f \n` + Array.from({ length: total - 1 }, (_, i) => String(offs[i + 1]).padStart(10, '0') + ' 00000 n \n').join(''));
+  put(`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  const out = new Uint8Array(len); let o = 0; for (const b of parts) { out.set(b, o); o += b.length; } return out;
+}
+/** Make the PDF of the chosen sheets, then offer Share (Print, Files, Mail… on phones) and Download. */
+async function printPdf() {
+  const d = printDoc(), A = PRINT_AREA[d.paper], btn = $('#pr-pdf'), out = $('#pr-out');
+  if (btn) { btn.disabled = true; btn.textContent = 'Making PDF…'; }
+  try {
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const box = printMeasureBox(d.html, A); box.style.visibility = 'visible'; printApply(box, d.sizes);
+    const sc = 2.4, pages = [];   // ≈ 230 dpi
+    for (const pg of box.querySelectorAll('.ppage')) {
+      const base = pg.getBoundingClientRect().top, boxes = [...pg.querySelectorAll('tr, .pbar, .pbar2, .pmeta')].map(e => { const r = e.getBoundingClientRect(); return [r.top - base, r.bottom - base]; });
+      const cuts = printCuts(Math.ceil(pg.scrollHeight), A.h, boxes);
+      for (let i = 0; i < cuts.length - 1; i++) {
+        const h = Math.ceil(cuts[i + 1] - cuts[i]), cv = document.createElement('canvas');
+        cv.width = Math.round(A.w * sc); cv.height = Math.round(h * sc);
+        const ctx = cv.getContext('2d'); ctx.scale(sc, sc); printDraw(ctx, pg, cuts[i], cuts[i] + h, A);
+        const jpg = Uint8Array.from(atob(cv.toDataURL('image/jpeg', 0.9).split(',')[1]), c => c.charCodeAt(0));
+        pages.push({ jpg, w: cv.width, h: cv.height });
+      }
+    }
+    box.remove();
+    const name = d.title.replace(/[\\/:*?"<>|]/g, '-') + '.pdf', blob = new Blob([printPdfBytes(pages, d.paper)], { type: 'application/pdf' });
+    const file = typeof File === 'function' ? new File([blob], name, { type: 'application/pdf' }) : null;
+    const canShare = !!(file && navigator.canShare && navigator.share && (() => { try { return navigator.canShare({ files: [file] }); } catch (e) { return false; } })());
+    S.printPdf = { blob, file, name };
+    if (out) { out.hidden = false; out.innerHTML = `<div class="pr-actions"><b>PDF ready</b> <span class="small muted">${plural(pages.length, 'page')} · ${esc(PRINT_PAPER[d.paper].css)}</span>
+      ${canShare ? '<button class="primary" data-act="print-share" id="pr-share">Share / Print…</button>' : ''}<button ${canShare ? '' : 'class="primary"'} data-act="print-dl" id="pr-dl">Download PDF</button></div>`; }
+  } catch (e) { console.warn(e); toast('Could not make the PDF on this device.', true); }
+  if (btn) { btn.disabled = false; btn.textContent = 'PDF'; }
+}
+async function printShare() {
+  const p = S.printPdf; if (!p || !p.file) return;
+  try { await navigator.share({ files: [p.file], title: p.name }); } catch (e) { if (e && e.name !== 'AbortError') printDownload(); }
+}
+function printDownload() {
+  const p = S.printPdf; if (!p) return;
+  const url = URL.createObjectURL(p.blob), a = document.createElement('a');
+  a.href = url; a.download = p.name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
 }

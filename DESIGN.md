@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.57.0 Requirements & Design
+# Karate Event Tracker · v1.58.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -846,3 +846,28 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
   - New "Open as page": the same sheets as a document of their own in a new tab, with a "Print / Save as PDF" button. If pop-ups are blocked it is downloaded as an .html file to open and print. This also helps inside the claude.ai frame, where printing can be blocked.
   - The dialog tells people that "Save as PDF" is in the print dialog (on iPhone / iPad: share the print preview).
 **Verify.** logic.test (blocks in sheet order). test/divprint.js (international demo: 10 sheets A→Z with the name in the top bar; Senior | Junior side by side; events in order; women | men; numbering; grey bars; teams with members and member countries; one country; per club; Letter / A4 PDFs; pages still there 2.5 s after `print()` and removed after `afterprint`; the largest country ≤ 2 pages; "Open as page" opens a standalone sheet with its own Print button. National demo by country (one sheet, every division) and the World demo by region (58 competitors on one sheet, Letter font shrinks to 10 px) fit on 2 pages in Letter and A4). Full e2e set and the other browser tests.
+
+## §86 Division printout: PDF made in the app (share / print on iPhone), full page width, names on one line (v1.58.0)
+**Requirement.** The Print button still did not work (iPhone; "Open as page" → "Cannot open the page because the URL is invalid"). Use the full width of the page; reduce the font so names fit.
+**Diagnosis.** The site runs as a home-screen app (`apple-mobile-web-app-capable`; the screenshot shows the in-app browser sheet). In that mode iOS does not support `window.print()` at all. The "Open as page" tab was a `blob:` address, which the in-app sheet could not reload to print.
+**Design.**
+- **PDF made in the app** (`printPdf`):
+  1. Lay each sheet out off screen at the printable width.
+  2. Cut it into pages without cutting through a row, bar or header (`printCuts`).
+  3. Draw each page on a canvas at about 230 dpi (`printDraw`: backgrounds, top / bottom borders, then the text word by word at its laid-out position, clipped to its cell). The text uses the device's own fonts, so Polish and other letters print correctly.
+  4. Write a PDF with one JPEG per page inside the margins (`printPdfBytes`: catalog, pages, content and image objects, xref).
+  - Then "PDF ready · N pages" offers **Share / Print…** (`navigator.share` with the file: the iOS share sheet has Print, Save to Files, Mail) and **Download PDF**.
+  - It is a second tap because sharing needs a fresh tap after the PDF is made.
+- **Print** uses the browser's print dialog on computers. In the home-screen app it makes the PDF instead (with a short note).
+- "Open as page" is removed.
+- **Full width:** margins 8 mm (were 12 mm), a narrower gap between the two columns, and the font may start larger (13 px) for small sheets.
+- **Names on one line:** name cells do not wrap. `printFit` takes the largest size (13 → 5.5 px) at which every name fits its cell and the sheet stays within two pages; at the smallest size a too-long name is cut with "…".
+- **Preview:** each sheet is the real page (printable width + margins), scaled to the dialog width, so the phone shows what will print.
+- Test fix: signin.js clicks once more if the first click landed before the app was ready (it failed once under load).
+**Verify.** test/divprint.js:
+  - Every name fits in the preview.
+  - PDF made in the app: a valid file with 10 Letter pages (612 × 792), one image per page, correct xref.
+  - Home-screen app emulated (`navigator.standalone`): Print does not call `print()`, makes the PDF and hands it to the share sheet.
+  - Phone: the preview is scaled to the screen, no sideways scroll.
+  - Whole-event sheets ≤ 2 pages in Letter and A4 (font 10.5–13 px).
+  - Plus the earlier layout checks, and the full e2e set and other browser tests.
