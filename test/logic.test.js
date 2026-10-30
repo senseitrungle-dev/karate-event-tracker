@@ -809,6 +809,7 @@ t('printGroups: per country, age groups, paired event blocks (v1.56)', () => {
   assert.deepEqual(sen.rows[1][0], null); assert.deepEqual(sen.rows[1][1].X, ['t1']);
   assert.deepEqual(P[0].ages[0].rows[0][0].F, ['b']);
   assert.deepEqual(P[2].ages[0].rows[0].map(b => b && b.et), [null, 'IKUMITE']);
+  assert.deepEqual(sen.blocks.map(b => b.et), ['IKATA', 'IKUMITE', 'ENBU']);   // v1.57: kata, fukugo, kumite, team kata, enbu, team kumite
   const P2 = KT.printGroups(divs, placed, id => id === 't1' ? ['Japan', 'Brazil'] : ctry[id]);   // groupOf may still return several groups
   assert.ok(P2.find(g => g.group === 'Brazil').ages[0].rows.some(r => r[1] && r[1].X.includes('t1')));
 });
