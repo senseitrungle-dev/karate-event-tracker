@@ -388,6 +388,8 @@ const ACT = {
   'save-result': () => saveResult(),
   'kp-score': el => openKP(el.dataset.did, el.dataset.key),
   'event-dup': () => dupForm(),
+  'print-open': () => printForm(),
+  'print-go': () => printGo(),
   // v1.49: fold / unfold a group (country, region, club) of the Competitors list — this person's view only
   'comp-grp': el => { const m = compSortMode(), g = el.dataset.g, c = Object.assign({}, S.ui.compClosed || {}), cur = Object.assign({}, c[m] || {});
     if (cur[g]) delete cur[g]; else cur[g] = 1; c[m] = cur; S.ui.compClosed = c; render(); },
@@ -468,6 +470,7 @@ const CHANGE = {
   'comp-sort': el => { S.ui.compSort = el.value; render(); },
   'judge-sort': el => { S.ui.judgeSort = el.value; render(); },
   'div-fmt': el => fmtApplies(el.form),
+  'print-opt': el => printRefresh(el),
   'team-sort': el => { S.ui.teamSort = Object.assign({}, S.ui.teamSort, { [el.dataset.et]: el.value }); render(); },
   ring: el => { S.ui.ring = el.value; S.ui.ringPicked = true; render(); },
   'call-present': el => ringPresent(el.dataset.rid, el.dataset.k, el.checked),

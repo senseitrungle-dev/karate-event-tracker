@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.55.0 Requirements & Design
+# Karate Event Tracker · v1.56.1 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -805,3 +805,24 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
 - Private columns (birth date, email, phone, emergency contact) stay empty for non-directors.
 - **Import** keeps exported files importable: an event column counts as entered when it holds anything but blank / no / n / false / 0 / -. So "X" and our own division or team text both count.
 **Verify.** compcard.js (exact header order; women then men, youngest first; division and "team · division" values; re-import of the exported file gives everyone the same events — compared as a whole because demo names repeat). yob.js (International: birth_year). Import tests (lenient, federation, Worlds 2026, judges), full e2e set and the other browser tests.
+
+## §83 Division printout per country / region / club, Letter or A4 (v1.56.0)
+**Requirement.** Division card: print, per country / dojo / club, all divisions with competitors, formatted for Letter or A4 paper, like the director's "Division printout" example (Numbers sheet).
+**Design.**
+- Example sheet: title "<group> Competitors"; per age group (Senior, Youth…) yellow-headed boxes in pairs Individual Kata | Individual Kumite, Team Kata | Team Kumite, Fukugo | Enbu; each box has Women and Men columns of names; Enbu has a "Mixed Gender" part.
+- `KT.printGroups(divs, placed, groupOf)` (pure, unit-tested) → groups A→Z ("No …" last) → age groups (black belt Senior → Youth → Junior → Cadet, then "Kyu <group>") → rows of paired blocks (a row is left out when neither side has entrants) → block {F, M, X ids}. `groupOf` may return several groups, so a team with members from different countries is printed on each of their pages.
+- `app12_print.js`: Divisions tab "🖨 Print by country" (region / club by event level) opens a dialog:
+  - One page per Country / Region / Club (default by event level); All or one group; Paper Letter or A4 (remembered on the device).
+  - A live preview of the pages.
+  - Print builds `#print-root` from the same HTML, sets `@page { size: letter | A4; margin: 12mm }`, and calls the browser's print (which also saves to PDF). Under `@media print` only the pages show, one group per page (`break-after: page`), boxes are not split across pages, and the yellow prints (`print-color-adjust: exact`). Afterwards the app returns.
+- Names: competitors "Last, First" (with the rank mark of §71 where seeded); team events show the team name in bold then its members. The page subtitle gives the event, date and number of competitors.
+**Verify.** logic.test (printGroups: per-country pages, age order, pairs, empty divisions left out, mixed team on both pages). test/divprint.js (international demo: 10 country pages A→Z; Japan page titles in order; yellow titles; Women | Men; Kata beside Kumite; teams with members; one country; per club; Letter and A4 PDFs with 612×792 / 595×842 pt pages; the app returns after printing; phone fit). Full e2e set and the other browser tests.
+
+## §84 Division printout: a mixed team is listed once, with each member's country (v1.56.1)
+**Requirement.** List a team only once when its members are from different countries / dojos / clubs, but show the country of each member.
+**Design.**
+- `printData`: a team whose members belong to different groups goes on one page only: the group most of its members are from (ties: A→Z). A team with a club / country of its own (team dojo field) keeps that.
+- `printMembers(t)`: when a team's members come from more than one group, each member line ends with "· <their country / region / club>" in italics. Members of a single-group team stay plain.
+- The page subtitle counts only that page's own competitors.
+- `KT.printGroups` still accepts several groups from `groupOf`; the app now passes one.
+**Verify.** divprint.js (each team on one page only; mixed teams show two or more member countries, e.g. Italy, India, Australia; no "No country" page), Letter and A4 PDFs, logic.test, and the e2e / browser tests that use teams.

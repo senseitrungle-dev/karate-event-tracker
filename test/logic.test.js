@@ -789,6 +789,29 @@ t('drawn bracket keeps the seeds it was drawn with (v1.45)', () => {
   assert.equal(kp.seeds[e[3].id], 1);
   assert.deepEqual(KT.generateBracket({ id: 'z', format: 'RR' }, ents(4), rng(3)).seeds, {});
 });
+t('printGroups: per country, age groups, paired event blocks (v1.56)', () => {
+  const divs = [
+    { id: 'skF', eventType: 'IKATA', gender: 'F', belt: 'black', group: 'Senior' }, { id: 'skM', eventType: 'IKATA', gender: 'M', belt: 'black', group: 'Senior' },
+    { id: 'suM', eventType: 'IKUMITE', gender: 'M', belt: 'black', group: 'Senior' }, { id: 'yk', eventType: 'IKATA', gender: 'M', belt: 'black', group: 'Youth' },
+    { id: 'en', eventType: 'ENBU', gender: 'X', belt: 'black', group: 'Senior' }, { id: 'kk', eventType: 'IKATA', gender: 'F', belt: 'kyu', group: 'Adult' },
+    { id: 'empty', eventType: 'FUKUGO', gender: 'M', belt: 'black', group: 'Senior' }];
+  const placed = { skF: ['a', 'b'], skM: ['c'], suM: ['c', 'd'], yk: ['e'], en: ['t1'], kk: ['f'], empty: [] };
+  const ctry = { a: 'Japan', b: 'Brazil', c: 'Japan', d: '', e: 'Japan', t1: 'Japan', f: 'Japan' };
+  const P = KT.printGroups(divs, placed, id => ctry[id]);
+  assert.deepEqual(P.map(g => g.group), ['Brazil', 'Japan', '']);
+  const J = P[1];
+  assert.deepEqual(J.ages.map(a => a.age), ['Senior', 'Youth', 'Kyu Adult']);
+  const sen = J.ages[0];
+  assert.equal(sen.rows.length, 2);                              // Kata | Kumite, then Fukugo | Enbu (no team kata / kumite; empty fukugo left out)
+  assert.deepEqual(sen.rows[0].map(b => b && b.title), ['Senior Individual Kata', 'Senior Individual Kumite']);
+  assert.deepEqual(sen.rows[0][0].F, ['a']);                    // Brazil's 'b' is on Brazil's page, not Japan's
+  assert.deepEqual(sen.rows[0][0].M, ['c']);
+  assert.deepEqual(sen.rows[1][0], null); assert.deepEqual(sen.rows[1][1].X, ['t1']);
+  assert.deepEqual(P[0].ages[0].rows[0][0].F, ['b']);
+  assert.deepEqual(P[2].ages[0].rows[0].map(b => b && b.et), [null, 'IKUMITE']);
+  const P2 = KT.printGroups(divs, placed, id => id === 't1' ? ['Japan', 'Brazil'] : ctry[id]);   // groupOf may still return several groups
+  assert.ok(P2.find(g => g.group === 'Brazil').ages[0].rows.some(r => r[1] && r[1].X.includes('t1')));
+});
 t('3rd-place match always before the championship (v1.39)', () => {
   const ready = br => KT.readyMatches(br).map(m => m.id);
   const play = (br, id) => { br.results[id] = { winnerId: KT.resolve(br)[id].a, method: 'x', pts: { a: 1, b: 0 } }; };

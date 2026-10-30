@@ -754,16 +754,48 @@ tr.grp-tog.shut td { opacity: .8; }
 /* v1.54: competitor card — the division / team actually assigned */
 .assigned { text-align: left; white-space: normal; overflow-wrap: anywhere; min-height: 0; }
 .assigned-line { color: var(--ink-2); overflow-wrap: anywhere; }
+/* v1.56: division printout (per country / region / club) — preview on screen, pages on paper */
+.pr-preview { background: #e9e9e6; padding: 10px; border-radius: 10px; max-height: 60vh; overflow: auto; }
+.pr-preview .ppage { background: #fff; color: #111; margin: 0 auto 12px; padding: 12mm; box-shadow: 0 1px 6px rgba(0,0,0,.18); }
+.pr-preview.paper-letter .ppage { max-width: 8.5in; } .pr-preview.paper-a4 .ppage { max-width: 210mm; }
+.ppage { font: 11px/1.35 "IBM Plex Sans", Arial, sans-serif; color: #111; }
+.ppage h1 { font-size: 15px; margin: 0 0 2px; color: #111; }
+.ppage .pmeta { font-size: 10px; color: #555; margin-bottom: 8px; }
+.ppage .page-grp { margin-bottom: 8px; }
+.ppage .prow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 6px; break-inside: avoid; page-break-inside: avoid; margin-bottom: 6px; }
+.ppage .pblock { border: 1px solid #9a9a9a; min-width: 0; }
+.ppage .pblock.pempty { border: 0; }
+.ppage .ptitle { background: #fff35c; font-weight: 700; padding: 3px 6px; border-bottom: 1px solid #9a9a9a; color: #111; }
+.ppage .pgrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.ppage, .ppage * { box-sizing: border-box; }
+.ppage .ph { font-weight: 700; padding: 3px 6px; border-bottom: 1px solid #c8c8c8; }
+.ppage .pgrid > .ph:nth-child(odd), .ppage .pgrid > .pc:nth-child(odd) { border-right: 1px solid #c8c8c8; }
+.ppage .pc { padding: 0 0 2px; min-width: 0; }
+.ppage .pn { padding: 2px 6px; border-bottom: 1px solid #e2e2e2; overflow-wrap: anywhere; }
+.ppage .pteam { font-weight: 700; } .ppage .pmem { padding-left: 12px; }
+.ppage .pmix { border-top: 1px solid #c8c8c8; }
+.ppage .pxgrid .pspan { grid-column: 1 / -1; }
+#print-root { display: none; }
+@media print {
+  body.printing > *:not(#print-root) { display: none !important; }
+  body.printing { background: #fff !important; }
+  body.printing #print-root { display: block; width: 100%; margin: 0; }
+  body.printing { margin: 0 !important; padding: 0 !important; }
+  #print-root .ppage { padding: 0 2px 0 1px; box-shadow: none; break-after: page; page-break-after: always; }
+  #print-root .ppage:last-child { break-after: auto; page-break-after: auto; }
+  #print-root .ptitle { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.ppage .pfrom { color: #555; font-style: italic; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.55.0 */
+<script>/* Karate Event Tracker v1.56.1 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.55.0';
+  const VERSION = '1.56.1';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -1092,6 +1124,27 @@ const KT = (function () {
     const seeded = entrants.filter(e => e.seed).sort((a, b) => a.seed - b.seed);
     const rest = shuffle(entrants.filter(e => !e.seed), rnd || Math.random);
     return seeded.concat(rest);
+  }
+  /** v1.56: division printout per country / region / club (the owner's "Division printout" sheet).
+      divs: [{id, eventType, gender, belt, group}], placed: {divId: [entrantIds]}, groupOf(id) → group name (or several: a mixed team is on each).
+      → [{ group, ages: [{ age, rows: [[block|null, block|null], …] }] }] — rows pair Kata | Kumite, Team Kata | Team Kumite, Fukugo | Enbu;
+      block: { et, title, F: [ids], M: [ids], X: [ids], did: {F, M, X} } (X = mixed / open). Groups A→Z ("No …" last); only blocks with entrants. */
+  const PRINT_PAIRS = [['IKATA', 'IKUMITE'], ['TKATA', 'TKUMITE'], ['FUKUGO', 'ENBU']];
+  function printGroups(divs, placed, groupOf) {
+    const ageOrder = BLACK_AGE_GROUPS.map(g => g.label);
+    const ageOf = d => (d.belt === 'kyu' ? 'Kyu ' : '') + (String(d.group || '').trim() || 'Open');
+    const ageRank = a => { const i = ageOrder.indexOf(a); return i >= 0 ? i : 100; };
+    const by = {};   // group → age → et → block
+    for (const d of divs) for (const id of placed[d.id] || []) for (const g0 of [].concat(groupOf(id))) {
+      const g = g0 || '', a = ageOf(d), sx = d.gender === 'F' || d.gender === 'W' ? 'F' : d.gender === 'M' ? 'M' : 'X';
+      const A = ((by[g] = by[g] || {})[a] = by[g][a] || {});
+      const b = (A[d.eventType] = A[d.eventType] || { et: d.eventType, title: a + ' ' + ((EVENT_TYPES[d.eventType] || {}).label || d.eventType), F: [], M: [], X: [], did: {} });
+      b[sx].push(id); b.did[sx] = b.did[sx] || d.id;
+    }
+    const cmp = (x, y) => String(x).localeCompare(String(y), undefined, { sensitivity: 'base' });
+    return Object.keys(by).sort((x, y) => (!x - !y) || cmp(x, y)).map(g => ({ group: g,
+      ages: Object.keys(by[g]).sort((x, y) => ageRank(x) - ageRank(y) || cmp(x, y)).map(a => ({ age: a,
+        rows: PRINT_PAIRS.map(([l, r]) => [by[g][a][l] || null, by[g][a][r] || null]).filter(([l, r]) => l || r) })) }));
   }
   /** v1.44: list order of a division's entrants. list: [{id, last, first, group}];
       mode 'name' (last, first A→Z) · 'name-desc' (Z→A) · 'club' / 'region' / 'country' (by group A→Z, no group last, then name A→Z). */
@@ -2085,7 +2138,7 @@ const KT = (function () {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, ageFromYear, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
-    seedOrder, nextPow2, orderEntrants, ENT_SORTS, sortEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, kpPrevious, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
+    seedOrder, nextPow2, orderEntrants, PRINT_PAIRS, printGroups, ENT_SORTS, sortEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, kpPrevious, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS, RING_CHECKS, ringChecksDone, ringReadyOk,
   };
 })();
@@ -5310,6 +5363,7 @@ function divisionsHTML() {
   const f = S.ui.divFilter;
   const list = DC.divs.filter(d => !f || d.eventType === f);
   const acts = `<button data-act="div-preset" data-id="wtkf-worlds-2026" title="Divisions and rules from the WTKF 2026 Information Package">WTKF Worlds 2026 rules</button><button data-act="div-ncr" title="Kyu divisions by the North Central Region tournament rules v3.3">Kyu rules (NCR)</button><button data-act="div-std">Add black-belt divisions</button><button data-act="div-kyu">Add kyu divisions</button><button data-act="div-new">New division</button>
+    <button data-act="print-open" title="One page per ${esc(({ International: 'country', National: 'region' })[ev.level] || 'club')} with all its divisions — Letter or A4">🖨 Print by ${esc(({ International: 'country', National: 'region' })[ev.level] || 'club')}</button>
     <button class="primary" data-act="draw-all">Draw all ready</button>`;
   if (!DC.divs.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No divisions yet</h2>
     <p class="muted" style="max-width:56ch">Start with the standard black-belt age groups — Senior 21+, Youth 19–20, Junior 16–18, Cadet 14–15 — for every event you offer, then define kyu divisions by rank and age.</p><div class="row">${acts}</div></div>`;
@@ -8843,6 +8897,81 @@ function divFollowCardHTML(did) {
   return `<div class="card stack follow-div" data-did="${esc(did)}"><div class="row between"><div class="row" style="gap:6px;min-width:0">${star('divs', did)}<div style="min-width:0"><h3>${esc(dv.name)}</h3><div class="dojo">${plural(n, 'entrant')}${rings.length ? ' · ' + esc(rings.map(ringName).join(', ')) : ''}</div></div></div>${divStatusChip(did)}</div>
     ${body}<div><button class="sm" data-act="view-bracket" data-id="${esc(did)}">Bracket ›</button></div></div>`;
 }
+/* ===== v1.56 division printout per country / region / club (Letter or A4), laid out like the director's "Division printout" sheet ===== */
+const PRINT_BY = { country: 'Country', region: 'Region / federation', club: 'Club / dojo' };
+const PRINT_LEVEL = { country: 'International', region: 'National', club: 'Local' };
+let printLv = 'International';
+/** Members of a team: "Last, First", plus each one's country / region / club when the team mixes them. */
+function printMembers(t) {
+  const mem = (t.memberIds || []).map(m => DC.compBy[m]).filter(Boolean);
+  const gs = mem.map(m => entGroupLabel(m.id, printLv)), mixed = new Set(gs.filter(Boolean)).size > 1;
+  return mem.map((m, i) => `<div class="pn pmem">${esc((m.lastName || '') + ', ' + (m.firstName || ''))}${mixed ? ` <span class="pfrom">· ${esc(gs[i] || '—')}</span>` : ''}</div>`).join('');
+}
+function printByDefault() { const lv = (curEvent() || {}).level; return lv === 'International' ? 'country' : lv === 'National' ? 'region' : 'club'; }
+function printPaper() { try { return localStorage.getItem('kt-paper') === 'a4' ? 'a4' : 'letter'; } catch (e) { return 'letter'; } }
+function printData(by) {
+  const lv = PRINT_LEVEL[by], none = 'No ' + (by === 'club' ? 'club' : by);
+  const divs = DC.divs.filter(d => (DC.assign.byDiv[d.id] || []).length);
+  // a team whose members come from different countries / regions / clubs is printed once: on the page of most of its members
+  // (ties: A→Z); each member's own group is shown beside their name (printMembers)
+  const groupOf = id => { const g = entGroupLabel(id, lv), t = DC.teamBy[id]; if (g || !t) return g;
+    const n = {}; for (const m of t.memberIds || []) { const x = entGroupLabel(m, lv); if (x) n[x] = (n[x] || 0) + 1; }
+    return Object.keys(n).sort((a, b) => n[b] - n[a] || a.localeCompare(b))[0] || ''; };
+  printLv = lv;
+  return KT.printGroups(divs, DC.assign.byDiv, groupOf).map(g => Object.assign(g, { label: g.group || none }));
+}
+/** Names in one gender column: competitors, or each team (bold) followed by its members. */
+function printCol(ids, did) {
+  return ids.map(id => { const t = DC.teamBy[id];
+    if (!t) return `<div class="pn">${esc(entName(id, did))}</div>`;
+    return `<div class="pn pteam">${esc(entName(id, did))}</div>${printMembers(t)}`; }).join('');
+}
+function printBlock(b) {
+  if (!b) return '<div class="pblock pempty"></div>';
+  const fm = b.F.length || b.M.length ? `<div class="pgrid"><div class="ph">Women</div><div class="ph">Men</div><div class="pc">${printCol(b.F, b.did.F)}</div><div class="pc">${printCol(b.M, b.did.M)}</div></div>` : '';
+  const team = KT.EVENT_TYPES[b.et] && KT.EVENT_TYPES[b.et].team;
+  const mx = b.X.length ? `<div class="ph pmix">${team ? 'Mixed Gender' : 'Open'}</div><div class="pgrid pxgrid">${b.X.map(id => { const t = DC.teamBy[id];
+    if (!t) return `<div class="pn">${esc(entName(id, b.did.X))}</div>`;
+    return `<div class="pn pteam pspan">${esc(entName(id, b.did.X))}</div>${printMembers(t)}`; }).join('')}</div>` : '';
+  return `<div class="pblock"><div class="ptitle">${esc(b.title)}</div>${fm}${mx}</div>`;
+}
+function printPagesHTML(by, which) {
+  const ev = curEvent() || {}, groups = printData(by).filter(g => !which || g.label === which);
+  if (!groups.length) return '<p class="small muted">No competitors are placed in a division yet.</p>';
+  return groups.map(g => { const n = new Set(g.ages.flatMap(a => a.rows.flat().filter(Boolean).flatMap(b => [...b.F, ...b.M, ...b.X]).flatMap(id => DC.teamBy[id] ? DC.teamBy[id].memberIds || [] : [id]).filter(id => entGroupLabel(id, printLv) === g.group))).size;   // this page's own competitors
+    return `<section class="ppage"><h1>${esc(g.label)} Competitors</h1><div class="pmeta">${esc(ev.name || '')}${ev.startDate ? ' · ' + esc(fmtDate(ev.startDate)) : ''} · ${plural(n, 'competitor')}</div>
+      ${g.ages.map(a => `<div class="page-grp">${a.rows.map(r => `<div class="prow">${printBlock(r[0])}${printBlock(r[1])}</div>`).join('')}</div>`).join('')}</section>`; }).join('');
+}
+function printForm() {
+  const by = printByDefault(), groups = printData(by);
+  openModal(sheet('Print divisions', `<div class="stack">
+    <p class="small muted">One page per ${esc(PRINT_BY[by].toLowerCase())} with every division it has competitors in — age groups in order, Kata | Kumite, Team Kata | Team Kumite, Fukugo | Enbu, women and men side by side.</p>
+    <div class="fgrid">
+      <label class="f"><span>One page per</span><select id="pr-by" data-change="print-opt">${Object.entries(PRINT_BY).map(([k, l]) => opt(k, l, by)).join('')}</select></label>
+      <label class="f"><span>Print</span><select id="pr-which" data-change="print-opt">${opt('', `All (${groups.length})`, '')}${groups.map(g => opt(g.label, g.label, '')).join('')}</select></label>
+      <label class="f"><span>Paper</span><select id="pr-paper" data-change="print-opt">${opt('letter', 'Letter (8.5 × 11 in)', printPaper())}${opt('a4', 'A4 (210 × 297 mm)', printPaper())}</select></label></div>
+    <div id="pr-preview" class="pr-preview paper-${printPaper()}">${printPagesHTML(by, '')}</div></div>`,
+    '<button data-act="modal-close">Cancel</button><button class="primary" data-act="print-go" id="pr-go">Print</button>'), { wide: true });
+}
+/** Options changed: refresh the group list (when the grouping changed) and the preview. */
+function printRefresh(el) {
+  const by = $('#pr-by').value, w = $('#pr-which'), paper = $('#pr-paper').value;
+  try { localStorage.setItem('kt-paper', paper); } catch (e) { /* ignore */ }
+  if (el && el.id === 'pr-by') { const gs = printData(by); w.innerHTML = opt('', `All (${gs.length})`, '') + gs.map(g => opt(g.label, g.label, '')).join(''); }
+  const pv = $('#pr-preview'); pv.className = 'pr-preview paper-' + paper; pv.innerHTML = printPagesHTML(by, w.value);
+}
+function printGo() {
+  const by = $('#pr-by').value, which = $('#pr-which').value, paper = $('#pr-paper').value;
+  let root = document.getElementById('print-root'); if (root) root.remove();
+  root = document.createElement('div'); root.id = 'print-root'; root.className = 'paper-' + paper; root.innerHTML = printPagesHTML(by, which); document.body.appendChild(root);
+  let st = document.getElementById('print-page'); if (!st) { st = document.createElement('style'); st.id = 'print-page'; document.head.appendChild(st); }
+  st.textContent = `@page { size: ${paper === 'a4' ? 'A4' : 'letter'} portrait; margin: 12mm; }`;
+  document.body.classList.add('printing');
+  const done = () => { document.body.classList.remove('printing'); const r = document.getElementById('print-root'); if (r) r.remove(); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  try { window.print(); } catch (e) { toast('Printing is not available here — open the site in a browser tab.', true); }
+  setTimeout(() => { if (!window.matchMedia || !window.matchMedia('print').matches) done(); }, 1500);
+}
 /* ===== actions, subscriptions, init ===== */
 function subscribeEvents() {
   watchBranding();
@@ -9233,6 +9362,8 @@ const ACT = {
   'save-result': () => saveResult(),
   'kp-score': el => openKP(el.dataset.did, el.dataset.key),
   'event-dup': () => dupForm(),
+  'print-open': () => printForm(),
+  'print-go': () => printGo(),
   // v1.49: fold / unfold a group (country, region, club) of the Competitors list — this person's view only
   'comp-grp': el => { const m = compSortMode(), g = el.dataset.g, c = Object.assign({}, S.ui.compClosed || {}), cur = Object.assign({}, c[m] || {});
     if (cur[g]) delete cur[g]; else cur[g] = 1; c[m] = cur; S.ui.compClosed = c; render(); },
@@ -9313,6 +9444,7 @@ const CHANGE = {
   'comp-sort': el => { S.ui.compSort = el.value; render(); },
   'judge-sort': el => { S.ui.judgeSort = el.value; render(); },
   'div-fmt': el => fmtApplies(el.form),
+  'print-opt': el => printRefresh(el),
   'team-sort': el => { S.ui.teamSort = Object.assign({}, S.ui.teamSort, { [el.dataset.et]: el.value }); render(); },
   ring: el => { S.ui.ring = el.value; S.ui.ringPicked = true; render(); },
   'call-present': el => ringPresent(el.dataset.rid, el.dataset.k, el.checked),
