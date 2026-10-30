@@ -390,6 +390,7 @@ const ACT = {
   'event-dup': () => dupForm(),
   'print-open': () => printForm(),
   'print-go': () => printGo(),
+  'print-page': () => printPage(),
   // v1.49: fold / unfold a group (country, region, club) of the Competitors list — this person's view only
   'comp-grp': el => { const m = compSortMode(), g = el.dataset.g, c = Object.assign({}, S.ui.compClosed || {}), cur = Object.assign({}, c[m] || {});
     if (cur[g]) delete cur[g]; else cur[g] = 1; c[m] = cur; S.ui.compClosed = c; render(); },

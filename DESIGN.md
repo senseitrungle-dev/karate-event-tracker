@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.56.1 Requirements & Design
+# Karate Event Tracker · v1.57.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -826,3 +826,23 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
 - The page subtitle counts only that page's own competitors.
 - `KT.printGroups` still accepts several groups from `groupOf`; the app now passes one.
 **Verify.** divprint.js (each team on one page only; mixed teams show two or more member countries, e.g. Italy, India, Australia; no "No country" page), Letter and A4 PDFs, logic.test, and the e2e / browser tests that use teams.
+
+## §85 Division printout in the Polish federation's layout, at most two pages per group; printing fixed (v1.57.0)
+**Requirement.** Re-format the printout like the Polish federation's sheet (photo of a "WASHINGTON" sheet), with a font size that fits a group's divisions on at most 2 pages. The Print button did nothing and did not allow saving as PDF.
+**Design.**
+- **Layout** (`app12_print.js`):
+  - A dark-grey bar with the group name in capitals, then the event · date · count.
+  - Age groups side by side in two columns (Senior | Youth, Junior | Cadet, then kyu groups), each under a dark-grey bar.
+  - In each age group the events stack in the sheet's order (`KT.PRINT_ORDER`): kata ind., fukugo, kumite ind., kata team, enbu, kumite team.
+  - Each event is a table with a light-grey header ("kata ind." + women | men). Names are numbered 1, 2, 3… as "First Last" (with the rank mark of §71).
+  - Enbu columns are "enbu W/M" (mixed), "enbu M/M" and "enbu W/W"; more than two columns wrap in pairs.
+  - Team events list the members numbered (team name first when a column has several teams). A mixed team shows each member's country (§84).
+- **Fit:** `printFit` lays each sheet out off screen at the printable width (Letter 725 px, A4 703 px at 12 mm margins). It picks the largest font from 10.5 px down to 6 px whose height is within two pages (6% kept for page breaks). Every size is in em, so the whole sheet scales.
+  - Long tables may continue on the next page; their header repeats (`thead`) and rows are not split. The age bar stays with its first table.
+  - The page styles live in `PRINT_CSS` (injected once), so they are independent of the app's own table styles. The app's `td` font size had kept names large, which pushed a big group to four pages.
+- **Printing:**
+  - Cause of "Print did nothing": on iPhone / iPad (and some browsers) `print()` returns at once and the dialog reads the page afterwards, but v1.56 removed the printed pages after 1.5 s.
+  - Now the pages stay until `afterprint` (then 0.8 s), or until the next print.
+  - New "Open as page": the same sheets as a document of their own in a new tab, with a "Print / Save as PDF" button. If pop-ups are blocked it is downloaded as an .html file to open and print. This also helps inside the claude.ai frame, where printing can be blocked.
+  - The dialog tells people that "Save as PDF" is in the print dialog (on iPhone / iPad: share the print preview).
+**Verify.** logic.test (blocks in sheet order). test/divprint.js (international demo: 10 sheets A→Z with the name in the top bar; Senior | Junior side by side; events in order; women | men; numbering; grey bars; teams with members and member countries; one country; per club; Letter / A4 PDFs; pages still there 2.5 s after `print()` and removed after `afterprint`; the largest country ≤ 2 pages; "Open as page" opens a standalone sheet with its own Print button. National demo by country (one sheet, every division) and the World demo by region (58 competitors on one sheet, Letter font shrinks to 10 px) fit on 2 pages in Letter and A4). Full e2e set and the other browser tests.

@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.56.1';
+  const VERSION = '1.57.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -339,6 +339,8 @@ const KT = (function () {
       → [{ group, ages: [{ age, rows: [[block|null, block|null], …] }] }] — rows pair Kata | Kumite, Team Kata | Team Kumite, Fukugo | Enbu;
       block: { et, title, F: [ids], M: [ids], X: [ids], did: {F, M, X} } (X = mixed / open). Groups A→Z ("No …" last); only blocks with entrants. */
   const PRINT_PAIRS = [['IKATA', 'IKUMITE'], ['TKATA', 'TKUMITE'], ['FUKUGO', 'ENBU']];
+  /** v1.57: event order within an age group on the printout (the Polish federation's sheet): kata, fukugo, kumite, team kata, enbu, team kumite. */
+  const PRINT_ORDER = ['IKATA', 'FUKUGO', 'IKUMITE', 'TKATA', 'ENBU', 'TKUMITE'];
   function printGroups(divs, placed, groupOf) {
     const ageOrder = BLACK_AGE_GROUPS.map(g => g.label);
     const ageOf = d => (d.belt === 'kyu' ? 'Kyu ' : '') + (String(d.group || '').trim() || 'Open');
@@ -353,7 +355,8 @@ const KT = (function () {
     const cmp = (x, y) => String(x).localeCompare(String(y), undefined, { sensitivity: 'base' });
     return Object.keys(by).sort((x, y) => (!x - !y) || cmp(x, y)).map(g => ({ group: g,
       ages: Object.keys(by[g]).sort((x, y) => ageRank(x) - ageRank(y) || cmp(x, y)).map(a => ({ age: a,
-        rows: PRINT_PAIRS.map(([l, r]) => [by[g][a][l] || null, by[g][a][r] || null]).filter(([l, r]) => l || r) })) }));
+        rows: PRINT_PAIRS.map(([l, r]) => [by[g][a][l] || null, by[g][a][r] || null]).filter(([l, r]) => l || r),
+        blocks: PRINT_ORDER.map(et => by[g][a][et]).filter(Boolean) })) }));
   }
   /** v1.44: list order of a division's entrants. list: [{id, last, first, group}];
       mode 'name' (last, first A→Z) · 'name-desc' (Z→A) · 'club' / 'region' / 'country' (by group A→Z, no group last, then name A→Z). */
@@ -1347,7 +1350,7 @@ const KT = (function () {
     VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, ageFromYear, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
-    seedOrder, nextPow2, orderEntrants, PRINT_PAIRS, printGroups, ENT_SORTS, sortEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, kpPrevious, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
+    seedOrder, nextPow2, orderEntrants, PRINT_PAIRS, PRINT_ORDER, printGroups, ENT_SORTS, sortEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, kpPrevious, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,
     kumiteEval, kogoEval, flagsEval, scoreTotal, scoresEval, teamKumiteEval, fukugoPart, kiteiEval, medalTable, toCSV, PTS, RING_CHECKS, ringChecksDone, ringReadyOk,
   };
 })();
