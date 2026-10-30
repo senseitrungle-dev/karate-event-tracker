@@ -1,22 +1,31 @@
 /* ===== v1.56 division printout per country / region / club (Letter or A4), laid out like the director's "Division printout" sheet ===== */
 const PRINT_BY = { country: 'Country', region: 'Region / federation', club: 'Club / dojo' };
 const PRINT_LEVEL = { country: 'International', region: 'National', club: 'Local' };
+let printLv = 'International';
+/** Members of a team: "Last, First", plus each one's country / region / club when the team mixes them. */
+function printMembers(t) {
+  const mem = (t.memberIds || []).map(m => DC.compBy[m]).filter(Boolean);
+  const gs = mem.map(m => entGroupLabel(m.id, printLv)), mixed = new Set(gs.filter(Boolean)).size > 1;
+  return mem.map((m, i) => `<div class="pn pmem">${esc((m.lastName || '') + ', ' + (m.firstName || ''))}${mixed ? ` <span class="pfrom">· ${esc(gs[i] || '—')}</span>` : ''}</div>`).join('');
+}
 function printByDefault() { const lv = (curEvent() || {}).level; return lv === 'International' ? 'country' : lv === 'National' ? 'region' : 'club'; }
 function printPaper() { try { return localStorage.getItem('kt-paper') === 'a4' ? 'a4' : 'letter'; } catch (e) { return 'letter'; } }
 function printData(by) {
   const lv = PRINT_LEVEL[by], none = 'No ' + (by === 'club' ? 'club' : by);
   const divs = DC.divs.filter(d => (DC.assign.byDiv[d.id] || []).length);
-  // a team whose members come from different countries / regions / clubs is printed on each of their pages
+  // a team whose members come from different countries / regions / clubs is printed once: on the page of most of its members
+  // (ties: A→Z); each member's own group is shown beside their name (printMembers)
   const groupOf = id => { const g = entGroupLabel(id, lv), t = DC.teamBy[id]; if (g || !t) return g;
-    const gs = [...new Set((t.memberIds || []).map(m => entGroupLabel(m, lv)).filter(Boolean))]; return gs.length ? gs : ''; };
+    const n = {}; for (const m of t.memberIds || []) { const x = entGroupLabel(m, lv); if (x) n[x] = (n[x] || 0) + 1; }
+    return Object.keys(n).sort((a, b) => n[b] - n[a] || a.localeCompare(b))[0] || ''; };
+  printLv = lv;
   return KT.printGroups(divs, DC.assign.byDiv, groupOf).map(g => Object.assign(g, { label: g.group || none }));
 }
 /** Names in one gender column: competitors, or each team (bold) followed by its members. */
 function printCol(ids, did) {
   return ids.map(id => { const t = DC.teamBy[id];
     if (!t) return `<div class="pn">${esc(entName(id, did))}</div>`;
-    const mem = (t.memberIds || []).map(m => DC.compBy[m]).filter(Boolean);
-    return `<div class="pn pteam">${esc(entName(id, did))}</div>${mem.map(m => `<div class="pn pmem">${esc((m.lastName || '') + ', ' + (m.firstName || ''))}</div>`).join('')}`; }).join('');
+    return `<div class="pn pteam">${esc(entName(id, did))}</div>${printMembers(t)}`; }).join('');
 }
 function printBlock(b) {
   if (!b) return '<div class="pblock pempty"></div>';
@@ -24,14 +33,13 @@ function printBlock(b) {
   const team = KT.EVENT_TYPES[b.et] && KT.EVENT_TYPES[b.et].team;
   const mx = b.X.length ? `<div class="ph pmix">${team ? 'Mixed Gender' : 'Open'}</div><div class="pgrid pxgrid">${b.X.map(id => { const t = DC.teamBy[id];
     if (!t) return `<div class="pn">${esc(entName(id, b.did.X))}</div>`;
-    const mem = (t.memberIds || []).map(m => DC.compBy[m]).filter(Boolean);
-    return `<div class="pn pteam pspan">${esc(entName(id, b.did.X))}</div>${mem.map(m => `<div class="pn pmem">${esc((m.lastName || '') + ', ' + (m.firstName || ''))}</div>`).join('')}`; }).join('')}</div>` : '';
+    return `<div class="pn pteam pspan">${esc(entName(id, b.did.X))}</div>${printMembers(t)}`; }).join('')}</div>` : '';
   return `<div class="pblock"><div class="ptitle">${esc(b.title)}</div>${fm}${mx}</div>`;
 }
 function printPagesHTML(by, which) {
   const ev = curEvent() || {}, groups = printData(by).filter(g => !which || g.label === which);
   if (!groups.length) return '<p class="small muted">No competitors are placed in a division yet.</p>';
-  return groups.map(g => { const n = new Set(g.ages.flatMap(a => a.rows.flat().filter(Boolean).flatMap(b => [...b.F, ...b.M, ...b.X]).flatMap(id => DC.teamBy[id] ? DC.teamBy[id].memberIds || [] : [id]))).size;
+  return groups.map(g => { const n = new Set(g.ages.flatMap(a => a.rows.flat().filter(Boolean).flatMap(b => [...b.F, ...b.M, ...b.X]).flatMap(id => DC.teamBy[id] ? DC.teamBy[id].memberIds || [] : [id]).filter(id => entGroupLabel(id, printLv) === g.group))).size;   // this page's own competitors
     return `<section class="ppage"><h1>${esc(g.label)} Competitors</h1><div class="pmeta">${esc(ev.name || '')}${ev.startDate ? ' · ' + esc(fmtDate(ev.startDate)) : ''} · ${plural(n, 'competitor')}</div>
       ${g.ages.map(a => `<div class="page-grp">${a.rows.map(r => `<div class="prow">${printBlock(r[0])}${printBlock(r[1])}</div>`).join('')}</div>`).join('')}</section>`; }).join('');
 }

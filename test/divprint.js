@@ -30,6 +30,12 @@ const path = require('path');
   // team events list the team and its members
   const teamPage = await p.$('#pr-preview .ppage:has(.pteam)');
   ok('team events: team name then members', !!teamPage && (await teamPage.$$('.pmem')).length >= 2);
+  // v1.56.1: a team with members from different countries is printed once, with each member's country
+  const teamPages = await p.$$eval('#pr-preview .ppage', ps => { const seen = {}; ps.forEach((pg, i) => pg.querySelectorAll('.pteam').forEach(t => { const k = t.textContent.trim() + '@' + (t.closest('.pblock').querySelector('.ptitle').textContent); (seen[k] = seen[k] || new Set()).add(i); })); return Object.entries(seen).map(([k, v]) => [k, v.size]); });
+  ok(`each team on one page only (${teamPages.length} teams)`, teamPages.length > 0 && teamPages.every(([, n]) => n === 1));
+  const mixed = await p.$$eval('#pr-preview .pblock', bs => bs.map(b => [...b.querySelectorAll('.pmem .pfrom')].map(x => x.textContent.replace('·', '').trim())).filter(a => a.length));
+  ok(`mixed teams show each member's country (${(mixed[0] || []).join(', ')})`, mixed.length >= 1 && mixed.every(a => new Set(a).size >= 2));
+  ok('no "No country" page', !(await p.$('#pr-preview .ppage h1:text("No country Competitors")')));
   // one country only
   await p.selectOption('#pr-which', 'Brazil'); await W(200);
   ok('print one country', (await p.$$eval('#pr-preview .ppage h1', x => x.map(y => y.textContent))).join() === 'Brazil Competitors');

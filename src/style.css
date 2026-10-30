@@ -776,3 +776,4 @@ tr.grp-tog.shut td { opacity: .8; }
   #print-root .ppage:last-child { break-after: auto; page-break-after: auto; }
   #print-root .ptitle { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.ppage .pfrom { color: #555; font-style: italic; }

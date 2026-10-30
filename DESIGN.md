@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.56.0 Requirements & Design
+# Karate Event Tracker · v1.56.1 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -817,3 +817,12 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
   - Print builds `#print-root` from the same HTML, sets `@page { size: letter | A4; margin: 12mm }`, and calls the browser's print (which also saves to PDF). Under `@media print` only the pages show, one group per page (`break-after: page`), boxes are not split across pages, and the yellow prints (`print-color-adjust: exact`). Afterwards the app returns.
 - Names: competitors "Last, First" (with the rank mark of §71 where seeded); team events show the team name in bold then its members. The page subtitle gives the event, date and number of competitors.
 **Verify.** logic.test (printGroups: per-country pages, age order, pairs, empty divisions left out, mixed team on both pages). test/divprint.js (international demo: 10 country pages A→Z; Japan page titles in order; yellow titles; Women | Men; Kata beside Kumite; teams with members; one country; per club; Letter and A4 PDFs with 612×792 / 595×842 pt pages; the app returns after printing; phone fit). Full e2e set and the other browser tests.
+
+## §84 Division printout: a mixed team is listed once, with each member's country (v1.56.1)
+**Requirement.** List a team only once when its members are from different countries / dojos / clubs, but show the country of each member.
+**Design.**
+- `printData`: a team whose members belong to different groups goes on one page only: the group most of its members are from (ties: A→Z). A team with a club / country of its own (team dojo field) keeps that.
+- `printMembers(t)`: when a team's members come from more than one group, each member line ends with "· <their country / region / club>" in italics. Members of a single-group team stay plain.
+- The page subtitle counts only that page's own competitors.
+- `KT.printGroups` still accepts several groups from `groupOf`; the app now passes one.
+**Verify.** divprint.js (each team on one page only; mixed teams show two or more member countries, e.g. Italy, India, Australia; no "No country" page), Letter and A4 PDFs, logic.test, and the e2e / browser tests that use teams.
