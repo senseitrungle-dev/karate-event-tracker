@@ -761,14 +761,14 @@ tr.grp-tog.shut td { opacity: .8; }
 .pr-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.59.0 */
+<script>/* Karate Event Tracker v1.59.1 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.59.0';
+  const VERSION = '1.59.1';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -6109,6 +6109,9 @@ function importRows(text) {
   // year only (international): same name + same year + same country / dojo = same person
   const whoKey = (f, l, c) => [normH(f), normH(l)].concat(yobOnly() ? [yrOf(c), normH(c.country || c.dojo)] : [c.dob || '']).join('|');
   const seen = new Map(DC.comps.map(c => [whoKey(c.firstName, c.lastName, c), c]));
+  // v1.59.1: registered earlier without a birth date (e.g. imported before M/D/YY dates were read): the same name with a birth date updates that record
+  const nameKey = (f, l) => normH(f) + '|' + normH(l);
+  const noBirth = new Map(DC.comps.filter(c => !c.dob && !c.birthYear).map(c => [nameKey(c.firstName, c.lastName), c]));
   for (let n = hi + 1; n < rows.length; n++) {
     const r = rows[n], lead = String(r[0] || '').trim();
     // next section of a federation sheet (JUDGES/COACHES, PHOTOGRAPHER, TOTAL FEES …) ends the athlete table
@@ -6155,6 +6158,13 @@ function importRows(text) {
       if (/\?/.test(had.firstName + had.lastName) && !/\?/.test(rec.firstName + rec.lastName)) { recs.push({ ...rec, fixId: had.id, was: `${had.firstName} ${had.lastName}` }); seen.set(key, rec); continue; }
       errors.push(`Row ${n + 1} · ${who}: already registered — skipped`); continue;
     }
+    const old = (rec.dob || rec.birthYear) && noBirth.get(nameKey(rec.firstName, rec.lastName));
+    if (old) {   // fill in what the earlier record lacks; keep what it has (and its manual choices)
+      noBirth.delete(nameKey(rec.firstName, rec.lastName)); seen.set(key, rec);
+      const add = rec.events.filter(e => !(old.events || []).includes(e));
+      recs.push({ ...rec, updId: old.id, upd: { addEvents: add, events: [...new Set([...(old.events || []), ...rec.events])] } });
+      continue;
+    }
     seen.set(key, rec);
     if (/\?/.test(rec.firstName + rec.lastName)) rec.warn = true;
     recs.push(rec);
@@ -6170,14 +6180,14 @@ function importPreviewHTML() {
   const cell = (v, need) => v ? esc(v) : need ? '<span class="imp-miss">missing</span>' : '<span class="muted">—</span>';
   const born = r => r.birthYear ? r.birthYear : r.dob ? new Date(r.dob + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   const tbl = recs.length ? `<div class="tw imp-wrap"><table class="imp-tbl"><thead><tr><th>#</th><th>Name</th><th>G</th><th>${info.yobOnly ? 'Born (year)' : 'Born'}</th><th>Rank</th><th>Dojo / club</th><th>${info.country || recs.some(r => r.country) ? 'Country' : 'State / region'}</th>${isT ? '<th>Events</th>' : ''}<th>Emergency</th><th>Waiver</th><th>Needs later</th></tr></thead><tbody>${recs.map((r, i) => `<tr class="${r.warn ? 'imp-warn' : ''}${(r.missing || []).length ? ' imp-inc' : ''}"><td class="n">${i + 1}</td><td>${cell([r.lastName, r.firstName].filter(Boolean).join(', '), true)}${r.fixId ? ' <span class="chip ok">name fix</span>' : ''}</td><td>${r.gender ? (r.gender === 'F' ? 'W' : 'M') : cell('', isT)}</td><td class="mono" title="year-month-day">${cell(born(r), isT)}</td><td>${r.rank ? esc(KT.rankLabel(r.rank)) : cell('', true)}</td><td>${cell(r.dojo, true)}</td><td>${cell(r.country || r.state, false)}</td>${isT ? `<td>${r.events.length ? evs(r.events) : cell('', true)}</td>` : ''}<td>${r.emergencyName || r.emergencyPhone ? esc([r.emergencyName, r.emergencyPhone].filter(Boolean).join(' · ')) : cell('', true)}</td><td>${r.waiver ? '✓' : cell('', true)}</td><td class="imp-need">${(r.missing || []).map(esc).join(', ')}</td></tr>`).join('')}</tbody></table></div>` : '';
-  const fixes = recs.filter(r => r.fixId), adds = recs.length - fixes.length;
+  const fixes = recs.filter(r => r.fixId), upds = recs.filter(r => r.updId), adds = recs.length - fixes.length - upds.length;
   const dd = info && info.dates, dline = dd ? `<div class="notice ${dd.clash ? 'warn' : 'info'}" style="display:block">Birth dates read as <b>${dd.order === 'MDY' ? 'month-day-year (USA, 07/27/2012 = July 27)' : 'day-month-year (Europe, 27.07.2012 = 27 July)'}</b> — ${esc(dd.why)}. ${dd.clash ? 'Rows that don’t fit are listed below. ' : ''}Change it with “Birth dates are” above if this is wrong.</div>` : '';
   const nInc = recs.filter(r => !r.fixId && (r.missing || []).length).length;
   const colsBox = info && info.cols ? `<div class="imp-cols"><div><b>Columns found (${info.cols.length})</b><div class="pill-list">${info.cols.map(c => `<span class="chip ok" title="File heading: ${esc(c.header)}">${esc(c.label)}${normH(c.header) !== normH(c.label) ? ` <span class="tiny">← ${esc(impShort(c.header))}</span>` : ''}</span>`).join('') || '<span class="muted small">none</span>'}</div></div>
     ${info.missingCols.length ? `<div><b>Not in the file — enter later</b><div class="pill-list">${info.missingCols.map(c => `<span class="chip warn">${esc(c)}</span>`).join('')}</div></div>` : ''}
     ${info.ignored.length ? `<div><b>Not used</b> <span class="tiny muted">(not recognised)</span><div class="pill-list">${info.ignored.map(c => `<span class="chip plain" title="${esc(c)}">${esc(impShort(c))}</span>`).join('')}</div></div>` : ''}</div>` : '';
   const yline = info && info.yobOnly ? `<div class="notice info" style="display:block"><b>International event — year of birth only.</b> Ages count on 31 Dec (birth-year rule); the day and month in the file are not stored (data minimisation).</div>` : '';
-  return `${head}${colsBox}${yline}${dline}${warn}<p><b>${plural(adds, 'competitor')} ready to import</b>${nInc ? ` — <span style="color:var(--warn)"><b>${nInc}</b> with details to enter later</span> (marked <span class="chip warn">Incomplete</span>; Competitors → filter “Missing information”)` : ''}.${fixes.length ? ` <b>${plural(fixes.length, 'name')} will be corrected</b> (${fixes.map(r => esc(r.was) + ' → ' + esc(r.firstName + ' ' + r.lastName)).join(', ')}).` : ''}${errors.length ? `<br><span class="small" style="color:var(--bad)">${errors.slice(0, 10).map(esc).join('<br>')}${errors.length > 10 ? '<br>…and ' + (errors.length - 10) + ' more' : ''}</span>` : ''}</p>${tbl}`;
+  return `${head}${colsBox}${yline}${dline}${warn}<p><b>${plural(adds, 'competitor')} ready to import</b>${upds.length ? ` · <b>${plural(upds.length, 'competitor')} already registered without a birth date will be updated</b> (birth date${upds.some(r => r.upd.addEvents.length) ? ', missing events' : ''} and other empty details from this file: ${upds.map(r => esc(r.firstName + ' ' + r.lastName) + (r.upd.addEvents.length ? ' +' + r.upd.addEvents.map(e => KT.EVENT_TYPES[e].short).join(', ') : '')).join('; ')})` : ''}${nInc ? ` — <span style="color:var(--warn)"><b>${nInc}</b> with details to enter later</span> (marked <span class="chip warn">Incomplete</span>; Competitors → filter “Missing information”)` : ''}.${fixes.length ? ` <b>${plural(fixes.length, 'name')} will be corrected</b> (${fixes.map(r => esc(r.was) + ' → ' + esc(r.firstName + ' ' + r.lastName)).join(', ')}).` : ''}${errors.length ? `<br><span class="small" style="color:var(--bad)">${errors.slice(0, 10).map(esc).join('<br>')}${errors.length > 10 ? '<br>…and ' + (errors.length - 10) + ' more' : ''}</span>` : ''}</p>${tbl}`;
 }
 async function runImport() {
   const { recs, errors } = importRows($('#imp-text').value);
@@ -6187,6 +6197,15 @@ async function runImport() {
   let done = 0;
   for (const r of recs) {
     if (r.fixId) { if (!(await guard(() => S.store.update(P.doc(S.evId, 'competitors', r.fixId), { firstName: r.firstName, lastName: r.lastName })))) break; done++; continue; }
+    if (r.updId) {   // v1.59.1: earlier record without a birth date — add the birth date, the missing events and empty details
+      const c = DC.compBy[r.updId] || {}, fill = (k, v) => (!c[k] && v ? { [k]: v } : {});
+      const pub = Object.assign({ events: r.upd.events, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : r.birthYear ? KT.ageFromYear(r.birthYear, DC.asOf) : null },
+        fill('gender', r.gender), fill('rank', r.rank), fill('dojo', r.dojo), fill('state', r.state), fill('country', r.country), r.waiver && !c.waiver ? { waiver: true } : {}, r.feePaid && !c.feePaid ? { feePaid: true } : {});
+      const pv = Object.assign({ dob: r.dob || '', birthYear: r.birthYear || '' }, fill('email', r.email), fill('phone', r.phone), fill('emergencyName', r.emergencyName), fill('emergencyPhone', r.emergencyPhone),
+        r.notes && !String(c.notes || '').includes(r.notes) ? { notes: [c.notes, r.notes].filter(Boolean).join('\n') } : {});
+      if (!(await guard(async () => { await S.store.update(P.doc(S.evId, 'competitors', r.updId), pub); await S.store.update(P.pv(S.evId, r.updId), pv); return true; }))) break;
+      done++; continue;
+    }
     const id = uid();
     const pub = { firstName: r.firstName, lastName: r.lastName, gender: r.gender, rank: r.rank, dojo: r.dojo, state: r.state, country: r.country, waiver: r.waiver, feePaid: r.feePaid,
       checkedIn: false, status: 'active', events: r.events, divOverride: {}, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : r.birthYear ? KT.ageFromYear(r.birthYear, DC.asOf) : null, createdAt: new Date().toISOString(),
@@ -6195,10 +6214,10 @@ async function runImport() {
     if (!ok) break;
     done++; $('#imp-preview').textContent = `Imported ${done} of ${recs.length}…`;
   }
-  const nFix = recs.filter(r => r.fixId).length;
-  const nInc = recs.filter(r => !r.fixId && (r.missing || []).length).length;
+  const nFix = recs.filter(r => r.fixId).length, nUpd = recs.filter(r => r.updId).length;
+  const nInc = recs.filter(r => !r.fixId && !r.updId && (r.missing || []).length).length;
   if (nInc) S.ui.filter = 'incomplete';       // show who still needs details
-  closeModal(); toast(`Imported ${plural(done - nFix, 'competitor')}${nInc ? ` · ${nInc} need details — showing “Missing information”` : ''}${nFix ? ` · ${plural(nFix, 'name')} corrected` : ''}${errors.length ? ` · ${errors.length} rows skipped` : ''}`);
+  closeModal(); toast(`Imported ${plural(done - nFix - nUpd, 'competitor')}${nUpd ? ` · ${plural(nUpd, 'competitor')} updated` : ''}${nInc ? ` · ${nInc} need details — showing “Missing information”` : ''}${nFix ? ` · ${plural(nFix, 'name')} corrected` : ''}${errors.length ? ` · ${errors.length} rows skipped` : ''}`);
 }
 
 function teamForm(id, et) {

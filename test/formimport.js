@@ -37,6 +37,39 @@ const path = require('path');
   ok('the team details kept in the director\'s notes', by.Bruno.notes === 'Team Kata: Empinada backup; Brian, Thi, Isaac' && !by.Ada.notes);
   ok('waiver "I agree" / "I agree." → signed; empty → not signed', by.Ada.waiver === true && by.Cleo.waiver === true && by.Dan.waiver === false);
   ok('gender Woman / Man (with a trailing space) and ranks read', by.Cleo.gender === 'F' && by.Bruno.gender === 'M' && by.Ada.rank === 'k5' && by.Cleo.rank === 'd1' && by.Dan.rank === 'k10');
+  // v1.59.1: records left without a birth date by an earlier import (as v1.58 left them) are updated by a re-import, not duplicated
+  {
+    const p2 = await (await b.newContext({ viewport: { width: 1280, height: 900 } })).newPage(); p2.on('pageerror', e => errors.push(e.message)); await p2.route(/fonts\./, r => r.abort());
+    await p2.goto('file://' + path.resolve('dist/karate-event-tracker.html'));
+    await p2.click('button.primary[data-act="event-new"]'); await p2.waitForTimeout(300);
+    await p2.fill('#f-event input[name="name"]', 'Re-import'); await p2.fill('#f-event input[name="startDate"]', '2026-10-31');
+    await p2.click('#modal button[type="submit"]'); await p2.waitForTimeout(800);
+    await p2.click('.tab:has-text("Divisions")'); await p2.waitForTimeout(300); await p2.click('button[data-act="div-ncr"]'); await p2.waitForTimeout(400);
+    await p2.click('#modal button[type="submit"]'); await p2.waitForTimeout(1500); await p2.click('#modal button[data-act="modal-close"]').catch(() => {});
+    const imp = async text => { await p2.click('.tab:has-text("Competitors")'); await p2.click('button:has-text("Import CSV")'); await p2.fill('#imp-text', text);
+      await p2.click('button[data-act="imp-preview"]'); await p2.waitForTimeout(400); const t = (await p2.textContent('#imp-preview')).replace(/\s+/g, ' ');
+      await p2.click('button[data-act="imp-run"]'); await p2.waitForTimeout(1500); return t; };
+    // the first import as v1.58 read it: no birth dates, "Kata, Kumite" not understood → Cynthia-like kata only, Elle-like no events
+    await imp(['First Name,Last Name,Gender,Rank,Dojo,Events', 'Cyn,Testa,Woman,5th kyu (Purple),Test Academy,Kata', 'Ell,Testb,Woman,White belt,Test Academy,'].join('\n'));
+    const all = () => p2.evaluate(() => { const db = JSON.parse(localStorage.getItem('kt-local-v1') || '{}'); return Object.entries(db).filter(([k, v]) => /^events\/[^/]+\/competitors\//.test(k) && /^Test/.test(v.lastName))
+      .map(([k, v]) => Object.assign({ id: k.split('/').pop() }, v, Object.values(db).find(x => x && x.dob !== undefined && false) || {}, db[k.replace(/^events\/([^/]+)\/competitors\//, 'pv/$1/competitors/')] || {})); });
+    let a = await all();
+    ok('first import: no birth dates, Ell without events', a.length === 2 && a.every(c => !c.dob) && a.find(c => c.firstName === 'Ell').events.length === 0);
+    let rows = await p2.$$eval('#main tr[data-act="comp-edit"]', rs => rs.map(r => r.textContent.replace(/\s+/g, ' ')));
+    ok('so Cyn shows "Kata · no division"', rows.some(r => /Cyn/.test(r) && /Kata · no division/.test(r)));
+    // re-import the full form export (v1.59.1)
+    const t = await imp(['First Name,Last Name,Gender,DOB,Dojo,Rank,Events,Waiver', 'Cyn,Testa,Woman,5/12/06,Test Academy,5th kyu (Purple),Kata,I agree', 'Ell,Testb,Woman,1/25/08,Test Academy,White belt,"Kata, Kumite",I agree'].join('\n'));
+    ok('preview: 2 already registered without a birth date will be updated (+Kata, Kumite for Ell)', /2 competitors already registered without a birth date will be updated/.test(t) && /Ell Testb \+Kata, Kumite/.test(t));
+    a = await all();
+    const cyn = a.find(c => c.firstName === 'Cyn'), ell = a.find(c => c.firstName === 'Ell');
+    ok(`no duplicates (${a.length}); birth dates and waivers filled in`, a.length === 2 && cyn.dob === '2006-05-12' && ell.dob === '2008-01-25' && cyn.waiver && ell.waiver && cyn.age === 20 && ell.age === 18);
+    ok('Ell now has Kata and Kumite', ell.events.includes('IKATA') && ell.events.includes('IKUMITE'));
+    rows = await p2.$$eval('#main tr[data-act="comp-edit"]', rs => rs.map(r => r.textContent.replace(/\s+/g, ' ')));
+    ok('both now placed: Cyn in Level 3 Adult Women Kata, Ell in Level 1 Adult Women Kata and Kumite', rows.some(r => /Cyn/.test(r) && /Level 3 Adult Women Individual Kata/.test(r)) && rows.some(r => /Ell/.test(r) && /Level 1 Adult Women Individual Kata/.test(r) && /Level 1 Adult Women Individual Kumite/.test(r)));
+    // a third import of the same file: now really already registered → skipped
+    const t3 = await imp(['First Name,Last Name,Gender,DOB,Dojo,Rank,Events,Waiver', 'Cyn,Testa,Woman,5/12/06,Test Academy,5th kyu (Purple),Kata,I agree', 'Ell,Testb,Woman,1/25/08,Test Academy,White belt,"Kata, Kumite",I agree'].join('\n')).catch(() => '');   // 1/25/08 decides month-first
+    ok('importing again: both already registered — skipped, no duplicates', /already registered — skipped/.test(t3) && (await all()).length === 2);
+  }
   console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
   await b.close(); process.exit(errors.length ? 1 : 0);
 })();

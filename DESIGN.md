@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.59.0 Requirements & Design
+# Karate Event Tracker · v1.59.1 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -883,3 +883,23 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
 - Waiver / paid: "I agree", "agree(d)", "I accept", "accept(ed)", "signed" (a trailing "." or "!" is ignored) count as yes, as do y / yes / x / 1.
 - Preview: long headings are shortened ("Waiver By filling out this form and in…"; full heading on hover). "Kitei Kata" (no matching event in the app) and Timestamp are listed under "Not used".
 **Verify.** test/formimport.js (made-up rows in the same shape: columns found incl. Waiver and Team Kata, Kitei / Timestamp not used, month-day-year detected; DOB 5/12/06 → 2006-05-12, 11/24/07, 9/3/87 → 1987-09-03, 1/25/08; Kata, Kumite; Team Kata only where filled, details in notes; "I agree" / "I agree." signed, blank not; Woman / Man (trailing space), ranks). The real file converted to CSV imports all 16 competitors with DOB (1987–2008), kata 16, kumite 10, team kata 1, waiver 16. dates, lenient / federation / Worlds 2026 imports, yob, export round trip, full e2e set.
+
+## §88 Fix: re-import updates competitors registered without a birth date (v1.59.1)
+- **Locate:** after importing the Oct 31 UMN form responses, Cynthia was not registered for kata and Elle not for kumite.
+- **Diagnose:** the file is correct (Cynthia: Kata; Elle: Kata, Kumite). It was imported with v1.58, which could not read two-digit-year dates (5/12/06) or comma-separated events.
+  - So every competitor came in without a birth date, i.e. without an age, and no division can match: "Kata · no division" (Cynthia).
+  - The 10 who entered "Kata, Kumite" came in with no events at all (Elle).
+  - Reproduced with the real file on v1.58: 16 competitors, 6 with an unplaced event.
+  - v1.59 reads the file correctly, but re-importing it would have added everyone again: the duplicate check is name + birth date, and the old records have no birth date.
+- **Fix:** `importRows`: when the file has a birth date and a competitor with the same first and last name is registered without one, that record is updated instead of duplicated:
+  - the birth date (and age) is added;
+  - missing events are added (none removed);
+  - empty gender / rank / dojo / region / country / email / phone / emergency contact are filled; waiver / paid are set if the file says yes (never unset);
+  - team details are appended to the notes;
+  - anything already filled and manual division choices are kept.
+  - The preview says "N competitors already registered without a birth date will be updated (… +Kata, Kumite)"; the toast "N updated".
+- **Verify:**
+  - The real file, imported on v1.58 then re-imported: still 16 competitors, all 16 updated. Cynthia → Kyu Level 3 Adult Women Individual Kata; Elle → Level 1 Adult Women Individual Kata and Kumite; only the Shodan (no black-belt division in a kyu-only event) is unplaced.
+  - test/formimport.js: first import without birth dates → re-import updates (preview line, no duplicates, birth dates, waivers, events, divisions) → a third import skips both.
+  - Note: a file whose dates are all ambiguous (e.g. only 5/12/06) is read day-first unless the event is in the USA or the director picks "Birth dates are: month first" — the preview always says which order it used.
+  - Import tests, e2e set.
