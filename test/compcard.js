@@ -31,13 +31,32 @@ const path = require('path');
   // export
   const [dl] = await Promise.all([p.waitForEvent('download'), p.click('button[data-act="export-comps"]')]);
   const csv = require('fs').readFileSync(await dl.path(), 'utf8').replace(/^﻿/, '');
-  const lines = csv.split(/\r?\n/), head = lines[0].split(',');
-  ok(`export keeps "events" and adds a column per event (${head.slice(17).join(' | ')})`, head[17] === 'events' && head.includes('Individual Kata') && head.includes('Team Kata') && head.includes('Individual Kumite'));
+  const parse = t => { const out = []; let row = [], cur = '', q = false;
+    for (let k = 0; k < t.length; k++) { const ch = t[k];
+      if (q) { if (ch === '"' && t[k + 1] === '"') { cur += '"'; k++; } else if (ch === '"') q = false; else cur += ch; }
+      else if (ch === '"') q = true; else if (ch === ',') { row.push(cur); cur = ''; } else if (ch === '\n' || ch === '\r') { if (ch === '\r' && t[k + 1] === '\n') k++; row.push(cur); out.push(row); row = []; cur = ''; } else cur += ch; }
+    if (cur || row.length) { row.push(cur); out.push(row); } return out; };
+  const R = parse(csv), head = R[0], body = R.slice(1).filter(r => r.length > 1);
+  const want = ['First', 'Last', 'gender', 'dob', 'age', 'rank', 'dojo', 'state', 'country', 'Individual Kata', 'Individual Kumite', 'Team Kata', 'Team Kumite', 'Fukugo', 'Enbu', 'waiver', 'paid', 'checked_in', 'status', 'email', 'phone', 'emergency_name', 'emergency_phone'];
+  ok(`export columns in the requested order (national event: dob) — ${head.join(',')}`, JSON.stringify(head) === JSON.stringify(want));
+  const G = head.indexOf('gender'), A = head.indexOf('age');
+  const order = body.map(r => [r[G] === 'F' ? 0 : r[G] === 'M' ? 1 : 2, +r[A]]);
+  ok('sorted women first, then men, each youngest to oldest', order.every((x, k) => k === 0 || x[0] > order[k - 1][0] || (x[0] === order[k - 1][0] && x[1] >= order[k - 1][1])) && order[0][0] === 0 && order[order.length - 1][0] === 1);
   const ik = head.indexOf('Individual Kata'), tk = head.indexOf('Team Kata');
-  ok('export: individual kata column has the division name', lines.slice(1).some(l => /Black Belt (Senior|Youth|Junior|Cadet) (Men|Women) Individual Kata/.test(l)));
-  ok('export: team kata column has "team · division"', /Senior Women [A-Z] · Black Belt Senior Women Team Kata/.test(csv));
-  ok('export: the events column still uses event names (re-import)', /Individual Kata; Individual Kumite/.test(csv));
-  void ik; void tk;
+  ok('Individual Kata column holds the division', body.some(r => /^Black Belt .* Individual Kata$/.test(r[ik])));
+  ok('Team Kata column holds "team · division"', body.some(r => /^Senior Women [A-Z] · Black Belt Senior Women Team Kata$/.test(r[tk])));
+  // round trip: the exported file imports with the same events (names changed so they are new competitors)
+  const evIdx = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'].map((et, k) => [et, 9 + k]);
+  const reCsv = [head.join(','), ...body.map(r => r.map((v, k) => k === 0 ? 'Re' + v : v).map(v => /[",]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v).join(','))].join('\n');
+  await p.click('button[data-act="import-open"]'); await W(300);
+  await p.fill('#imp-text', reCsv); await p.click('button[data-act="imp-preview"]'); await W(400);
+  await p.click('button[data-act="imp-run"]'); await W(2500);
+  const db = await p.evaluate(() => JSON.parse(localStorage.getItem('kt-local-v1') || '{}'));
+  const re = Object.entries(db).filter(([k, v]) => /^events\/[^/]+\/competitors\//.test(k) && /^Re/.test(v.firstName || '')).map(([, v]) => v);
+  // demo names repeat, so compare the events of everyone as a whole (multiset), not by name
+  const sig = list => list.map(x => x.slice().sort().join()).sort().join(' | ');
+  const before = body.map(r => evIdx.filter(([, k]) => r[k]).map(([et]) => et)), after = re.map(c => c.events || []);
+  ok(`re-import: ${re.length} competitors come back with the same events`, re.length === body.length && sig(before) === sig(after));
   console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
   await b.close(); process.exit(errors.length ? 1 : 0);
 })();

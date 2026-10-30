@@ -265,6 +265,8 @@ function importRows(text) {
   const recs = [], errors = [];
   const g = (r, i) => (i >= 0 ? (r[i] || '').trim() : '');
   const yes = s => /^(y|yes|true|1|x|✓|✔)$/i.test(s);
+  // v1.55: an event column counts as entered when it holds anything but a blank or a "no" (e.g. X, or the division name from our own export)
+  const entered = s => !!String(s || '').trim() && !/^(n|no|false|0|-|–|—)$/i.test(String(s).trim());
   const body = rows.slice(hi + 1);
   const rawDate = r => g(r, ix.dob) || (ix.age >= 0 && splitDate(g(r, ix.age)) ? g(r, ix.age) : '');
   const dord = dateOrder(body.map(rawDate).filter(Boolean), [info.country, ...body.map(r => g(r, ix.country))], (($('#imp-dates') || {}).value) || 'auto');
@@ -293,7 +295,7 @@ function importRows(text) {
     const rec = { firstName: nameCase(fn), lastName: nameCase(ln), gender: /^(m|male|man|men|boy)$/.test(gs) ? 'M' : /^(f|female|w|woman|women|girl)$/.test(gs) ? 'F' : '',
       dob, rank: parseRank(g(r, ix.rank)), dojo: g(r, ix.dojo) || info.federation, state: g(r, ix.state), country: titleWord(g(r, ix.country)) || info.country, email: g(r, ix.email), phone: g(r, ix.phone),
       emergencyName: g(r, ix.en), emergencyPhone: g(r, ix.ep), waiver: yes(g(r, ix.waiver)), feePaid: yes(g(r, ix.paid)), feeAmount: fee && +fee ? String(+fee) : '',
-      events: [...new Set([...evText, ...evCols.filter(([i]) => yes(g(r, i))).map(([, e]) => e)].filter(Boolean))] };
+      events: [...new Set([...evText, ...evCols.filter(([i]) => entered(g(r, i))).map(([, e]) => e)].filter(Boolean))] };
     // v1.34: never drop a named competitor for missing details — import what is there and flag the rest for entry later
     const miss = [], bad = (v, l) => (v ? `${l} (“${v}” not recognised)` : l);
     if (!rec.firstName) miss.push('First name'); if (!rec.lastName) miss.push('Last name');

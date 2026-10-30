@@ -236,12 +236,19 @@ const ACT = {
   'imp-preview': () => { const el = $('#imp-preview'); el.innerHTML = importPreviewHTML(); try { el.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* old browsers */ } },
   'imp-run': () => runImport(),
   'export-comps': () => {
-    const dir = isDirector();
-    const yo = yobOnly();
-    // v1.54: one column per event with the division actually assigned (team events: team · division); "events" stays for re-import
-    const ets = (curEvent().eventTypes || KT.EVENT_ORDER).filter(et => KT.EVENT_TYPES[et]);
-    const rows = [['first_name', 'last_name', 'gender', yo ? 'birth_year' : 'dob', 'age', 'rank', 'dojo', 'state', 'country', 'email', 'phone', 'emergency_name', 'emergency_phone', 'waiver', 'paid', 'checked_in', 'status', 'events', ...ets.map(et => KT.EVENT_TYPES[et].label)]];
-    for (const c of DC.comps) rows.push([c.firstName, c.lastName, c.gender, dir ? (yo ? c.birthYear || (c.dob || '').slice(0, 4) : c.dob || '') : '', KT.ageOf(c, DC.asOf), KT.rankLabel(c.rank), c.dojo, c.state, c.country, dir ? c.email : '', dir ? c.phone : '', dir ? c.emergencyName : '', dir ? c.emergencyPhone : '', c.waiver ? 'yes' : 'no', c.feePaid ? 'yes' : 'no', c.checkedIn ? 'yes' : 'no', c.status, (c.events || []).map(e => KT.EVENT_TYPES[e] ? KT.EVENT_TYPES[e].label : e).join('; '), ...ets.map(et => (c.events || []).includes(et) ? compAssigned(c, et).text : '')]);
+    // v1.55: fixed column order (the event columns hold the division actually assigned; team events: team · division);
+    // women first, then men, each youngest → oldest. birth_year at International events (year only), otherwise dob.
+    const dir = isDirector(), yo = yobOnly();
+    const ets = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'];
+    const rows = [['First', 'Last', 'gender', yo ? 'birth_year' : 'dob', 'age', 'rank', 'dojo', 'state', 'country', ...ets.map(et => KT.EVENT_TYPES[et].label),
+      'waiver', 'paid', 'checked_in', 'status', 'email', 'phone', 'emergency_name', 'emergency_phone']];
+    const gOrd = g => g === 'F' ? 0 : g === 'M' ? 1 : 2, age = c => { const a = KT.ageOf(c, DC.asOf); return a == null ? 999 : a; };
+    const list = DC.comps.slice().sort((a, b) => gOrd(a.gender) - gOrd(b.gender) || age(a) - age(b)
+      || String(a.lastName || '').localeCompare(String(b.lastName || ''), undefined, { sensitivity: 'base' }) || String(a.firstName || '').localeCompare(String(b.firstName || ''), undefined, { sensitivity: 'base' }));
+    for (const c of list) rows.push([c.firstName, c.lastName, c.gender, dir ? (yo ? c.birthYear || (c.dob || '').slice(0, 4) : c.dob || '') : '', KT.ageOf(c, DC.asOf), KT.rankLabel(c.rank), c.dojo, c.state, c.country,
+      ...ets.map(et => (c.events || []).includes(et) ? compAssigned(c, et).text : ''),
+      c.waiver ? 'yes' : 'no', c.feePaid ? 'yes' : 'no', c.checkedIn ? 'yes' : 'no', c.status,
+      dir ? c.email : '', dir ? c.phone : '', dir ? c.emergencyName : '', dir ? c.emergencyPhone : '']);
     saveFile(`${curEvent().name} - competitors.csv`, KT.toCSV(rows));
   },
   'export-results': () => {

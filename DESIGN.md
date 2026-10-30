@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.54.0 Requirements & Design
+# Karate Event Tracker · v1.55.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -795,3 +795,13 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
 - **Export CSV:** the `events` column keeps the event names, so an exported file still imports. One column per offered event is added (header = event name) holding the assignment text. Import ignores those columns unless they hold yes / x / 1, so they don't add or remove events.
 - Test fix: signin.js waits for the sign-in call instead of a fixed 400 ms (it failed under load twice).
 **Verify.** test/compcard.js (national @390: card shows "Senior Women A · Black Belt Senior Women Team Kata" matching the list; "In: …" for individual events; the team button opens the team; "Not on a team yet"; fits the phone; export: events column kept, columns per event with the division names and "team · division"). compdiv.js, yob.js (export), full e2e set and the other browser tests.
+
+## §82 Competitor export: fixed column order; women then men, youngest first (v1.55.0)
+**Requirement.** Export columns: First, Last, gender, birth_year, age, rank, dojo, state, country, Individual Kata, Individual Kumite, Team Kata, Team Kumite, Fukugo, Enbu, waiver, paid, checked_in, status, email, phone, emergency_name, emergency_phone. Sort: female then male, youngest to oldest.
+**Design.**
+- `export-comps` writes exactly those columns. The six event columns are always present and hold the assignment text (`compAssigned`, §81) for events the competitor entered, blank otherwise. The separate `events` column is gone.
+- The birth column is `birth_year` at International events (year only, §62). Other levels keep the full date under `dob` in the same position, because their ages count on the event's age-as-of date.
+- Sort: gender F, then M, then anything else. Within each, age ascending (unknown last), then last and first name.
+- Private columns (birth date, email, phone, emergency contact) stay empty for non-directors.
+- **Import** keeps exported files importable: an event column counts as entered when it holds anything but blank / no / n / false / 0 / -. So "X" and our own division or team text both count.
+**Verify.** compcard.js (exact header order; women then men, youngest first; division and "team · division" values; re-import of the exported file gives everyone the same events — compared as a whole because demo names repeat). yob.js (International: birth_year). Import tests (lenient, federation, Worlds 2026, judges), full e2e set and the other browser tests.
