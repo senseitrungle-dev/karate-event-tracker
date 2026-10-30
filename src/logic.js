@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.59.0';
+  const VERSION = '1.60.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -13,9 +13,12 @@ const KT = (function () {
     TKATA:   { label: 'Team Kata',         short: 'Team Kata',  team: true,  genders: ['M', 'F', 'X'], kind: 'kata',       defMethod: 'scores', size: [3, 3] },
     TKUMITE: { label: 'Team Kumite',       short: 'Team Kumite',team: true,  genders: ['M', 'F'],      kind: 'teamkumite', size: [3, 5] },
     FUKUGO:  { label: 'Fukugo',            short: 'Fukugo',     team: false, genders: ['M', 'F'],      kind: 'fukugo' },
+    KITEI:   { label: 'Ki-tei Kata',       short: 'Ki-tei',     team: false, genders: ['M', 'F'],      kind: 'kata',       defMethod: 'flags' },   // v1.60: designated kata, open ranks, flags
     ENBU:    { label: 'Enbu',              short: 'Enbu',       team: true,  genders: ['M', 'F', 'X'], kind: 'kata',       defMethod: 'scores', size: [2, 2] },  // pair; a division can set its own size (WTKF 2026 Cadet & Junior Enbu = 3)
   };
-  const EVENT_ORDER = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU'];
+  const EVENT_ORDER = ['IKATA', 'IKUMITE', 'TKATA', 'TKUMITE', 'FUKUGO', 'ENBU', 'KITEI'];
+  /** v1.60: the six WTKF events — offered by default; Ki-tei Kata is added per event. */
+  const STD_EVENTS = EVENT_ORDER.filter(e => e !== 'KITEI');
   const GENDERS = { M: 'Men', F: 'Women', X: 'Mixed' };
   const FORMATS = { SE: 'Single elimination', RR: 'Round robin (pools)', DE: 'Double elimination', DES: 'Double elimination (simplified)', KP: 'Kata score pools (12 max per pool)' };
   const ELIM_POOL = 8;
@@ -56,7 +59,7 @@ const KT = (function () {
   /* ---------- divisions ---------- */
   function divisionName(dv) {
     const et = EVENT_TYPES[dv.eventType];
-    const who = dv.belt === 'black' ? 'Black Belt' : 'Kyu';
+    const who = dv.belt === 'black' ? 'Black Belt' : dv.belt === 'open' ? 'Open Rank' : 'Kyu';   // v1.60: open rank = kyu and dan together
     const grp = dv.group ? ' ' + dv.group : '';
     return `${who}${grp} ${dv.open ? 'Open' : GENDERS[dv.gender] || ''} ${et ? et.label : ''}`.replace(/\s+/g, ' ').trim();
   }
@@ -126,6 +129,11 @@ const KT = (function () {
   ];
   const NCR_KYU = { id: 'ncr-kyu', label: 'NCR kyu rules (v3.3)', source: 'Traditional Karate North Central Region (AAKF) — Tournament Rules for Kyu Rank Competitors, v3.3, Oct 2022',
     levels: NCR_LEVELS, events: ['IKATA', 'IKUMITE', 'TKATA', 'ENBU'], ages: { youth: ['Youth', null, 17], adult: ['Adult', 18, null] }, poolSize: 6 };
+  /** v1.60: Ki-tei Kata divisions — open ranks (kyu and dan), all ages, women and men, single elimination, judges' flags. */
+  function kiteiDivisions() {
+    return ['F', 'M'].map((g, i) => { const dv = { eventType: 'KITEI', gender: g, belt: 'open', group: '', minAge: null, maxAge: null, minRank: 'k10', maxRank: 'd10', format: 'SE', bronze: 'two', reset: false,
+      scoring: Object.assign(defaultScoring('KITEI'), { method: 'flags', judges: 5 }), order: 9000 + i }; dv.name = divisionName(dv); return dv; });
+  }
   /** NCR kyu divisions. o: { byAge: true, byGender: true, format: 'RR'|'DE', judges: 3|5, events: [...] } */
   function ncrDivisions(o) {
     o = Object.assign({ byAge: true, byGender: true, format: 'RR', judges: 3, events: NCR_KYU.events }, o || {});
@@ -340,10 +348,10 @@ const KT = (function () {
       block: { et, title, F: [ids], M: [ids], X: [ids], did: {F, M, X} } (X = mixed / open). Groups A→Z ("No …" last); only blocks with entrants. */
   const PRINT_PAIRS = [['IKATA', 'IKUMITE'], ['TKATA', 'TKUMITE'], ['FUKUGO', 'ENBU']];
   /** v1.57: event order within an age group on the printout (the Polish federation's sheet): kata, fukugo, kumite, team kata, enbu, team kumite. */
-  const PRINT_ORDER = ['IKATA', 'FUKUGO', 'IKUMITE', 'TKATA', 'ENBU', 'TKUMITE'];
+  const PRINT_ORDER = ['IKATA', 'FUKUGO', 'IKUMITE', 'TKATA', 'ENBU', 'TKUMITE', 'KITEI'];
   function printGroups(divs, placed, groupOf) {
     const ageOrder = BLACK_AGE_GROUPS.map(g => g.label);
-    const ageOf = d => (d.belt === 'kyu' ? 'Kyu ' : '') + (String(d.group || '').trim() || 'Open');
+    const ageOf = d => (d.belt === 'kyu' ? 'Kyu ' : d.belt === 'open' ? 'Open Rank ' : '') + (String(d.group || '').trim() || 'Open');
     const ageRank = a => { const i = ageOrder.indexOf(a); return i >= 0 ? i : 100; };
     const by = {};   // group → age → et → block
     for (const d of divs) for (const id of placed[d.id] || []) for (const g0 of [].concat(groupOf(id))) {
@@ -1347,7 +1355,7 @@ const KT = (function () {
   function toCSV(rows) { return rows.map(r => r.map(csvEscape).join(',')).join('\n'); }
 
   return {
-    VERSION, EVENT_TYPES, EVENT_ORDER, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
+    VERSION, EVENT_TYPES, EVENT_ORDER, STD_EVENTS, kiteiDivisions, GENDERS, FORMATS, LEVELS, EVENT_KINDS, BLACK_AGE_GROUPS, RANKS, POOL_NAMES,
     ordinal, rankValue, rankLabel, isBlack, ageOn, ageOf, ageFromYear, divisionName, defaultScoring, blackBeltDivisions, kyuDivisions, WTKF_WORLDS_2026, PRESETS, NCR_KYU, NCR_LEVELS, ncrDivisions, ncrEval, kyuEval, wtkfSlots, wtkfPoolSizes, kataChartCount, kataSeedChart, wtkfKataCharts, WTKF_POOLS, defaultKyuGroups, kyuGroupsCheck, NCR_EX, NCR_STYLES, presetDivisions, quotaIssues, teamSizeFor,
     fitsDivision, candidateDivisions, teamGender, teamCandidates, assignEntrants, validateCompetitor,
     seedOrder, nextPow2, orderEntrants, PRINT_PAIRS, PRINT_ORDER, printGroups, ENT_SORTS, sortEntrants, kataOrder, kpState, kpPlacings, kpQueue, kpSegOfKey, segOf, segList, ringOf, judgeNeed, judgeLevelFor, judgeEligible, judgeFrom, officialPositions, officialsCheck, kpKataCheck, kpPrevious, defaultFormat, defaultStyle, WTKF_KATA, kpCanEdit, kpProgress, kpKey, kpRoundName, KP_POOL, KP_ADV, placeSlots, makePools, seedClashes, generateBracket, resolve, standings, placings, readyMatches, canEdit, matchLabel,

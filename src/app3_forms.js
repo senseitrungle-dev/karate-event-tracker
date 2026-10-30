@@ -1,7 +1,7 @@
 /* ===== forms & modals ===== */
 function eventForm(id) {
-  const e = id ? S.events[id] : { kind: 'tournament', level: 'Local', startDate: todayISO(), eventTypes: KT.EVENT_ORDER.slice(), defaultFormat: 'SE', bronze: 'two' };
-  const et = new Set(e.eventTypes || KT.EVENT_ORDER);
+  const e = id ? S.events[id] : { kind: 'tournament', level: 'Local', startDate: todayISO(), eventTypes: KT.STD_EVENTS.slice(), defaultFormat: 'SE', bronze: 'two' };
+  const et = new Set(e.eventTypes || KT.STD_EVENTS);
   openModal(sheet(id ? 'Event settings' : 'New event', `<form id="f-event" data-form="event" data-id="${esc(id || '')}" class="stack">
     <div class="fgrid">
       <label class="f req span"><span>Event name</span><input name="name" id="ev-name" required value="${esc(e.name || '')}" placeholder="e.g. Great Lakes Traditional Karate Championship"></label>
@@ -65,7 +65,7 @@ function compForm(id) {
   const ev = curEvent(), tour = ev.kind === 'tournament';
   const c = id ? DC.compBy[id] : { gender: '', events: [], status: 'active' };
   const evs = new Set(c.events || []);
-  const offered = (ev.eventTypes || KT.EVENT_ORDER);
+  const offered = (ev.eventTypes || KT.STD_EVENTS);
   const evRows = tour ? offered.map(et => {
     const T = KT.EVENT_TYPES[et];
     // v1.54: the team (and its division) this competitor is actually on
@@ -164,24 +164,27 @@ function parseCSV(text) {
   return rows.filter(r => r.some(x => x.trim() !== ''));
 }
 const EV_ALIASES = { 'individual kata': 'IKATA', kata: 'IKATA', ikata: 'IKATA', 'individual kumite': 'IKUMITE', kumite: 'IKUMITE', ikumite: 'IKUMITE', 'team kata': 'TKATA', tkata: 'TKATA',
-  'team kumite': 'TKUMITE', tkumite: 'TKUMITE', fukugo: 'FUKUGO', fukogo: 'FUKUGO', enbu: 'ENBU' };
+  'team kumite': 'TKUMITE', tkumite: 'TKUMITE', fukugo: 'FUKUGO', fukogo: 'FUKUGO', enbu: 'ENBU',
+  kitei: 'KITEI', 'ki-tei': 'KITEI', 'kitei kata': 'KITEI', 'ki-tei kata': 'KITEI', 'kiteikata': 'KITEI' };
 /* v1.26: also reads the WTKF "Informational Spreadsheet for National Federations" (title rows, COUNTRY / National Federation,
    ATHLETES INFORMATION table with an X per event, then JUDGES/COACHES and PHOTOGRAPHER sections which are skipped). */
 const EV_COLS = { individualkata: 'IKATA', kata: 'IKATA', individualkumite: 'IKUMITE', kumite: 'IKUMITE', teamkata: 'TKATA', teamkumite: 'TKUMITE',
-  fukugo: 'FUKUGO', fukogo: 'FUKUGO', enbu: 'ENBU', mixedenbu: 'ENBU', manmanenbu: 'ENBU', womanwomanenbu: 'ENBU', menenbu: 'ENBU', womenenbu: 'ENBU' };
+  fukugo: 'FUKUGO', fukogo: 'FUKUGO', enbu: 'ENBU', mixedenbu: 'ENBU', manmanenbu: 'ENBU', womanwomanenbu: 'ENBU', menenbu: 'ENBU', womenenbu: 'ENBU',
+  kitei: 'KITEI', kiteikata: 'KITEI' };
 const normH = x => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
 /* v1.28: birth-date order per file. Europe and most of the world write day-month-year (27.07.2012), the USA month-day-year (07/27/2012).
    The separator says nothing, so the order is decided once per file: 1) the director's choice, 2) the dates themselves (a first number
    above 12 can only be a day, a second number above 12 can only be a day), 3) the country on the sheet / in the rows (USA → month first),
    4) otherwise day first. Year-first dates (2012-07-27) are always year-month-day. 8 digits without separators (27072012) follow the same order. */
 const US_NAMES = /^(us|usa|u\.s\.a?\.?|united states( of america)?|america|puerto rico|guam)$/i;
-function splitDate(s) {
+function splitDate(s, shortYear) {
   s = String(s || '').trim(); let k;
   if ((k = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/))) return { ymd: true, y: k[1], a: +k[2], b: +k[3] };
   if ((k = s.match(/^(\d{1,2})[-/. ](\d{1,2})[-/. ](\d{4})$/))) return { a: +k[1], b: +k[2], y: k[3] };
   if ((k = s.match(/^(\d{2})(\d{2})(\d{4})$/))) return { a: +k[1], b: +k[2], y: k[3] };
-  // v1.59: two-digit years (5/12/06, 11/6/96 — Google / Numbers forms): the most recent year that is not in the future
-  if ((k = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/))) return { a: +k[1], b: +k[2], y: String(fullYear(+k[3])) };
+  // v1.59: two-digit years (5/12/06, 11/6/96 — Google / Numbers forms): the most recent year that is not in the future.
+  // Imports only: on the competitor card "07/27/20" is still being typed (v1.60)
+  if (shortYear && (k = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/))) return { a: +k[1], b: +k[2], y: String(fullYear(+k[3])) };
   return null;
 }
 /** v1.59: a long form question as a column heading, shortened for the preview ("Waiver By filling out this form…") */
@@ -191,7 +194,7 @@ function fullYear(yy) { const now = new Date().getFullYear(), c = Math.floor(now
 /** decide day-first (DMY) or month-first (MDY) for a list of raw dates; returns { order, why, clash } */
 function dateOrder(raw, countries, choice) {
   if (choice === 'DMY' || choice === 'MDY') return { order: choice, why: 'chosen by you' };
-  const ps = raw.map(splitDate).filter(p => p && !p.ymd);
+  const ps = raw.map(x => splitDate(x, true)).filter(p => p && !p.ymd);
   const dayFirst = ps.find(p => p.a > 12 && p.b <= 12), monFirst = ps.find(p => p.b > 12 && p.a <= 12);
   const ex = p => `${String(p.a).padStart(2, '0')}·${String(p.b).padStart(2, '0')}·${p.y}`;
   const us = countries.filter(Boolean).some(c => US_NAMES.test(String(c).trim())), other = countries.filter(Boolean).some(c => !US_NAMES.test(String(c).trim()));
@@ -207,8 +210,8 @@ function dateOrder(raw, countries, choice) {
   return { order: 'DMY', why: 'nothing in the file decides it — day first assumed' };
 }
 /** raw date → yyyy-mm-dd in the given order ('' if impossible) */
-function importDate(s, order) {
-  const p = splitDate(s); if (!p) return '';
+function importDate(s, order, shortYear) {
+  const p = splitDate(s, shortYear); if (!p) return '';
   const [m, d] = p.ymd ? [p.a, p.b] : order === 'MDY' ? [p.a, p.b] : [p.b, p.a];
   const iso = `${p.y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, t = new Date(iso + 'T00:00:00Z');
   return !isNaN(t) && t.toISOString().slice(0, 10) === iso ? iso : '';
@@ -278,7 +281,7 @@ function importRows(text) {
   // v1.55: an event column counts as entered when it holds anything but a blank or a "no" (e.g. X, or the division name from our own export)
   const entered = s => !!String(s || '').trim() && !/^(n|no|false|0|-|–|—)$/i.test(String(s).trim());
   const body = rows.slice(hi + 1);
-  const rawDate = r => g(r, ix.dob) || (ix.age >= 0 && splitDate(g(r, ix.age)) ? g(r, ix.age) : '');
+  const rawDate = r => g(r, ix.dob) || (ix.age >= 0 && splitDate(g(r, ix.age), true) ? g(r, ix.age) : '');
   const dord = dateOrder(body.map(rawDate).filter(Boolean), [info.country, ...body.map(r => g(r, ix.country))], (($('#imp-dates') || {}).value) || 'auto');
   if (body.some(r => rawDate(r)) && !yobOnly()) info.dates = dord;     // only talk about date order when the file has dates (year-only events don't need it)
   const isTournament = curEvent().kind === 'tournament';
@@ -286,6 +289,9 @@ function importRows(text) {
   // year only (international): same name + same year + same country / dojo = same person
   const whoKey = (f, l, c) => [normH(f), normH(l)].concat(yobOnly() ? [yrOf(c), normH(c.country || c.dojo)] : [c.dob || '']).join('|');
   const seen = new Map(DC.comps.map(c => [whoKey(c.firstName, c.lastName, c), c]));
+  // v1.59.1: registered earlier without a birth date (e.g. imported before M/D/YY dates were read): the same name with a birth date updates that record
+  const nameKey = (f, l) => normH(f) + '|' + normH(l);
+  const noBirth = new Map(DC.comps.filter(c => !c.dob && !c.birthYear).map(c => [nameKey(c.firstName, c.lastName), c]));
   for (let n = hi + 1; n < rows.length; n++) {
     const r = rows[n], lead = String(r[0] || '').trim();
     // next section of a federation sheet (JUDGES/COACHES, PHOTOGRAPHER, TOTAL FEES …) ends the athlete table
@@ -298,7 +304,7 @@ function importRows(text) {
       if (r.some((x, i) => String(x || '').trim() && !(i === 0 && /^\d+$/.test(String(x).trim())) && !/^(free|\$?0(\.00)?)$/i.test(String(x).trim()))) errors.push(`Row ${n + 1}: no name — not imported`);
       continue;
     }
-    const dob = importDate(rawDate(r), dord.order);   // the federation sheet puts the birth date under "Age"
+    const dob = importDate(rawDate(r), dord.order, true);   // the federation sheet puts the birth date under "Age"
     const gs = g(r, ix.gender).toLowerCase();
     const evText = g(r, ix.events).split(/[;|,]/).map(s => EV_ALIASES[s.trim().toLowerCase()] || (KT.EVENT_TYPES[s.trim().toUpperCase()] ? s.trim().toUpperCase() : null));
     const fee = g(r, ix.fee).replace(/[^0-9.]/g, '');
@@ -332,6 +338,13 @@ function importRows(text) {
       if (/\?/.test(had.firstName + had.lastName) && !/\?/.test(rec.firstName + rec.lastName)) { recs.push({ ...rec, fixId: had.id, was: `${had.firstName} ${had.lastName}` }); seen.set(key, rec); continue; }
       errors.push(`Row ${n + 1} · ${who}: already registered — skipped`); continue;
     }
+    const old = (rec.dob || rec.birthYear) && noBirth.get(nameKey(rec.firstName, rec.lastName));
+    if (old) {   // fill in what the earlier record lacks; keep what it has (and its manual choices)
+      noBirth.delete(nameKey(rec.firstName, rec.lastName)); seen.set(key, rec);
+      const add = rec.events.filter(e => !(old.events || []).includes(e));
+      recs.push({ ...rec, updId: old.id, upd: { addEvents: add, events: [...new Set([...(old.events || []), ...rec.events])] } });
+      continue;
+    }
     seen.set(key, rec);
     if (/\?/.test(rec.firstName + rec.lastName)) rec.warn = true;
     recs.push(rec);
@@ -347,14 +360,14 @@ function importPreviewHTML() {
   const cell = (v, need) => v ? esc(v) : need ? '<span class="imp-miss">missing</span>' : '<span class="muted">—</span>';
   const born = r => r.birthYear ? r.birthYear : r.dob ? new Date(r.dob + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   const tbl = recs.length ? `<div class="tw imp-wrap"><table class="imp-tbl"><thead><tr><th>#</th><th>Name</th><th>G</th><th>${info.yobOnly ? 'Born (year)' : 'Born'}</th><th>Rank</th><th>Dojo / club</th><th>${info.country || recs.some(r => r.country) ? 'Country' : 'State / region'}</th>${isT ? '<th>Events</th>' : ''}<th>Emergency</th><th>Waiver</th><th>Needs later</th></tr></thead><tbody>${recs.map((r, i) => `<tr class="${r.warn ? 'imp-warn' : ''}${(r.missing || []).length ? ' imp-inc' : ''}"><td class="n">${i + 1}</td><td>${cell([r.lastName, r.firstName].filter(Boolean).join(', '), true)}${r.fixId ? ' <span class="chip ok">name fix</span>' : ''}</td><td>${r.gender ? (r.gender === 'F' ? 'W' : 'M') : cell('', isT)}</td><td class="mono" title="year-month-day">${cell(born(r), isT)}</td><td>${r.rank ? esc(KT.rankLabel(r.rank)) : cell('', true)}</td><td>${cell(r.dojo, true)}</td><td>${cell(r.country || r.state, false)}</td>${isT ? `<td>${r.events.length ? evs(r.events) : cell('', true)}</td>` : ''}<td>${r.emergencyName || r.emergencyPhone ? esc([r.emergencyName, r.emergencyPhone].filter(Boolean).join(' · ')) : cell('', true)}</td><td>${r.waiver ? '✓' : cell('', true)}</td><td class="imp-need">${(r.missing || []).map(esc).join(', ')}</td></tr>`).join('')}</tbody></table></div>` : '';
-  const fixes = recs.filter(r => r.fixId), adds = recs.length - fixes.length;
+  const fixes = recs.filter(r => r.fixId), upds = recs.filter(r => r.updId), adds = recs.length - fixes.length - upds.length;
   const dd = info && info.dates, dline = dd ? `<div class="notice ${dd.clash ? 'warn' : 'info'}" style="display:block">Birth dates read as <b>${dd.order === 'MDY' ? 'month-day-year (USA, 07/27/2012 = July 27)' : 'day-month-year (Europe, 27.07.2012 = 27 July)'}</b> — ${esc(dd.why)}. ${dd.clash ? 'Rows that don’t fit are listed below. ' : ''}Change it with “Birth dates are” above if this is wrong.</div>` : '';
   const nInc = recs.filter(r => !r.fixId && (r.missing || []).length).length;
   const colsBox = info && info.cols ? `<div class="imp-cols"><div><b>Columns found (${info.cols.length})</b><div class="pill-list">${info.cols.map(c => `<span class="chip ok" title="File heading: ${esc(c.header)}">${esc(c.label)}${normH(c.header) !== normH(c.label) ? ` <span class="tiny">← ${esc(impShort(c.header))}</span>` : ''}</span>`).join('') || '<span class="muted small">none</span>'}</div></div>
     ${info.missingCols.length ? `<div><b>Not in the file — enter later</b><div class="pill-list">${info.missingCols.map(c => `<span class="chip warn">${esc(c)}</span>`).join('')}</div></div>` : ''}
     ${info.ignored.length ? `<div><b>Not used</b> <span class="tiny muted">(not recognised)</span><div class="pill-list">${info.ignored.map(c => `<span class="chip plain" title="${esc(c)}">${esc(impShort(c))}</span>`).join('')}</div></div>` : ''}</div>` : '';
   const yline = info && info.yobOnly ? `<div class="notice info" style="display:block"><b>International event — year of birth only.</b> Ages count on 31 Dec (birth-year rule); the day and month in the file are not stored (data minimisation).</div>` : '';
-  return `${head}${colsBox}${yline}${dline}${warn}<p><b>${plural(adds, 'competitor')} ready to import</b>${nInc ? ` — <span style="color:var(--warn)"><b>${nInc}</b> with details to enter later</span> (marked <span class="chip warn">Incomplete</span>; Competitors → filter “Missing information”)` : ''}.${fixes.length ? ` <b>${plural(fixes.length, 'name')} will be corrected</b> (${fixes.map(r => esc(r.was) + ' → ' + esc(r.firstName + ' ' + r.lastName)).join(', ')}).` : ''}${errors.length ? `<br><span class="small" style="color:var(--bad)">${errors.slice(0, 10).map(esc).join('<br>')}${errors.length > 10 ? '<br>…and ' + (errors.length - 10) + ' more' : ''}</span>` : ''}</p>${tbl}`;
+  return `${head}${colsBox}${yline}${dline}${warn}<p><b>${plural(adds, 'competitor')} ready to import</b>${upds.length ? ` · <b>${plural(upds.length, 'competitor')} already registered without a birth date will be updated</b> (birth date${upds.some(r => r.upd.addEvents.length) ? ', missing events' : ''} and other empty details from this file: ${upds.map(r => esc(r.firstName + ' ' + r.lastName) + (r.upd.addEvents.length ? ' +' + r.upd.addEvents.map(e => KT.EVENT_TYPES[e].short).join(', ') : '')).join('; ')})` : ''}${nInc ? ` — <span style="color:var(--warn)"><b>${nInc}</b> with details to enter later</span> (marked <span class="chip warn">Incomplete</span>; Competitors → filter “Missing information”)` : ''}.${fixes.length ? ` <b>${plural(fixes.length, 'name')} will be corrected</b> (${fixes.map(r => esc(r.was) + ' → ' + esc(r.firstName + ' ' + r.lastName)).join(', ')}).` : ''}${errors.length ? `<br><span class="small" style="color:var(--bad)">${errors.slice(0, 10).map(esc).join('<br>')}${errors.length > 10 ? '<br>…and ' + (errors.length - 10) + ' more' : ''}</span>` : ''}</p>${tbl}`;
 }
 async function runImport() {
   const { recs, errors } = importRows($('#imp-text').value);
@@ -364,6 +377,15 @@ async function runImport() {
   let done = 0;
   for (const r of recs) {
     if (r.fixId) { if (!(await guard(() => S.store.update(P.doc(S.evId, 'competitors', r.fixId), { firstName: r.firstName, lastName: r.lastName })))) break; done++; continue; }
+    if (r.updId) {   // v1.59.1: earlier record without a birth date — add the birth date, the missing events and empty details
+      const c = DC.compBy[r.updId] || {}, fill = (k, v) => (!c[k] && v ? { [k]: v } : {});
+      const pub = Object.assign({ events: r.upd.events, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : r.birthYear ? KT.ageFromYear(r.birthYear, DC.asOf) : null },
+        fill('gender', r.gender), fill('rank', r.rank), fill('dojo', r.dojo), fill('state', r.state), fill('country', r.country), r.waiver && !c.waiver ? { waiver: true } : {}, r.feePaid && !c.feePaid ? { feePaid: true } : {});
+      const pv = Object.assign({ dob: r.dob || '', birthYear: r.birthYear || '' }, fill('email', r.email), fill('phone', r.phone), fill('emergencyName', r.emergencyName), fill('emergencyPhone', r.emergencyPhone),
+        r.notes && !String(c.notes || '').includes(r.notes) ? { notes: [c.notes, r.notes].filter(Boolean).join('\n') } : {});
+      if (!(await guard(async () => { await S.store.update(P.doc(S.evId, 'competitors', r.updId), pub); await S.store.update(P.pv(S.evId, r.updId), pv); return true; }))) break;
+      done++; continue;
+    }
     const id = uid();
     const pub = { firstName: r.firstName, lastName: r.lastName, gender: r.gender, rank: r.rank, dojo: r.dojo, state: r.state, country: r.country, waiver: r.waiver, feePaid: r.feePaid,
       checkedIn: false, status: 'active', events: r.events, divOverride: {}, age: r.dob ? KT.ageOn(r.dob, DC.asOf) : r.birthYear ? KT.ageFromYear(r.birthYear, DC.asOf) : null, createdAt: new Date().toISOString(),
@@ -372,10 +394,12 @@ async function runImport() {
     if (!ok) break;
     done++; $('#imp-preview').textContent = `Imported ${done} of ${recs.length}…`;
   }
-  const nFix = recs.filter(r => r.fixId).length;
-  const nInc = recs.filter(r => !r.fixId && (r.missing || []).length).length;
+  const brought = [...new Set(recs.flatMap(r => r.events || []))], newEts = brought.filter(e => !(curEvent().eventTypes || KT.STD_EVENTS).includes(e));
+  if (newEts.length) await offerEvents(newEts);   // v1.60: e.g. Ki-tei Kata entries turn the event on
+  const nFix = recs.filter(r => r.fixId).length, nUpd = recs.filter(r => r.updId).length;
+  const nInc = recs.filter(r => !r.fixId && !r.updId && (r.missing || []).length).length;
   if (nInc) S.ui.filter = 'incomplete';       // show who still needs details
-  closeModal(); toast(`Imported ${plural(done - nFix, 'competitor')}${nInc ? ` · ${nInc} need details — showing “Missing information”` : ''}${nFix ? ` · ${plural(nFix, 'name')} corrected` : ''}${errors.length ? ` · ${errors.length} rows skipped` : ''}`);
+  closeModal(); toast(`Imported ${plural(done - nFix - nUpd, 'competitor')}${nUpd ? ` · ${plural(nUpd, 'competitor')} updated` : ''}${newEts.length ? ` · ${newEts.map(e => KT.EVENT_TYPES[e].label).join(', ')} now offered` : ''}${nInc ? ` · ${nInc} need details — showing “Missing information”` : ''}${nFix ? ` · ${plural(nFix, 'name')} corrected` : ''}${errors.length ? ` · ${errors.length} rows skipped` : ''}`);
 }
 
 function teamForm(id, et) {
@@ -439,15 +463,15 @@ async function saveTeam(form) {
 
 function divForm(id) {
   const ev = curEvent();
-  const d = id ? DC.divBy[id] : { eventType: (ev.eventTypes || KT.EVENT_ORDER)[0], gender: 'M', belt: 'black', group: 'Senior', minAge: 21, maxAge: '', minRank: 'd1', maxRank: 'd10', format: ev.defaultFormat || 'SE', bronze: ev.bronze || 'two', reset: true };
+  const d = id ? DC.divBy[id] : { eventType: (ev.eventTypes || KT.STD_EVENTS)[0], gender: 'M', belt: 'black', group: 'Senior', minAge: 21, maxAge: '', minRank: 'd1', maxRank: 'd10', format: ev.defaultFormat || 'SE', bronze: ev.bronze || 'two', reset: true };
   const sc = scoringOf(d), k = kindOf(d);
   const ents = id ? divEntrants(id) : [];
   const bs = id ? bracketState(id) : { drawn: false };
   openModal(sheet(id ? esc(d.name) : 'New division', `<form id="f-div" data-form="div" data-id="${esc(id || '')}" class="stack">
     <div class="fgrid">
-      <label class="f"><span>Event</span><select name="eventType" id="d-et" data-change="div-et">${(ev.eventTypes || KT.EVENT_ORDER).map(t => opt(t, KT.EVENT_TYPES[t].label, d.eventType)).join('')}</select></label>
+      <label class="f"><span>Event</span><select name="eventType" id="d-et" data-change="div-et">${(ev.eventTypes || KT.STD_EVENTS).map(t => opt(t, KT.EVENT_TYPES[t].label, d.eventType)).join('')}</select></label>
       <label class="f"><span>Gender</span><select name="gender" id="d-g">${KT.EVENT_TYPES[d.eventType].genders.map(g => opt(g, KT.GENDERS[g], d.open ? '' : d.gender)).join('')}${opt('open', 'Open (any gender)', d.open ? 'open' : '')}</select></label>
-      <label class="f"><span>Belt class</span><select name="belt" id="d-belt">${opt('black', 'Black belt (Dan)', d.belt)}${opt('kyu', 'Kyu belt', d.belt)}</select></label>
+      <label class="f"><span>Belt class</span><select name="belt" id="d-belt">${opt('black', 'Black belt (Dan)', d.belt)}${opt('kyu', 'Kyu belt', d.belt)}${opt('open', 'Open rank (kyu and dan)', d.belt)}</select></label>
       <label class="f"><span>Group label</span><input name="group" id="d-group" value="${esc(d.group || '')}" placeholder="Senior, Youth, Novice…"></label>
       <label class="f"><span>Minimum age</span><input type="number" name="minAge" id="d-min" min="0" max="99" value="${esc(d.minAge ?? '')}"></label>
       <label class="f"><span>Maximum age</span><input type="number" name="maxAge" id="d-max" min="0" max="120" value="${esc(d.maxAge ?? '')}" placeholder="No limit"></label>
@@ -539,7 +563,7 @@ async function saveDiv(form, thenDraw) {
   scoring.styleExplicit = !!v.style && (v.style === 'kyux' || KT.NCR_STYLES[v.style] || old.preset === 'ncr-kyu') || !!v.style && v.style !== KT.defaultStyle({ eventType: v.eventType, belt: v.belt, group: v.group, maxAge: v.maxAge === '' ? null : +v.maxAge, minRank: v.minRank, maxRank: v.maxRank });
   if (scoring.method === 'flags' && scoring.judges % 2 === 0) scoring.judges = 5;
   const dv = { eventType: v.eventType, gender: v.gender, belt: v.belt, group: v.group, minAge: v.minAge === '' ? null : +v.minAge, maxAge: v.maxAge === '' ? null : +v.maxAge,
-    minRank: v.minRank || (v.belt === 'black' ? 'd1' : 'k10'), maxRank: v.maxRank || (v.belt === 'black' ? 'd10' : 'k1'), format: v.format || old.format || 'SE', bronze: v.bronze, reset: false, poolCount: v.poolCount ? Math.max(0, +v.poolCount) : 0, advance: v.advance ? +v.advance : null,
+    minRank: v.minRank || (v.belt === 'black' ? 'd1' : 'k10'), maxRank: v.maxRank || (v.belt === 'kyu' ? 'k1' : 'd10'), format: v.format || old.format || 'SE', bronze: v.bronze, reset: false, poolCount: v.poolCount ? Math.max(0, +v.poolCount) : 0, advance: v.advance ? +v.advance : null,
     ringId: v.ringId || '', ringOrder: old.ringOrder ?? Date.now(), scoring, seeds, order: old.order || 0, poolSize: v.poolSize ? Math.min(12, Math.max(4, +v.poolSize)) : (old.poolSize || 8),
     rrPoolSize: v.rrPoolSize ? +v.rrPoolSize : null, chart: v.chart || '', kataList: String(v.kataList || '').split(',').map(x => x.trim()).filter(Boolean), open: isOpen, level: old.level || null, preset: old.preset || null, quota: old.quota || null, teamSize: old.teamSize || null };
   dv.name = v.name && v.name !== (old.eventType ? KT.divisionName(old) : '') ? v.name : KT.divisionName(dv);
@@ -551,7 +575,7 @@ async function saveDiv(form, thenDraw) {
 }
 function stdDivForm(kyu) {
   const ev = curEvent();
-  const ets = ev.eventTypes || KT.EVENT_ORDER;
+  const ets = ev.eventTypes || KT.STD_EVENTS;
   openModal(sheet(kyu ? 'Add kyu divisions' : 'Add black-belt divisions', `<form id="f-std" data-form="${kyu ? 'kyu' : 'std'}" class="stack">
     ${kyu ? `<p class="small muted">Define one kyu group. A division is created for every event and gender you pick.</p><div class="fgrid">
       <label class="f req"><span>Group label</span><input name="label" id="k-label" required placeholder="e.g. Youth Novice"></label>
@@ -609,7 +633,7 @@ async function applyPreset(form) {
   const list = KT.presetDivisions(pr), key = d => [d.eventType, d.gender, d.group].join('|');
   const mine = {}; DC.divs.forEach(d => { mine[key(d)] = d; });
   let added = 0, updated = 0, removed = 0;
-  if (v.settings) await guard(() => S.store.update(P.event(S.evId), { level: pr.level, ageAsOf: pr.ageAsOf, judgeMin: String(pr.judgeMin), preset: pr.id, eventTypes: KT.EVENT_ORDER.slice() }));
+  if (v.settings) await guard(() => S.store.update(P.event(S.evId), { level: pr.level, ageAsOf: pr.ageAsOf, judgeMin: String(pr.judgeMin), preset: pr.id, eventTypes: KT.STD_EVENTS.slice() }));
   for (const d of list) {
     const cur = mine[key(d)];
     if (cur && S.d.brackets[cur.id]) continue;
@@ -674,9 +698,21 @@ async function applyNcr(form) {
     if (cur) { const { ringId, ...rules } = d; await guard(() => S.store.update(P.doc(S.evId, 'divisions', cur.id), rules)); updated++; }
     else { d.ringId = ''; await guard(() => S.store.set(P.doc(S.evId, 'divisions', uid()), d)); added++; }
   }
-  const et = new Set(curEvent().eventTypes || KT.EVENT_ORDER); ets.forEach(x => et.add(x));
+  const et = new Set(curEvent().eventTypes || KT.STD_EVENTS); ets.forEach(x => et.add(x));
   await guard(() => S.store.update(P.event(S.evId), { eventTypes: KT.EVENT_ORDER.filter(x => et.has(x)) }));
   closeModal(); toast(`Kyu rules: ${plural(added, 'division')} added${updated ? `, ${updated} updated` : ''}${removed ? `, ${removed} replaced` : ''}`);
+}
+/** v1.60: add Ki-tei Kata divisions (open ranks, women and men) and offer the event. */
+async function addKiteiDivisions() {
+  const have = new Set(DC.divs.filter(d => d.eventType === 'KITEI').map(d => d.gender)); let added = 0;
+  for (const d of KT.kiteiDivisions()) { if (have.has(d.gender)) continue; d.ringId = ''; d.ringOrder = d.order; if (await guard(() => S.store.set(P.doc(S.evId, 'divisions', uid()), d))) added++; }
+  await offerEvents(['KITEI']);
+  toast(added ? `Ki-tei Kata: ${plural(added, 'division')} added (open ranks, women and men)` : 'Ki-tei Kata divisions already exist');
+}
+/** Make sure the event offers these events (kept in the standard order). */
+async function offerEvents(ets) {
+  const cur = curEvent().eventTypes || KT.STD_EVENTS, et = new Set(cur); ets.forEach(x => et.add(x));
+  if (et.size !== cur.length) await guard(() => S.store.update(P.event(S.evId), { eventTypes: KT.EVENT_ORDER.filter(x => et.has(x)) }));
 }
 /* ---------- v1.32: the event's own kyu rank groups & kumite exchanges ---------- */
 function kyuGroupsForm(draft) {

@@ -7,7 +7,7 @@
    so the PDF goes to the share sheet (Print, Save to Files, Mail…) or is downloaded. ===== */
 const PRINT_BY = { country: 'Country', region: 'Region / federation', club: 'Club / dojo' };
 const PRINT_LEVEL = { country: 'International', region: 'National', club: 'Local' };
-const PRINT_EV = { IKATA: 'kata ind.', FUKUGO: 'fukugo', IKUMITE: 'kumite ind.', TKATA: 'kata team', ENBU: 'enbu', TKUMITE: 'kumite team' };
+const PRINT_EV = { IKATA: 'kata ind.', FUKUGO: 'fukugo', IKUMITE: 'kumite ind.', TKATA: 'kata team', ENBU: 'enbu', TKUMITE: 'kumite team', KITEI: 'ki-tei kata' };
 /** Paper in CSS px (96 / in) and PDF points, with 8 mm margins; area = printable width × height in CSS px. */
 const PRINT_MM = 96 / 25.4, PRINT_MARGIN = 8;
 const PRINT_PAPER = { letter: { w: 816, h: 1056, pt: [612, 792], css: 'letter' }, a4: { w: 794, h: 1123, pt: [595.28, 841.89], css: 'A4' } };
