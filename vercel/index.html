@@ -778,14 +778,14 @@ tr.grp-tog.shut td { opacity: .8; }
 @media (max-width: 760px) { table.mcards td.reg-cell { grid-column: 1 / -1; } }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.64.0 */
+<script>/* Karate Event Tracker v1.65.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.64.0';
+  const VERSION = '1.65.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -5279,6 +5279,7 @@ function regToggles(c) {
 }
 function competitorsHTML() {
   const ev = curEvent(), dir = isDirector(), tour = ev.kind === 'tournament';
+  const canCheckIn = !dir && role() === 'manager' && !S.readOnly;   // v1.65: ring managers / staff check competitors in — nothing else
   const q = S.ui.q.toLowerCase(), f = !dir && ['unpaid', 'incomplete'].includes(S.ui.filter) ? 'all' : S.ui.filter;   // director-only filters
   const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'competitor').map(u => u.id));
   // v1.48: list order — name A→Z / Z→A, or grouped by country / region / club (dojo); the person's own view (§72)
@@ -5323,7 +5324,7 @@ function competitorsHTML() {
       <td>${esc(c.gender === 'F' ? 'W' : c.gender === 'M' ? 'M' : '')}${age != null ? ` · <span class="num">${age}</span>` : ''}</td>
       <td>${esc(KT.rankLabel(c.rank))}</td>
       ${tour ? `<td class="ev-cell"><div class="pill-list">${evs}</div></td>` : ''}
-      <td class="reg-cell">${c.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : dir ? `<div class="reg-btns"><button class="sm ${c.checkedIn ? '' : 'ghost'}" data-act="checkin" data-id="${esc(c.id)}" aria-pressed="${!!c.checkedIn}">${c.checkedIn ? '✓ Checked in' : 'Check in'}</button>${regToggles(c)}</div>` : (c.checkedIn ? '<span class="chip ok">Checked in</span>' : '<span class="chip plain">Not checked in</span>')}
+      <td class="reg-cell">${c.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : dir || canCheckIn ? `<div class="reg-btns"><button class="sm ${c.checkedIn ? '' : 'ghost'}" data-act="checkin" data-id="${esc(c.id)}" aria-pressed="${!!c.checkedIn}">${c.checkedIn ? '✓ Checked in' : 'Check in'}</button>${dir ? regToggles(c) : ''}</div>` : (c.checkedIn ? '<span class="chip ok">Checked in</span>' : '<span class="chip plain">Not checked in</span>')}
         ${miss.length ? `<span class="chip warn" title="Missing: ${esc(miss.join(', '))}">Incomplete</span>` : ''}</td></tr>`;
   }).join('');
   return fab('comp-new', tour ? 'Add competitor' : 'Add participant') + eventHeader() + yobNote + `<div class="section-h">${tools}<div class="row actions">${acts}</div></div>${foldCtl}
@@ -6023,7 +6024,7 @@ function checkInForm(id) {
 }
 async function saveCheckIn(form) {
   const v = fd(form), id = form.dataset.id;
-  if (await guard(() => S.store.update(P.doc(S.evId, 'competitors', id), { checkedIn: true, waiver: !!v.waiver, feePaid: !!v.feePaid }), 'Checked in')) closeModal();
+  if (await guard(() => S.store.update(P.doc(S.evId, 'competitors', id), { checkedIn: true, checkedInAt: new Date().toISOString(), checkedInBy: S.myId || '', waiver: !!v.waiver, feePaid: !!v.feePaid }), 'Checked in')) closeModal();
 }
 function importForm() {
   openModal(sheet('Import competitors', `<p class="small">Paste CSV text or choose a .csv file. It needs a row of column headings (it doesn’t have to be the first row) with at least a name column. Every recognised column is imported; anything missing is listed and the competitors are marked <b>Incomplete</b> so the details can be entered later. Check shows everything before you import. Recognised columns:</p>
@@ -9488,9 +9489,11 @@ const ACT = {
     if (!(await confirmBox(`Delete ${c.firstName} ${c.lastName}? Consider marking them withdrawn instead if they already competed.`, 'Delete', true))) return;
     closeModal(); await guard(async () => { await S.store.del(P.doc(S.evId, 'competitors', id)); await S.store.del(P.pv(S.evId, id)); }, 'Deleted');
   },
-  checkin: (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id];
-    if (!c.checkedIn && (!c.waiver || !c.feePaid)) { checkInForm(c.id); return; }   // v1.64: confirm waiver / fee while checking in
-    guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { checkedIn: !c.checkedIn })); },
+  checkin: (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; if (!c) return;
+    const dir = isDirector(); if (!dir && role() !== 'manager') return;
+    if (dir && !c.checkedIn && (!c.waiver || !c.feePaid)) { checkInForm(c.id); return; }   // v1.64: directors confirm waiver / fee while checking in
+    // v1.65: ring managers / staff change only the check-in (the database rules allow nothing else)
+    guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { checkedIn: !c.checkedIn, checkedInAt: new Date().toISOString(), checkedInBy: S.myId || '' })); },
   'comp-waiver': (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { waiver: !c.waiver })); },
   'comp-paid': (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { feePaid: !c.feePaid })); },
   'import-open': () => { S.ui.impName = ''; importForm(); },

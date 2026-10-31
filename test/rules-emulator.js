@@ -48,6 +48,20 @@ const denied = async (name, p) => { try { await assertFails(p); ok(name, true); 
   await allowed('director: event’s competitors', dir.collection('events/E/competitors').get());
   await allowed('ring manager: event’s competitors', mgr.collection('events/E/competitors').get());
   await allowed('staff: ring readiness', stf.doc('live/E/ringready/R').get());
+  // v1.65: ring managers / staff check competitors in — the check-in fields only
+  const ci = db => db.doc('events/E/competitors/C').update({ checkedIn: true, checkedInAt: 'now', checkedInBy: 'x' });
+  await allowed('ring manager: check a competitor in', ci(mgr));
+  await allowed('staff: check a competitor in', ci(stf));
+  await allowed('ring manager: check out again', mgr.doc('events/E/competitors/C').update({ checkedIn: false }));
+  await denied('ring manager: cannot mark the waiver', mgr.doc('events/E/competitors/C').update({ waiver: true }));
+  await denied('ring manager: cannot mark the fee paid', mgr.doc('events/E/competitors/C').update({ checkedIn: true, feePaid: true }));
+  await denied('ring manager: cannot change a name', mgr.doc('events/E/competitors/C').update({ firstName: 'X' }));
+  await denied('ring manager: cannot add a competitor', mgr.doc('events/E/competitors/N').set({ firstName: 'New', checkedIn: true }));
+  await denied('ring manager: cannot delete a competitor', mgr.doc('events/E/competitors/C').delete());
+  await denied('ring manager: check-in must be true / false', mgr.doc('events/E/competitors/C').update({ checkedIn: 'yes' }));
+  await denied('ring manager: no private details', mgr.doc('pv/E/competitors/C').get());
+  await denied('signed-in non-team: cannot check in', ci(view));
+  await allowed('director: still changes anything', dir.doc('events/E/competitors/C').update({ waiver: true, feePaid: true }));
   const FP = firebase.firestore.FieldPath, DEL = firebase.firestore.FieldValue.delete;
   const patch = (db, p, field, kv, top) => { const data = Object.assign({}, top || {}, { [field]: {}, at: 'now' }), paths = Object.keys(top || {}).concat(['at']); for (const k in kv) { data[field][k] = kv[k] === null ? DEL() : kv[k]; paths.push(new FP(field, k)); } return db.doc(p).set(data, { mergeFields: paths }); };
   await allowed('director: patch a part', patch(dir, 'pubsnap/E/parts/competitors~0', 'd', { C2: { firstName: 'Bo', tags: ['a'] } }, { col: 'competitors' }));
@@ -92,6 +106,7 @@ const denied = async (name, p) => { try { await assertFails(p); ok(name, true); 
   // archived
   await env.withSecurityRulesDisabled(c => c.firestore().doc('events/E').update({ public: true, locked: true }));
   await denied('archived: director cannot change the copy', patch(dir, 'pubsnap/E/parts/competitors~0', 'd', { C: null }));
+  await denied('archived: ring manager cannot check in', mgr.doc('events/E/competitors/C').update({ checkedIn: true }));
   // the website function (api/live.js) against the emulator's REST API, signed out like on Vercel
   await seed({ pubPaused: false, locked: false });
   await env.withSecurityRulesDisabled(c => c.firestore().doc('share/t1').set({ eventId: 'E' }));

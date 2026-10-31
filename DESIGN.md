@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.64.0 Requirements & Design
+# Karate Event Tracker · v1.65.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -961,3 +961,20 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
 - Check in: someone whose waiver or fee is not marked opens a small check-in box (`checkInForm`) with "Waiver signed" and "Fee paid" (with the fee amount when known) ticks preset from the record. "Check in" saves `checkedIn` together with both. A fully registered competitor is still checked in (or out) with one tap.
 - Phone: the status buttons span the full card width (one line). Non-directors still see only the Checked in chip (payment is director information).
 **Verify.** test/regstatus.js (desktop and 390 px: Check in · Waiver · Not paid; Waiver toggles on / off without opening the card; Check in on someone not registered opens the box, ticking both and Check in saves all three; the row shows ✓ Checked in · ✓ Waiver · ✓ Paid; a fully registered competitor is checked in with one tap; no sideways scroll). spectfeed (check-in), unpaid, golive, e2e set, mobile.
+
+## §95 Ring managers check competitors in — nothing else (v1.65.0)
+**Requirement.** Make only the check-in process accessible to managers, so they can check competitors in, with no access to other information.
+**Design.**
+- **App** (Competitors tab):
+  - A ring manager / staff member (`role() === 'manager'`) gets the Check in button on each row and nothing else: no Waiver / Paid toggles; rows do not open the competitor card; no Import / Export / Remove group / Add competitor; no "Not paid", "Missing information" or "No division match" filters; no Incomplete marks.
+  - Their tap only toggles `checkedIn` (with `checkedInAt` / `checkedInBy`); the director's waiver / fee box (§94) is for directors only. Spectators get no button.
+  - Private details (birth date, contacts, notes in `pv/`) were already director-only in the database.
+- **Database** (`firestore.rules`): new `events/{e}/competitors/{c}` update rule.
+  - Allowed for the event's managers (`managerIds`) and staff (`staffIds`) while the event is open, when the update changes only `checkedIn` (a boolean), `checkedInAt` and `checkedInBy`.
+  - Any other field, creating or deleting a competitor stays director-only.
+  - Note: waiver / paid and the competitor's public fields are on the competitor record that team members can read; the app does not show waiver / paid to managers.
+**Redeploy the rules:** `npm run deploy:rules`.
+**Verify.**
+- Rules in the Firestore emulator (test/rules-emulator.js, 74 passed): manager and staff check in / out; denied: waiver, fee (even together with check-in), name, creating, deleting, a non-boolean check-in, private details, a non-team user, an archived event; the director still changes anything.
+- test/mgrcheckin.js (View as Ring manager: Check in buttons only; one tap toggles check-in and nothing else; spectator has none).
+- regstatus, unpaid, spectfeed, e2e set and the other browser tests.

@@ -231,9 +231,11 @@ const ACT = {
     if (!(await confirmBox(`Delete ${c.firstName} ${c.lastName}? Consider marking them withdrawn instead if they already competed.`, 'Delete', true))) return;
     closeModal(); await guard(async () => { await S.store.del(P.doc(S.evId, 'competitors', id)); await S.store.del(P.pv(S.evId, id)); }, 'Deleted');
   },
-  checkin: (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id];
-    if (!c.checkedIn && (!c.waiver || !c.feePaid)) { checkInForm(c.id); return; }   // v1.64: confirm waiver / fee while checking in
-    guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { checkedIn: !c.checkedIn })); },
+  checkin: (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; if (!c) return;
+    const dir = isDirector(); if (!dir && role() !== 'manager') return;
+    if (dir && !c.checkedIn && (!c.waiver || !c.feePaid)) { checkInForm(c.id); return; }   // v1.64: directors confirm waiver / fee while checking in
+    // v1.65: ring managers / staff change only the check-in (the database rules allow nothing else)
+    guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { checkedIn: !c.checkedIn, checkedInAt: new Date().toISOString(), checkedInBy: S.myId || '' })); },
   'comp-waiver': (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { waiver: !c.waiver })); },
   'comp-paid': (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { feePaid: !c.feePaid })); },
   'import-open': () => { S.ui.impName = ''; importForm(); },

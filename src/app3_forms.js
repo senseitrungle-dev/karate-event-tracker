@@ -152,7 +152,7 @@ function checkInForm(id) {
 }
 async function saveCheckIn(form) {
   const v = fd(form), id = form.dataset.id;
-  if (await guard(() => S.store.update(P.doc(S.evId, 'competitors', id), { checkedIn: true, waiver: !!v.waiver, feePaid: !!v.feePaid }), 'Checked in')) closeModal();
+  if (await guard(() => S.store.update(P.doc(S.evId, 'competitors', id), { checkedIn: true, checkedInAt: new Date().toISOString(), checkedInBy: S.myId || '', waiver: !!v.waiver, feePaid: !!v.feePaid }), 'Checked in')) closeModal();
 }
 function importForm() {
   openModal(sheet('Import competitors', `<p class="small">Paste CSV text or choose a .csv file. It needs a row of column headings (it doesn’t have to be the first row) with at least a name column. Every recognised column is imported; anything missing is listed and the competitors are marked <b>Incomplete</b> so the details can be entered later. Check shows everything before you import. Recognised columns:</p>
