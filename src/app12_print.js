@@ -70,7 +70,7 @@ function printLines(ids, did) {
 function printSection(b) {
   const ev = PRINT_EV[b.et] || b.et, enbu = b.et === 'ENBU';
   const cols = (enbu ? [['X', 'enbu W/M'], ['M', 'enbu M/M'], ['F', 'enbu W/W']] : [['F', 'women'], ['M', 'men'], ['X', 'mixed']])
-    .filter(([k], i) => b[k].length || (!enbu && i < 2)).map(([k, l]) => ({ l, lines: printLines(b[k], b.did[k]) }));
+    .filter(([k], i) => b[k].length || (!enbu && i < 2 && (b.F.length || b.M.length || !b.X.length))).map(([k, l]) => ({ l, lines: printLines(b[k], b.did[k]) }));   // a mixed-only event (Ki-tei): one list
   let html = '';
   for (let i = 0; i < cols.length; i += 2) {
     const L = cols[i], R = cols[i + 1] || { l: '', lines: [] }, rows = Math.max(L.lines.length, R.lines.length);

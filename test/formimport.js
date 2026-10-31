@@ -43,10 +43,22 @@ const path = require('path');
   await p.click('.tab:has-text("Divisions")'); await p.waitForTimeout(300);
   await p.click('button[data-act="div-kitei"]'); await p.waitForTimeout(800);
   const kdiv = await p.$$eval('#main tr button[data-act="div-panel"]', b => b.map(x => x.textContent.trim()).filter(t => /Ki-tei/.test(t)));
-  ok(`Add Ki-tei divisions: ${kdiv.join(', ')}`, kdiv.includes('Open Rank Women Ki-tei Kata') && kdiv.includes('Open Rank Men Ki-tei Kata') && !(await p.$('button[data-act="div-kitei"]')));
-  await p.click('.tab:has-text("Competitors")'); await p.waitForTimeout(300);
+  ok(`Add Ki-tei division: one mixed division (${kdiv.join(', ')})`, kdiv.length === 1 && kdiv[0] === 'Open Rank Mixed Ki-tei Kata' && !(await p.$('button[data-act="div-kitei"]')));
+  await p.click('.tab:has-text("Competitors")'); await p.waitForTimeout(300); await p.selectOption('#comp-f', 'all'); await p.waitForTimeout(300);
   const rows = await p.$$eval('#main tr[data-act="comp-edit"]', rs => rs.map(r => r.textContent.replace(/\s+/g, ' ')));
-  ok('Bruno (2nd kyu) and Dan (white belt) placed in Open Rank Men Ki-tei Kata', rows.filter(r => /Testik|Testson/.test(r)).every(r => /Open Rank Men Ki-tei Kata/.test(r)));
+  ok('Bruno (2nd kyu, man) and Dan (white belt, man) placed in Open Rank Mixed Ki-tei Kata', rows.filter(r => /Testik|Testson/.test(r)).length === 2 && rows.filter(r => /Testik|Testson/.test(r)).every(r => /Open Rank Mixed Ki-tei Kata/.test(r)));
+  // an event that already has the v1.60 women / men Ki-tei divisions: "Make Ki-tei one mixed division" replaces them
+  await p.evaluate(() => { const db = JSON.parse(localStorage.getItem('kt-local-v1')); const ev = Object.keys(db).find(k => /^events\/[^/]+$/.test(k) && db[k].demo);
+    for (const k of Object.keys(db)) if (k.startsWith(ev + '/divisions/') && db[k].eventType === 'KITEI') delete db[k];
+    ['F', 'M'].forEach(g => { db[ev + '/divisions/kitei' + g] = { eventType: 'KITEI', gender: g, belt: 'open', group: '', minAge: null, maxAge: null, minRank: 'k10', maxRank: 'd10', format: 'SE', name: 'Open Rank ' + (g === 'F' ? 'Women' : 'Men') + ' Ki-tei Kata', scoring: { method: 'flags', judges: 5 }, ringId: '' }; });
+    localStorage.setItem('kt-local-v1', JSON.stringify(db)); });
+  await p.reload(); await p.waitForTimeout(900); if (await p.$('.ev-card')) { await p.click('.ev-card'); await p.waitForTimeout(400); }
+  await p.click('.tab:has-text("Divisions")'); await p.waitForTimeout(300);
+  ok('women / men Ki-tei divisions → button "Make Ki-tei one mixed division"', !!(await p.$('button[data-act="div-kitei"]:has-text("Make Ki-tei one mixed division")')));
+  await p.click('button[data-act="div-kitei"]'); await p.waitForTimeout(800);
+  const k2 = await p.$$eval('#main tr button[data-act="div-panel"]', b => b.map(x => x.textContent.trim()).filter(t => /Ki-tei/.test(t)));
+  ok(`replaced by one mixed division (${k2.join(', ')})`, k2.length === 1 && k2[0] === 'Open Rank Mixed Ki-tei Kata');
+  await p.click('.tab:has-text("Competitors")'); await p.waitForTimeout(300);
   ok('gender Woman / Man (with a trailing space) and ranks read', by.Cleo.gender === 'F' && by.Bruno.gender === 'M' && by.Ada.rank === 'k5' && by.Cleo.rank === 'd1' && by.Dan.rank === 'k10');
   // v1.59.1: records left without a birth date by an earlier import (as v1.58 left them) are updated by a re-import, not duplicated
   {

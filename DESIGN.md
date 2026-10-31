@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.60.1 Requirements & Design
+# Karate Event Tracker · v1.61.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -929,3 +929,11 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
 - Import: a file without emergency columns no longer lists "Emergency contact" under "Not in the file — enter later", and rows without them are not "details to enter later". The fields are still imported (and exported) when present.
 - After an import where nobody needs details, the Competitors list leaves the "Missing information" filter. Otherwise competitors updated to complete (§88) would vanish from the filtered list.
 **Verify.** logic.test (a competitor without emergency contact has no problems). lenientimport.js (not listed as missing). formimport.js (form rows with phone but no emergency contact: only the row without a waiver needs details; re-import placement visible). e2e set, imports, demos, mobile.
+
+## §91 Ki-tei Kata: one mixed division (v1.61.0)
+**Requirement.** Ki-tei is one mixed division instead of women and men.
+**Design.**
+- `KT.kiteiDivisions()` returns one division: `gender: 'X', open: true` (any gender — `candidateDivisions` already accepts open divisions for every competitor), open rank (k10–d10), all ages, single elimination, 5 judges' flags. Its name is "Open Rank Mixed Ki-tei Kata" (`divisionName`: "Mixed" for an open-gender division with open rank, not "Open Rank Open …").
+- Divisions tab: "Add Ki-tei division" while there is none. If an event has the women / men Ki-tei divisions from v1.60, the button "Make Ki-tei one mixed division" deletes them (only if not drawn — a drawn one is kept and the director is told to clear its bracket first) and adds the mixed one, keeping their ring.
+- Printout: an event with only mixed entrants (Ki-tei) prints one list instead of empty women / men columns.
+**Verify.** logic.test (one division, open, the name, a white-belt woman and a 2nd-dan man both placed in it). formimport.js (Add Ki-tei division → Open Rank Mixed Ki-tei Kata; 2nd kyu and white belt men placed in it; an event with the v1.60 women / men divisions gets "Make Ki-tei one mixed division", which leaves one mixed division). divprint, compcard, imports, demos, e2e set, mobile.

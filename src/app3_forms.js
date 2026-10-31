@@ -704,10 +704,14 @@ async function applyNcr(form) {
 }
 /** v1.60: add Ki-tei Kata divisions (open ranks, women and men) and offer the event. */
 async function addKiteiDivisions() {
-  const have = new Set(DC.divs.filter(d => d.eventType === 'KITEI').map(d => d.gender)); let added = 0;
-  for (const d of KT.kiteiDivisions()) { if (have.has(d.gender)) continue; d.ringId = ''; d.ringOrder = d.order; if (await guard(() => S.store.set(P.doc(S.evId, 'divisions', uid()), d))) added++; }
+  // v1.61: one mixed division; separate women / men Ki-tei divisions (v1.60) that are not drawn yet are replaced
+  const ki = DC.divs.filter(d => d.eventType === 'KITEI'), split = ki.filter(d => !d.open && !S.d.brackets[d.id]);
+  if (ki.some(d => !d.open && S.d.brackets[d.id])) { toast('A women / men Ki-tei division is already drawn — clear its bracket first, or keep it.', true); return; }
+  for (const d of split) await guard(() => S.store.del(P.doc(S.evId, 'divisions', d.id)));
+  let added = 0;
+  if (!ki.some(d => d.open)) for (const d of KT.kiteiDivisions()) { d.ringId = (split[0] || {}).ringId || ''; d.ringOrder = d.order; if (await guard(() => S.store.set(P.doc(S.evId, 'divisions', uid()), d))) added++; }
   await offerEvents(['KITEI']);
-  toast(added ? `Ki-tei Kata: ${plural(added, 'division')} added (open ranks, women and men)` : 'Ki-tei Kata divisions already exist');
+  toast(added ? `Ki-tei Kata: one mixed division added (open ranks, any gender)${split.length ? ` — replaces ${plural(split.length, 'division')}` : ''}` : split.length ? 'Ki-tei Kata is now one mixed division' : 'The Ki-tei Kata division already exists');
 }
 /** Make sure the event offers these events (kept in the standard order). */
 async function offerEvents(ets) {
