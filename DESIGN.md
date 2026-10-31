@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.62.0 Requirements & Design
+# Karate Event Tracker · v1.63.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -948,3 +948,8 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
   So when the "continues" block disappears, that division is done on this ring and the "Next division" block is what starts.
 - The division name is in the header only; each match keeps its round / pool line (`queueItemHTML`, the former item markup). Spectator ring boards (three items) are grouped the same way.
 **Verify.** test/matgroups.js (local demo, Ring 2: one header per division and none repeated; "N left" ≥ the matches shown; "First up" with nothing on the mat; no division name on the match lines; framed blocks; after putting a match on the mat its division shows "on the mat · continues" and the next "Next division"; phone fit). ringcall, matnow, matready, bracketback, prevkata, rankmark, public, ringdrag, e2e set.
+
+## §93 Competitors filter "Not paid" (v1.63.0)
+**Requirement.** Competitor card: add the filter "Not paid" to the list (Not checked in, Checked in, …).
+**Design.** The Competitors filter has "Not paid" after "Checked in" (directors only; payment is director information). It lists competitors whose fee is not marked paid, leaving out withdrawn ones. It works with search and the sort / groups. Like the other filters it is the person's own view (§72), and is remembered. For a non-director (e.g. a director viewing as a spectator) a remembered "Not paid" or "Missing information" filter counts as "All".
+**Verify.** test/unpaid.js (local demo with two unpaid, one withdrawn: "Not paid" right after "Checked in"; shows only the unpaid one not withdrawn; "1 competitor shown"; remembered after reload; spectators have no "Not paid" and an unfiltered list). e2e set, imports, sort / fold tests, mobile.

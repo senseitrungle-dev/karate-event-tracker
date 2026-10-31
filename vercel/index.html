@@ -771,14 +771,14 @@ tr.grp-tog.shut td { opacity: .8; }
 .queue .q-sub { margin-top: -4px; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.62.0 */
+<script>/* Karate Event Tracker v1.63.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.62.0';
+  const VERSION = '1.63.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -5267,7 +5267,7 @@ function compSortMode() {
 }
 function competitorsHTML() {
   const ev = curEvent(), dir = isDirector(), tour = ev.kind === 'tournament';
-  const q = S.ui.q.toLowerCase(), f = S.ui.filter;
+  const q = S.ui.q.toLowerCase(), f = !dir && ['unpaid', 'incomplete'].includes(S.ui.filter) ? 'all' : S.ui.filter;   // director-only filters
   const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'competitor').map(u => u.id));
   // v1.48: list order — name A→Z / Z→A, or grouped by country / region / club (dojo); the person's own view (§72)
   const cs = compSortMode(), cf = { country: 'country', region: 'state', club: 'dojo' }[cs];
@@ -5281,10 +5281,11 @@ function competitorsHTML() {
   if (f === 'incomplete') list = list.filter(c => KT.validateCompetitor(c, DC.asOf).length);
   if (f === 'unplaced') list = list.filter(c => unplaced.has(c.id));
   if (f === 'withdrawn') list = list.filter(c => c.status === 'withdrawn');
+  if (f === 'unpaid') list = list.filter(c => !c.feePaid && c.status !== 'withdrawn');   // v1.63: fee not marked paid (withdrawn left out)
   const word = tour ? 'competitor' : 'participant';
   const tools = `<div class="row"><input id="comp-q" class="search" type="search" placeholder="Search name, dojo…" value="${esc(S.ui.q)}" data-input="q" aria-label="Search">
     <select id="comp-s" data-change="comp-sort" aria-label="Sort">${Object.entries(KT.ENT_SORTS).map(([k, l]) => opt(k, k === 'name' ? 'Name A→Z' : k === 'name-desc' ? 'Name Z→A' : 'By ' + l.toLowerCase(), cs)).join('')}</select>
-    <select id="comp-f" data-change="filter" aria-label="Filter">${opt('all', 'All', f)}${opt('out', 'Not checked in', f)}${opt('in', 'Checked in', f)}${dir ? opt('incomplete', 'Missing information', f) : ''}${tour && dir ? opt('unplaced', 'No division match', f) : ''}${opt('withdrawn', 'Withdrawn', f)}</select></div>`;
+    <select id="comp-f" data-change="filter" aria-label="Filter">${opt('all', 'All', f)}${opt('out', 'Not checked in', f)}${opt('in', 'Checked in', f)}${dir ? opt('unpaid', 'Not paid', f) : ''}${dir ? opt('incomplete', 'Missing information', f) : ''}${tour && dir ? opt('unplaced', 'No division match', f) : ''}${opt('withdrawn', 'Withdrawn', f)}</select></div>`;
   const acts = dir ? `<button data-act="import-open">Import CSV</button><button data-act="export-comps">Export CSV</button>${DC.comps.length ? '<button class="danger" data-act="rm-group">Remove group…</button>' : ''}<button class="primary" data-act="comp-new">Add ${word}</button>` : '';
   const fullDob = dir && ev.level === 'International' ? DC.comps.filter(c => c.dob).length : 0;
   const yobNote = fullDob ? `<div class="notice info" style="display:block"><b>${plural(fullDob, 'competitor')}</b> ${fullDob === 1 ? 'has' : 'have'} a full date of birth stored. International events only need the year (ages count on 31 Dec) — keep only what is needed. <button class="sm" data-act="keep-year">Keep year only</button></div>` : '';
