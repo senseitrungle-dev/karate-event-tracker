@@ -298,7 +298,9 @@ t('KP: kata change rule, kettei kata, hansoku, application, pool size 12', () =>
 });
 t('validate competitor', () => {
   assert.equal(KT.validateCompetitor({ firstName: 'A', lastName: 'B', gender: 'M', dob: '1990-01-01', rank: 'd1', dojo: 'X', emergencyName: 'Y', emergencyPhone: '1', waiver: true }, '2026-01-01').length, 0);
-  assert.ok(KT.validateCompetitor({}, '2026-01-01').length >= 6);
+  assert.ok(KT.validateCompetitor({}, '2026-01-01').length >= 5);
+  // v1.60.1: no emergency contact / phone is not a problem
+  assert.deepEqual(KT.validateCompetitor({ firstName: 'A', lastName: 'B', gender: 'F', dob: '1990-01-01', rank: 'k5', dojo: 'X', waiver: true }, '2026-01-01'), []);
 });
 t('medal table & csv', () => {
   const m = KT.medalTable([{ dojo: 'A', place: 'gold' }, { dojo: 'B', place: 'silver' }, { dojo: 'B', place: 'gold' }, { dojo: 'B', place: 'bronze' }]);

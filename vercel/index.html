@@ -761,14 +761,14 @@ tr.grp-tog.shut td { opacity: .8; }
 .pr-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.60.0 */
+<script>/* Karate Event Tracker v1.60.1 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.60.0';
+  const VERSION = '1.60.1';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -1087,7 +1087,7 @@ const KT = (function () {
     else { const a = c.dob ? ageOn(c.dob, asOf) : ageFromYear(c.birthYear, asOf); if (a == null || a < 3 || a > 110) p.push('Valid date of birth'); }
     if (!RANK_BY[c.rank]) p.push('Rank');
     if (!c.dojo) p.push('Dojo / club');
-    if (!c.emergencyName || !c.emergencyPhone) p.push('Emergency contact');
+    // v1.60.1: the emergency contact and phone are optional (not flagged as incomplete)
     if (!c.waiver) p.push('Signed waiver');
     return p;
   }
@@ -5925,8 +5925,8 @@ function compForm(id) {
     <fieldset><legend>Contact &amp; emergency (directors only)</legend><div class="fgrid">
       <label class="f"><span>Email</span><input type="email" name="email" id="c-email" value="${esc(c.email || '')}"></label>
       <label class="f"><span>Phone</span><input type="tel" name="phone" id="c-phone" value="${esc(c.phone || '')}"></label>
-      <label class="f req"><span>Emergency contact</span><input name="emergencyName" id="c-ename" value="${esc(c.emergencyName || '')}"></label>
-      <label class="f req"><span>Emergency phone</span><input type="tel" name="emergencyPhone" id="c-ephone" value="${esc(c.emergencyPhone || '')}"></label>
+      <label class="f"><span>Emergency contact <span class="muted">(optional)</span></span><input name="emergencyName" id="c-ename" value="${esc(c.emergencyName || '')}"></label>
+      <label class="f"><span>Emergency phone <span class="muted">(optional)</span></span><input type="tel" name="emergencyPhone" id="c-ephone" value="${esc(c.emergencyPhone || '')}"></label>
     </div></fieldset>
     <fieldset><legend>Registration</legend><div class="row" style="gap:18px">
       <label class="check"><input type="checkbox" name="waiver" id="c-waiver" ${c.waiver ? 'checked' : ''}> Waiver signed <span style="color:var(--aka)">*</span></label>
@@ -6105,7 +6105,7 @@ function importRows(text) {
     ix.first < 0 && ix.last < 0 && ix.name < 0 ? 'Name' : '',
     ix.first < 0 && ix.name >= 0 ? '' : ix.first < 0 ? 'First name' : '', ix.last < 0 && ix.name < 0 && ix.first >= 0 ? 'Last name' : '',
     ix.gender < 0 && isT ? 'Gender' : '', ix.dob < 0 && ix.age < 0 && ix.yob < 0 && isT ? (yo ? 'Year of birth' : 'Date of birth') : '', ix.rank < 0 ? 'Rank' : '', ix.dojo < 0 && !info.federation ? 'Dojo / club' : '',
-    ix.en < 0 || ix.ep < 0 ? 'Emergency contact' : '', ix.waiver < 0 ? 'Waiver' : '', isT && ix.events < 0 && !evCols.length ? 'Events' : ''].filter(Boolean);
+    ix.waiver < 0 ? 'Waiver' : '', isT && ix.events < 0 && !evCols.length ? 'Events' : ''].filter(Boolean);
   const recs = [], errors = [];
   const g = (r, i) => (i >= 0 ? (r[i] || '').trim() : '');
   const yes = s => /^(y|yes|true|1|x|✓|✔|i agree|agree|agreed|i accept|accept|accepted|signed|i have read and agree)$/i.test(String(s || '').trim().replace(/[.!]+$/, ''));
@@ -6157,7 +6157,6 @@ function importRows(text) {
     if (isTournament && !rec.dob) miss.push(rawDate(r) ? `Date of birth (“${rawDate(r)}” is not a date as ${dord.order === 'MDY' ? 'month-day-year' : 'day-month-year'})` : 'Date of birth');
     if (!rec.rank) miss.push(bad(g(r, ix.rank), 'Rank'));
     if (!rec.dojo) miss.push('Dojo / club');
-    if (!rec.emergencyName || !rec.emergencyPhone) miss.push('Emergency contact');
     if (!rec.waiver) miss.push('Signed waiver');
     if (isTournament && !rec.events.length) miss.push('Events');
     rec.missing = miss; rec.row = n + 1;
@@ -6230,6 +6229,7 @@ async function runImport() {
   const nFix = recs.filter(r => r.fixId).length, nUpd = recs.filter(r => r.updId).length;
   const nInc = recs.filter(r => !r.fixId && !r.updId && (r.missing || []).length).length;
   if (nInc) S.ui.filter = 'incomplete';       // show who still needs details
+  else if (S.ui.filter === 'incomplete') S.ui.filter = 'all';   // v1.60.1: nobody new needs details — don't keep hiding the list
   closeModal(); toast(`Imported ${plural(done - nFix - nUpd, 'competitor')}${nUpd ? ` · ${plural(nUpd, 'competitor')} updated` : ''}${newEts.length ? ` · ${newEts.map(e => KT.EVENT_TYPES[e].label).join(', ')} now offered` : ''}${nInc ? ` · ${nInc} need details — showing “Missing information”` : ''}${nFix ? ` · ${plural(nFix, 'name')} corrected` : ''}${errors.length ? ` · ${errors.length} rows skipped` : ''}`);
 }
 
