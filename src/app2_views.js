@@ -209,8 +209,8 @@ function regToggles(c) {
 }
 function competitorsHTML() {
   const ev = curEvent(), dir = isDirector(), tour = ev.kind === 'tournament';
-  const canCheckIn = !dir && role() === 'manager' && !S.readOnly;   // v1.65: ring managers / staff check competitors in — nothing else
-  const q = S.ui.q.toLowerCase(), f = !dir && ['unpaid', 'incomplete'].includes(S.ui.filter) ? 'all' : S.ui.filter;   // director-only filters
+  const canCheckIn = !dir && role() === 'manager' && !S.readOnly;   // v1.65 / v1.66: ring managers / staff check in and mark waiver / paid — nothing else
+  const q = S.ui.q.toLowerCase(), f = (!dir && S.ui.filter === 'incomplete') || (!dir && !canCheckIn && S.ui.filter === 'unpaid') ? 'all' : S.ui.filter;   // director / check-in-only filters
   const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'competitor').map(u => u.id));
   // v1.48: list order — name A→Z / Z→A, or grouped by country / region / club (dojo); the person's own view (§72)
   const cs = compSortMode(), cf = { country: 'country', region: 'state', club: 'dojo' }[cs];
@@ -228,7 +228,7 @@ function competitorsHTML() {
   const word = tour ? 'competitor' : 'participant';
   const tools = `<div class="row"><input id="comp-q" class="search" type="search" placeholder="Search name, dojo…" value="${esc(S.ui.q)}" data-input="q" aria-label="Search">
     <select id="comp-s" data-change="comp-sort" aria-label="Sort">${Object.entries(KT.ENT_SORTS).map(([k, l]) => opt(k, k === 'name' ? 'Name A→Z' : k === 'name-desc' ? 'Name Z→A' : 'By ' + l.toLowerCase(), cs)).join('')}</select>
-    <select id="comp-f" data-change="filter" aria-label="Filter">${opt('all', 'All', f)}${opt('out', 'Not checked in', f)}${opt('in', 'Checked in', f)}${dir ? opt('unpaid', 'Not paid', f) : ''}${dir ? opt('incomplete', 'Missing information', f) : ''}${tour && dir ? opt('unplaced', 'No division match', f) : ''}${opt('withdrawn', 'Withdrawn', f)}</select></div>`;
+    <select id="comp-f" data-change="filter" aria-label="Filter">${opt('all', 'All', f)}${opt('out', 'Not checked in', f)}${opt('in', 'Checked in', f)}${dir || canCheckIn ? opt('unpaid', 'Not paid', f) : ''}${dir ? opt('incomplete', 'Missing information', f) : ''}${tour && dir ? opt('unplaced', 'No division match', f) : ''}${opt('withdrawn', 'Withdrawn', f)}</select></div>`;
   const acts = dir ? `<button data-act="import-open">Import CSV</button><button data-act="export-comps">Export CSV</button>${DC.comps.length ? '<button class="danger" data-act="rm-group">Remove group…</button>' : ''}<button class="primary" data-act="comp-new">Add ${word}</button>` : '';
   const fullDob = dir && ev.level === 'International' ? DC.comps.filter(c => c.dob).length : 0;
   const yobNote = fullDob ? `<div class="notice info" style="display:block"><b>${plural(fullDob, 'competitor')}</b> ${fullDob === 1 ? 'has' : 'have'} a full date of birth stored. International events only need the year (ages count on 31 Dec) — keep only what is needed. <button class="sm" data-act="keep-year">Keep year only</button></div>` : '';
@@ -254,7 +254,7 @@ function competitorsHTML() {
       <td>${esc(c.gender === 'F' ? 'W' : c.gender === 'M' ? 'M' : '')}${age != null ? ` · <span class="num">${age}</span>` : ''}</td>
       <td>${esc(KT.rankLabel(c.rank))}</td>
       ${tour ? `<td class="ev-cell"><div class="pill-list">${evs}</div></td>` : ''}
-      <td class="reg-cell">${c.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : dir || canCheckIn ? `<div class="reg-btns"><button class="sm ${c.checkedIn ? '' : 'ghost'}" data-act="checkin" data-id="${esc(c.id)}" aria-pressed="${!!c.checkedIn}">${c.checkedIn ? '✓ Checked in' : 'Check in'}</button>${dir ? regToggles(c) : ''}</div>` : (c.checkedIn ? '<span class="chip ok">Checked in</span>' : '<span class="chip plain">Not checked in</span>')}
+      <td class="reg-cell">${c.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : dir || canCheckIn ? `<div class="reg-btns"><button class="sm ${c.checkedIn ? '' : 'ghost'}" data-act="checkin" data-id="${esc(c.id)}" aria-pressed="${!!c.checkedIn}">${c.checkedIn ? '✓ Checked in' : 'Check in'}</button>${regToggles(c)}</div>` : (c.checkedIn ? '<span class="chip ok">Checked in</span>' : '<span class="chip plain">Not checked in</span>')}
         ${miss.length ? `<span class="chip warn" title="Missing: ${esc(miss.join(', '))}">Incomplete</span>` : ''}</td></tr>`;
   }).join('');
   return fab('comp-new', tour ? 'Add competitor' : 'Add participant') + eventHeader() + yobNote + `<div class="section-h">${tools}<div class="row actions">${acts}</div></div>${foldCtl}

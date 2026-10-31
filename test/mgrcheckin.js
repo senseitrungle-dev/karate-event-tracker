@@ -17,19 +17,29 @@ const path = require('path');
   await p.selectOption('#comp-f', 'all').catch(() => {}); await W(200);
   const row = `#main tr:has(button[data-act="checkin"][data-id="${id}"])`;
   ok('ring manager: a Check in button on each competitor', (await p.$$('#main button[data-act="checkin"]')).length > 10 && !!(await p.$(row)));
-  ok('no Waiver / Paid buttons', !(await p.$('#main button[data-act="comp-waiver"], #main button[data-act="comp-paid"]')));
+  ok('Waiver and Paid buttons too (v1.66)', !!(await p.$(`${row} button[data-act="comp-waiver"]`)) && !!(await p.$(`${row} button[data-act="comp-paid"]`)));
   ok('rows do not open the competitor card', !(await p.$('#main tr[data-act="comp-edit"]')));
   ok('no Import / Export / Remove group / Add competitor', !(await p.$('#main button[data-act="import-open"], #main button[data-act="export-comps"], #main button[data-act="rm-group"], #main button[data-act="comp-new"]')));
   const fopts = await p.$$eval('#comp-f option', o => o.map(x => x.value));
-  ok(`no "Not paid" / "Missing information" / "No division match" filters (${fopts.join(',')})`, !fopts.includes('unpaid') && !fopts.includes('incomplete') && !fopts.includes('unplaced'));
+  ok(`"Not paid" filter, but no "Missing information" / "No division match" (${fopts.join(',')})`, fopts.includes('unpaid') && !fopts.includes('incomplete') && !fopts.includes('unplaced'));
   ok('no Incomplete marks, no contact-details note', !(await p.$('#main .chip.warn:has-text("Incomplete")')) && !/visible to directors only/.test(await p.textContent('#main')));
-  // check in: one tap, no waiver / fee box, only the check-in fields change
+  // waiver / paid toggles
+  await p.click(`${row} button[data-act="comp-waiver"]`); await W(400);
+  ok('tap Waiver → signed', (await rec()).waiver === true);
+  await p.click(`${row} button[data-act="comp-waiver"]`); await W(400);
+  ok('tap again → not signed', (await rec()).waiver === false);
+  // check in someone not fully registered: the box confirms waiver and fee
   await p.click(`${row} button[data-act="checkin"]`); await W(400);
+  ok('check in opens the waiver / fee box', !!(await p.$('#f-checkin')) && !/Missing information/.test(await p.textContent('#f-checkin')));
+  await p.check('#ci-waiver'); await p.check('#ci-paid'); await p.click('#ci-go'); await W(500);
   let c = await rec();
-  ok('one tap checks the competitor in (no waiver / fee box)', c.checkedIn === true && !(await p.$('#f-checkin')) && c.waiver === false && c.feePaid === false && !!c.checkedInAt);
-  ok('the row shows ✓ Checked in', /✓ Checked in/.test(await p.textContent(row)));
+  ok('Check in saves check-in, waiver and paid together', c.checkedIn === true && c.waiver === true && c.feePaid === true && !!c.checkedInAt && !(await p.$('#f-checkin')));
+  ok('the row shows ✓ Checked in · ✓ Waiver · ✓ Paid', /✓ Checked in.*✓ Waiver.*✓ Paid/.test((await p.textContent(row)).replace(/\s+/g, ' ')));
   await p.click(`${row} button[data-act="checkin"]`); await W(400);
-  ok('tap again → not checked in', (await rec()).checkedIn === false);
+  ok('fully registered: one tap checks out again', (await rec()).checkedIn === false && !(await p.$('#f-checkin')));
+  await p.click(`${row} button[data-act="comp-paid"]`); await W(400);
+  await p.selectOption('#comp-f', 'unpaid'); await W(300);
+  ok('"Not paid" filter shows the competitor just marked not paid', (await p.$$('#main button[data-act="checkin"]')).length >= 1 && !!(await p.$(row)));
   // a spectator has no check-in button
   await p.selectOption('#sim-role', 'viewer'); await W(400); await p.click('.tab:has-text("Competitors")').catch(() => {}); await W(300);
   ok('spectator: no Check in buttons', !(await p.$('#main button[data-act="checkin"]')));

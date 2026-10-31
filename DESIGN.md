@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.65.0 Requirements & Design
+# Karate Event Tracker · v1.66.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -978,3 +978,15 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
 - Rules in the Firestore emulator (test/rules-emulator.js, 74 passed): manager and staff check in / out; denied: waiver, fee (even together with check-in), name, creating, deleting, a non-boolean check-in, private details, a non-team user, an archived event; the director still changes anything.
 - test/mgrcheckin.js (View as Ring manager: Check in buttons only; one tap toggles check-in and nothing else; spectator has none).
 - regstatus, unpaid, spectfeed, e2e set and the other browser tests.
+
+## §96 Ring managers also mark waiver signed and fee paid (v1.66.0)
+**Requirement.** Managers can check in; also allow them to mark the waiver and paid status.
+**Design.**
+- Competitors tab for ring managers / staff (§95): the Waiver and Paid / Not paid toggles beside Check in (§94), and the check-in box that confirms waiver and fee for someone not fully registered (its note mentions only "Not paid" for them).
+- The "Not paid" filter is available to them; "Missing information", "No division match", cards, import / export and private details stay director-only.
+- `firestore.rules`: the managers / staff competitor update may change `checkedIn`, `checkedInAt`, `checkedInBy`, `waiver` and `feePaid` only, and `checkedIn`, `waiver`, `feePaid` must be true / false. Status, events, names, the fee amount (private), creating and deleting stay director-only.
+**Redeploy the rules:** `npm run deploy:rules`.
+**Verify.**
+- Firestore emulator (test/rules-emulator.js, 77 passed): manager marks waiver; check-in + fee paid together; staff marks not paid. Denied: a non-boolean waiver, status / other fields, name, create, delete, archived.
+- test/mgrcheckin.js (View as Ring manager: Waiver / Paid buttons; toggles; the check-in box saves all three; "Not paid" filter).
+- regstatus, unpaid, e2e set and the other browser tests. spectfeed is timing-based (reads per cache period): it failed once in the full run and passed 3 / 3 alone.

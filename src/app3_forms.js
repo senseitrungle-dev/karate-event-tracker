@@ -147,7 +147,7 @@ function checkInForm(id) {
     <p class="small">Confirm the registration while checking in:</p>
     <label class="check big-check"><input type="checkbox" name="waiver" id="ci-waiver" ${c.waiver ? 'checked' : ''}> Waiver signed</label>
     <label class="check big-check"><input type="checkbox" name="feePaid" id="ci-paid" ${c.feePaid ? 'checked' : ''}> Fee paid${fee}</label>
-    <p class="tiny muted">You can still check in with either left open; the competitor then shows under “Missing information” / “Not paid”.</p></form>`,
+    <p class="tiny muted">You can still check in with either left open; the competitor then shows under ${isDirector() ? '“Missing information” / ' : ''}“Not paid”.</p></form>`,
     '<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-checkin" id="ci-go">Check in</button>'), { nofocus: true });
 }
 async function saveCheckIn(form) {

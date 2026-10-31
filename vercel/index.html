@@ -778,14 +778,14 @@ tr.grp-tog.shut td { opacity: .8; }
 @media (max-width: 760px) { table.mcards td.reg-cell { grid-column: 1 / -1; } }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.65.0 */
+<script>/* Karate Event Tracker v1.66.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.65.0';
+  const VERSION = '1.66.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -5279,8 +5279,8 @@ function regToggles(c) {
 }
 function competitorsHTML() {
   const ev = curEvent(), dir = isDirector(), tour = ev.kind === 'tournament';
-  const canCheckIn = !dir && role() === 'manager' && !S.readOnly;   // v1.65: ring managers / staff check competitors in — nothing else
-  const q = S.ui.q.toLowerCase(), f = !dir && ['unpaid', 'incomplete'].includes(S.ui.filter) ? 'all' : S.ui.filter;   // director-only filters
+  const canCheckIn = !dir && role() === 'manager' && !S.readOnly;   // v1.65 / v1.66: ring managers / staff check in and mark waiver / paid — nothing else
+  const q = S.ui.q.toLowerCase(), f = (!dir && S.ui.filter === 'incomplete') || (!dir && !canCheckIn && S.ui.filter === 'unpaid') ? 'all' : S.ui.filter;   // director / check-in-only filters
   const unplaced = new Set(DC.assign.unplaced.filter(u => u.kind === 'competitor').map(u => u.id));
   // v1.48: list order — name A→Z / Z→A, or grouped by country / region / club (dojo); the person's own view (§72)
   const cs = compSortMode(), cf = { country: 'country', region: 'state', club: 'dojo' }[cs];
@@ -5298,7 +5298,7 @@ function competitorsHTML() {
   const word = tour ? 'competitor' : 'participant';
   const tools = `<div class="row"><input id="comp-q" class="search" type="search" placeholder="Search name, dojo…" value="${esc(S.ui.q)}" data-input="q" aria-label="Search">
     <select id="comp-s" data-change="comp-sort" aria-label="Sort">${Object.entries(KT.ENT_SORTS).map(([k, l]) => opt(k, k === 'name' ? 'Name A→Z' : k === 'name-desc' ? 'Name Z→A' : 'By ' + l.toLowerCase(), cs)).join('')}</select>
-    <select id="comp-f" data-change="filter" aria-label="Filter">${opt('all', 'All', f)}${opt('out', 'Not checked in', f)}${opt('in', 'Checked in', f)}${dir ? opt('unpaid', 'Not paid', f) : ''}${dir ? opt('incomplete', 'Missing information', f) : ''}${tour && dir ? opt('unplaced', 'No division match', f) : ''}${opt('withdrawn', 'Withdrawn', f)}</select></div>`;
+    <select id="comp-f" data-change="filter" aria-label="Filter">${opt('all', 'All', f)}${opt('out', 'Not checked in', f)}${opt('in', 'Checked in', f)}${dir || canCheckIn ? opt('unpaid', 'Not paid', f) : ''}${dir ? opt('incomplete', 'Missing information', f) : ''}${tour && dir ? opt('unplaced', 'No division match', f) : ''}${opt('withdrawn', 'Withdrawn', f)}</select></div>`;
   const acts = dir ? `<button data-act="import-open">Import CSV</button><button data-act="export-comps">Export CSV</button>${DC.comps.length ? '<button class="danger" data-act="rm-group">Remove group…</button>' : ''}<button class="primary" data-act="comp-new">Add ${word}</button>` : '';
   const fullDob = dir && ev.level === 'International' ? DC.comps.filter(c => c.dob).length : 0;
   const yobNote = fullDob ? `<div class="notice info" style="display:block"><b>${plural(fullDob, 'competitor')}</b> ${fullDob === 1 ? 'has' : 'have'} a full date of birth stored. International events only need the year (ages count on 31 Dec) — keep only what is needed. <button class="sm" data-act="keep-year">Keep year only</button></div>` : '';
@@ -5324,7 +5324,7 @@ function competitorsHTML() {
       <td>${esc(c.gender === 'F' ? 'W' : c.gender === 'M' ? 'M' : '')}${age != null ? ` · <span class="num">${age}</span>` : ''}</td>
       <td>${esc(KT.rankLabel(c.rank))}</td>
       ${tour ? `<td class="ev-cell"><div class="pill-list">${evs}</div></td>` : ''}
-      <td class="reg-cell">${c.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : dir || canCheckIn ? `<div class="reg-btns"><button class="sm ${c.checkedIn ? '' : 'ghost'}" data-act="checkin" data-id="${esc(c.id)}" aria-pressed="${!!c.checkedIn}">${c.checkedIn ? '✓ Checked in' : 'Check in'}</button>${dir ? regToggles(c) : ''}</div>` : (c.checkedIn ? '<span class="chip ok">Checked in</span>' : '<span class="chip plain">Not checked in</span>')}
+      <td class="reg-cell">${c.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : dir || canCheckIn ? `<div class="reg-btns"><button class="sm ${c.checkedIn ? '' : 'ghost'}" data-act="checkin" data-id="${esc(c.id)}" aria-pressed="${!!c.checkedIn}">${c.checkedIn ? '✓ Checked in' : 'Check in'}</button>${regToggles(c)}</div>` : (c.checkedIn ? '<span class="chip ok">Checked in</span>' : '<span class="chip plain">Not checked in</span>')}
         ${miss.length ? `<span class="chip warn" title="Missing: ${esc(miss.join(', '))}">Incomplete</span>` : ''}</td></tr>`;
   }).join('');
   return fab('comp-new', tour ? 'Add competitor' : 'Add participant') + eventHeader() + yobNote + `<div class="section-h">${tools}<div class="row actions">${acts}</div></div>${foldCtl}
@@ -6019,7 +6019,7 @@ function checkInForm(id) {
     <p class="small">Confirm the registration while checking in:</p>
     <label class="check big-check"><input type="checkbox" name="waiver" id="ci-waiver" ${c.waiver ? 'checked' : ''}> Waiver signed</label>
     <label class="check big-check"><input type="checkbox" name="feePaid" id="ci-paid" ${c.feePaid ? 'checked' : ''}> Fee paid${fee}</label>
-    <p class="tiny muted">You can still check in with either left open; the competitor then shows under “Missing information” / “Not paid”.</p></form>`,
+    <p class="tiny muted">You can still check in with either left open; the competitor then shows under ${isDirector() ? '“Missing information” / ' : ''}“Not paid”.</p></form>`,
     '<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-checkin" id="ci-go">Check in</button>'), { nofocus: true });
 }
 async function saveCheckIn(form) {
@@ -9490,12 +9490,12 @@ const ACT = {
     closeModal(); await guard(async () => { await S.store.del(P.doc(S.evId, 'competitors', id)); await S.store.del(P.pv(S.evId, id)); }, 'Deleted');
   },
   checkin: (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; if (!c) return;
-    const dir = isDirector(); if (!dir && role() !== 'manager') return;
-    if (dir && !c.checkedIn && (!c.waiver || !c.feePaid)) { checkInForm(c.id); return; }   // v1.64: directors confirm waiver / fee while checking in
-    // v1.65: ring managers / staff change only the check-in (the database rules allow nothing else)
+    if (!isDirector() && role() !== 'manager') return;
+    if (!c.checkedIn && (!c.waiver || !c.feePaid)) { checkInForm(c.id); return; }   // v1.64 / v1.66: confirm waiver / fee while checking in (directors and managers)
+    // v1.65: ring managers / staff change only check-in, waiver and paid (the database rules allow nothing else)
     guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { checkedIn: !c.checkedIn, checkedInAt: new Date().toISOString(), checkedInBy: S.myId || '' })); },
-  'comp-waiver': (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { waiver: !c.waiver })); },
-  'comp-paid': (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { feePaid: !c.feePaid })); },
+  'comp-waiver': (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; if (!c || (!isDirector() && role() !== 'manager')) return; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { waiver: !c.waiver })); },
+  'comp-paid': (el, e) => { e.stopPropagation(); const c = DC.compBy[el.dataset.id]; if (!c || (!isDirector() && role() !== 'manager')) return; guard(() => S.store.update(P.doc(S.evId, 'competitors', c.id), { feePaid: !c.feePaid })); },
   'import-open': () => { S.ui.impName = ''; importForm(); },
   'imp-preview': () => { const el = $('#imp-preview'); el.innerHTML = importPreviewHTML(); try { el.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* old browsers */ } },
   'imp-run': () => runImport(),

@@ -129,11 +129,11 @@ service cloud.firestore {
         allow read: if evMember(e);
         allow write: if evDirector(e) && open_(e);
       }
-      // v1.65: ring managers and staff check competitors in — they may change only the check-in fields, nothing else
+      // v1.65 / v1.66: ring managers and staff check competitors in and mark the waiver / fee — they may change only these fields
       match /competitors/{c} {
         allow update: if open_(e) && signedIn() && (request.auth.uid in ev(e).get('managerIds', []) || request.auth.uid in ev(e).get('staffIds', []))
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkedIn', 'checkedInAt', 'checkedInBy'])
-          && request.resource.data.checkedIn is bool;
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkedIn', 'checkedInAt', 'checkedInBy', 'waiver', 'feePaid'])
+          && request.resource.data.get('checkedIn', false) is bool && request.resource.data.get('waiver', false) is bool && request.resource.data.get('feePaid', false) is bool;
       }
       // an invited ring manager adds only themself to the ring named in their invite
       match /rings/{r} {
