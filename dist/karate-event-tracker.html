@@ -758,14 +758,14 @@ tr.grp-tog.shut td { opacity: .8; }
 .pr-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.60.1 */
+<script>/* Karate Event Tracker v1.61.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.60.1';
+  const VERSION = '1.61.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -822,7 +822,7 @@ const KT = (function () {
     const et = EVENT_TYPES[dv.eventType];
     const who = dv.belt === 'black' ? 'Black Belt' : dv.belt === 'open' ? 'Open Rank' : 'Kyu';   // v1.60: open rank = kyu and dan together
     const grp = dv.group ? ' ' + dv.group : '';
-    return `${who}${grp} ${dv.open ? 'Open' : GENDERS[dv.gender] || ''} ${et ? et.label : ''}`.replace(/\s+/g, ' ').trim();
+    return `${who}${grp} ${dv.open ? (dv.belt === 'open' ? 'Mixed' : 'Open') : GENDERS[dv.gender] || ''} ${et ? et.label : ''}`.replace(/\s+/g, ' ').trim();   // v1.61: not "Open Rank Open …"
   }
   /** WTKF defaults: kumite 1:30 with 1:30 Kettei-sen; women's individual kumite (and fukugo kumite) = Ko-go. */
   function defaultScoring(eventType) {
@@ -890,10 +890,11 @@ const KT = (function () {
   ];
   const NCR_KYU = { id: 'ncr-kyu', label: 'NCR kyu rules (v3.3)', source: 'Traditional Karate North Central Region (AAKF) — Tournament Rules for Kyu Rank Competitors, v3.3, Oct 2022',
     levels: NCR_LEVELS, events: ['IKATA', 'IKUMITE', 'TKATA', 'ENBU'], ages: { youth: ['Youth', null, 17], adult: ['Adult', 18, null] }, poolSize: 6 };
-  /** v1.60: Ki-tei Kata divisions — open ranks (kyu and dan), all ages, women and men, single elimination, judges' flags. */
+  /** v1.60 / v1.61: the Ki-tei Kata division — one mixed division (any gender), open ranks (kyu and dan), all ages, single elimination, judges' flags. */
   function kiteiDivisions() {
-    return ['F', 'M'].map((g, i) => { const dv = { eventType: 'KITEI', gender: g, belt: 'open', group: '', minAge: null, maxAge: null, minRank: 'k10', maxRank: 'd10', format: 'SE', bronze: 'two', reset: false,
-      scoring: Object.assign(defaultScoring('KITEI'), { method: 'flags', judges: 5 }), order: 9000 + i }; dv.name = divisionName(dv); return dv; });
+    const dv = { eventType: 'KITEI', gender: 'X', open: true, belt: 'open', group: '', minAge: null, maxAge: null, minRank: 'k10', maxRank: 'd10', format: 'SE', bronze: 'two', reset: false,
+      scoring: Object.assign(defaultScoring('KITEI'), { method: 'flags', judges: 5 }), order: 9000 };
+    dv.name = divisionName(dv); return [dv];
   }
   /** NCR kyu divisions. o: { byAge: true, byGender: true, format: 'RR'|'DE', judges: 3|5, events: [...] } */
   function ncrDivisions(o) {
@@ -5343,7 +5344,7 @@ function divisionsHTML() {
   const ev = curEvent();
   const f = S.ui.divFilter;
   const list = DC.divs.filter(d => !f || d.eventType === f);
-  const acts = `<button data-act="div-preset" data-id="wtkf-worlds-2026" title="Divisions and rules from the WTKF 2026 Information Package">WTKF Worlds 2026 rules</button><button data-act="div-ncr" title="Kyu divisions by the North Central Region tournament rules v3.3">Kyu rules (NCR)</button><button data-act="div-std">Add black-belt divisions</button><button data-act="div-kyu">Add kyu divisions</button>${!DC.divs.some(d => d.eventType === 'KITEI') ? '<button data-act="div-kitei" title="Ki-tei Kata: open ranks (kyu and dan), women and men, single elimination, judges\' flags">Add Ki-tei divisions</button>' : ''}<button data-act="div-new">New division</button>
+  const acts = `<button data-act="div-preset" data-id="wtkf-worlds-2026" title="Divisions and rules from the WTKF 2026 Information Package">WTKF Worlds 2026 rules</button><button data-act="div-ncr" title="Kyu divisions by the North Central Region tournament rules v3.3">Kyu rules (NCR)</button><button data-act="div-std">Add black-belt divisions</button><button data-act="div-kyu">Add kyu divisions</button>${!DC.divs.some(d => d.eventType === 'KITEI') ? '<button data-act="div-kitei" title="Ki-tei Kata: one mixed division, open ranks (kyu and dan), single elimination, judges\' flags">Add Ki-tei division</button>' : DC.divs.some(d => d.eventType === 'KITEI' && !d.open && !S.d.brackets[d.id]) ? '<button data-act="div-kitei" title="Replace the women / men Ki-tei divisions with one mixed division">Make Ki-tei one mixed division</button>' : ''}<button data-act="div-new">New division</button>
     <button data-act="print-open" title="One page per ${esc(({ International: 'country', National: 'region' })[ev.level] || 'club')} with all its divisions — Letter or A4">🖨 Print by ${esc(({ International: 'country', National: 'region' })[ev.level] || 'club')}</button>
     <button class="primary" data-act="draw-all">Draw all ready</button>`;
   if (!DC.divs.length) return eventHeader() + `<div class="card empty"><div class="mark-lg"></div><h2>No divisions yet</h2>
@@ -6532,10 +6533,14 @@ async function applyNcr(form) {
 }
 /** v1.60: add Ki-tei Kata divisions (open ranks, women and men) and offer the event. */
 async function addKiteiDivisions() {
-  const have = new Set(DC.divs.filter(d => d.eventType === 'KITEI').map(d => d.gender)); let added = 0;
-  for (const d of KT.kiteiDivisions()) { if (have.has(d.gender)) continue; d.ringId = ''; d.ringOrder = d.order; if (await guard(() => S.store.set(P.doc(S.evId, 'divisions', uid()), d))) added++; }
+  // v1.61: one mixed division; separate women / men Ki-tei divisions (v1.60) that are not drawn yet are replaced
+  const ki = DC.divs.filter(d => d.eventType === 'KITEI'), split = ki.filter(d => !d.open && !S.d.brackets[d.id]);
+  if (ki.some(d => !d.open && S.d.brackets[d.id])) { toast('A women / men Ki-tei division is already drawn — clear its bracket first, or keep it.', true); return; }
+  for (const d of split) await guard(() => S.store.del(P.doc(S.evId, 'divisions', d.id)));
+  let added = 0;
+  if (!ki.some(d => d.open)) for (const d of KT.kiteiDivisions()) { d.ringId = (split[0] || {}).ringId || ''; d.ringOrder = d.order; if (await guard(() => S.store.set(P.doc(S.evId, 'divisions', uid()), d))) added++; }
   await offerEvents(['KITEI']);
-  toast(added ? `Ki-tei Kata: ${plural(added, 'division')} added (open ranks, women and men)` : 'Ki-tei Kata divisions already exist');
+  toast(added ? `Ki-tei Kata: one mixed division added (open ranks, any gender)${split.length ? ` — replaces ${plural(split.length, 'division')}` : ''}` : split.length ? 'Ki-tei Kata is now one mixed division' : 'The Ki-tei Kata division already exists');
 }
 /** Make sure the event offers these events (kept in the standard order). */
 async function offerEvents(ets) {
@@ -8998,7 +9003,7 @@ function printLines(ids, did) {
 function printSection(b) {
   const ev = PRINT_EV[b.et] || b.et, enbu = b.et === 'ENBU';
   const cols = (enbu ? [['X', 'enbu W/M'], ['M', 'enbu M/M'], ['F', 'enbu W/W']] : [['F', 'women'], ['M', 'men'], ['X', 'mixed']])
-    .filter(([k], i) => b[k].length || (!enbu && i < 2)).map(([k, l]) => ({ l, lines: printLines(b[k], b.did[k]) }));
+    .filter(([k], i) => b[k].length || (!enbu && i < 2 && (b.F.length || b.M.length || !b.X.length))).map(([k, l]) => ({ l, lines: printLines(b[k], b.did[k]) }));   // a mixed-only event (Ki-tei): one list
   let html = '';
   for (let i = 0; i < cols.length; i += 2) {
     const L = cols[i], R = cols[i + 1] || { l: '', lines: [] }, rows = Math.max(L.lines.length, R.lines.length);

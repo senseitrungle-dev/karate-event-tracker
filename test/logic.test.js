@@ -818,9 +818,12 @@ t('printGroups: per country, age groups, paired event blocks (v1.56)', () => {
 t('Ki-tei Kata: separate event, open-rank divisions (v1.60)', () => {
   assert.equal(KT.EVENT_TYPES.KITEI.label, 'Ki-tei Kata'); assert.equal(KT.EVENT_TYPES.KITEI.kind, 'kata'); assert.equal(KT.EVENT_TYPES.KITEI.team, false);
   assert.ok(KT.EVENT_ORDER.includes('KITEI') && !KT.STD_EVENTS.includes('KITEI') && KT.STD_EVENTS.length === 6);
-  const [w, m] = KT.kiteiDivisions();
-  assert.equal(w.name, 'Open Rank Women Ki-tei Kata'); assert.equal(m.gender, 'M'); assert.equal(w.format, 'SE'); assert.equal(w.scoring.method, 'flags');
+  const ks = KT.kiteiDivisions(), w = ks[0];   // v1.61: one mixed division
+  assert.equal(ks.length, 1); assert.equal(w.name, 'Open Rank Mixed Ki-tei Kata'); assert.ok(w.open); assert.equal(w.format, 'SE'); assert.equal(w.scoring.method, 'flags');
   assert.ok(KT.fitsDivision(w, [18], ['k10']) && KT.fitsDivision(w, [40], ['d3']) && KT.fitsDivision(w, [12], ['k5']));   // white belt to dan, any age
+  w.id = 'k';
+  assert.deepEqual(KT.candidateDivisions({ gender: 'F', dob: '2000-01-01', rank: 'k10' }, 'KITEI', [w], '2026-10-31').map(d => d.id), ['k']);
+  assert.deepEqual(KT.candidateDivisions({ gender: 'M', dob: '1990-01-01', rank: 'd2' }, 'KITEI', [w], '2026-10-31').map(d => d.id), ['k']);
   assert.ok(KT.PRINT_ORDER.includes('KITEI'));
 });
 t('3rd-place match always before the championship (v1.39)', () => {

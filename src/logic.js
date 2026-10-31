@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.60.1';
+  const VERSION = '1.61.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -61,7 +61,7 @@ const KT = (function () {
     const et = EVENT_TYPES[dv.eventType];
     const who = dv.belt === 'black' ? 'Black Belt' : dv.belt === 'open' ? 'Open Rank' : 'Kyu';   // v1.60: open rank = kyu and dan together
     const grp = dv.group ? ' ' + dv.group : '';
-    return `${who}${grp} ${dv.open ? 'Open' : GENDERS[dv.gender] || ''} ${et ? et.label : ''}`.replace(/\s+/g, ' ').trim();
+    return `${who}${grp} ${dv.open ? (dv.belt === 'open' ? 'Mixed' : 'Open') : GENDERS[dv.gender] || ''} ${et ? et.label : ''}`.replace(/\s+/g, ' ').trim();   // v1.61: not "Open Rank Open …"
   }
   /** WTKF defaults: kumite 1:30 with 1:30 Kettei-sen; women's individual kumite (and fukugo kumite) = Ko-go. */
   function defaultScoring(eventType) {
@@ -129,10 +129,11 @@ const KT = (function () {
   ];
   const NCR_KYU = { id: 'ncr-kyu', label: 'NCR kyu rules (v3.3)', source: 'Traditional Karate North Central Region (AAKF) — Tournament Rules for Kyu Rank Competitors, v3.3, Oct 2022',
     levels: NCR_LEVELS, events: ['IKATA', 'IKUMITE', 'TKATA', 'ENBU'], ages: { youth: ['Youth', null, 17], adult: ['Adult', 18, null] }, poolSize: 6 };
-  /** v1.60: Ki-tei Kata divisions — open ranks (kyu and dan), all ages, women and men, single elimination, judges' flags. */
+  /** v1.60 / v1.61: the Ki-tei Kata division — one mixed division (any gender), open ranks (kyu and dan), all ages, single elimination, judges' flags. */
   function kiteiDivisions() {
-    return ['F', 'M'].map((g, i) => { const dv = { eventType: 'KITEI', gender: g, belt: 'open', group: '', minAge: null, maxAge: null, minRank: 'k10', maxRank: 'd10', format: 'SE', bronze: 'two', reset: false,
-      scoring: Object.assign(defaultScoring('KITEI'), { method: 'flags', judges: 5 }), order: 9000 + i }; dv.name = divisionName(dv); return dv; });
+    const dv = { eventType: 'KITEI', gender: 'X', open: true, belt: 'open', group: '', minAge: null, maxAge: null, minRank: 'k10', maxRank: 'd10', format: 'SE', bronze: 'two', reset: false,
+      scoring: Object.assign(defaultScoring('KITEI'), { method: 'flags', judges: 5 }), order: 9000 };
+    dv.name = divisionName(dv); return [dv];
   }
   /** NCR kyu divisions. o: { byAge: true, byGender: true, format: 'RR'|'DE', judges: 3|5, events: [...] } */
   function ncrDivisions(o) {
