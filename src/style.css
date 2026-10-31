@@ -750,3 +750,13 @@ tr.grp-tog.shut td { opacity: .8; }
 .pr-preview .pv-sheet { margin: 0 auto 12px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,.18); background: #fff; }
 .pr-out { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .pr-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+/* v1.62: mat card queue grouped by division — header bar per division, strong break between divisions */
+.queue .q-grp { border: 1px solid var(--line-2); border-left: 4px solid var(--ai); border-radius: 10px; padding: 0 10px 6px; margin-top: 10px; background: var(--panel); }
+.queue .q-grp.cont { border-left-color: var(--ok); }
+.queue .q-grp + .q-grp { margin-top: 14px; }
+.queue .q-div { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 -10px 2px; padding: 6px 10px; background: var(--paper); border-bottom: 1px solid var(--line-2); border-radius: 9px 9px 0 0; font-weight: 700; font-size: .82rem; }
+.queue .q-div-name { min-width: 0; overflow-wrap: anywhere; margin-right: auto; }
+.queue .q-div-n { font-weight: 600; font-size: .72rem; color: var(--ink-3); white-space: nowrap; }
+.queue .q-tag { font-size: .66rem; padding: 1px 7px; }
+.queue .q-grp .q:first-of-type { border-top: 0; }
+.queue .q-sub { margin-top: -4px; }

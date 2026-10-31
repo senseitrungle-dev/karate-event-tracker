@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.61.0 Requirements & Design
+# Karate Event Tracker · v1.62.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -937,3 +937,14 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
 - Divisions tab: "Add Ki-tei division" while there is none. If an event has the women / men Ki-tei divisions from v1.60, the button "Make Ki-tei one mixed division" deletes them (only if not drawn — a drawn one is kept and the director is told to clear its bracket first) and adds the mixed one, keeping their ring.
 - Printout: an event with only mixed entrants (Ki-tei) prints one list instead of empty women / men columns.
 **Verify.** logic.test (one division, open, the name, a white-belt woman and a 2nd-dan man both placed in it). formimport.js (Add Ki-tei division → Open Rank Mixed Ki-tei Kata; 2nd kyu and white belt men placed in it; an event with the v1.60 women / men divisions gets "Make Ki-tei one mixed division", which leaves one mixed division). divprint, compcard, imports, demos, e2e set, mobile.
+
+## §92 Mat card: the queue grouped by division, with a strong break between divisions (v1.62.0)
+**Requirement.** On the mat card, separate the matches of one division strongly from the next, so it is easy to tell when a division is done and the next division starts.
+**Design.**
+- `queueGroupsHTML` groups the mat card's "Up next" list into consecutive runs of the same division. Each run is a framed block (4 px coloured left edge, border, rounded) with a header bar: the division name, a tag, and "N left" (how many of that division are still waiting on this ring, not just the ones shown). Consecutive blocks have a gap.
+- Tags:
+  - the division of the match / performance on the mat: "on the mat · continues" (green edge);
+  - the first other division: "Next division" (red tag), or "First up" when nothing is on the mat.
+  So when the "continues" block disappears, that division is done on this ring and the "Next division" block is what starts.
+- The division name is in the header only; each match keeps its round / pool line (`queueItemHTML`, the former item markup). Spectator ring boards (three items) are grouped the same way.
+**Verify.** test/matgroups.js (local demo, Ring 2: one header per division and none repeated; "N left" ≥ the matches shown; "First up" with nothing on the mat; no division name on the match lines; framed blocks; after putting a match on the mat its division shows "on the mat · continues" and the next "Next division"; phone fit). ringcall, matnow, matready, bracketback, prevkata, rankmark, public, ringdrag, e2e set.
