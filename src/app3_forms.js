@@ -139,6 +139,21 @@ async function saveComp(form) {
   if (ok) closeModal();
 }
 
+/** v1.64: check in someone whose waiver or fee is not marked yet — confirm both in the same step. */
+function checkInForm(id) {
+  const c = DC.compBy[id]; if (!c) return;
+  const fee = c.feeAmount ? ` <span class="muted">(${esc(c.feeAmount)})</span>` : '';
+  openModal(sheet(`Check in · ${esc(c.firstName)} ${esc(c.lastName)}`, `<form id="f-checkin" data-form="checkin" data-id="${esc(id)}" class="stack">
+    <p class="small">Confirm the registration while checking in:</p>
+    <label class="check big-check"><input type="checkbox" name="waiver" id="ci-waiver" ${c.waiver ? 'checked' : ''}> Waiver signed</label>
+    <label class="check big-check"><input type="checkbox" name="feePaid" id="ci-paid" ${c.feePaid ? 'checked' : ''}> Fee paid${fee}</label>
+    <p class="tiny muted">You can still check in with either left open; the competitor then shows under “Missing information” / “Not paid”.</p></form>`,
+    '<button data-act="modal-close">Cancel</button><button class="primary" type="submit" form="f-checkin" id="ci-go">Check in</button>'), { nofocus: true });
+}
+async function saveCheckIn(form) {
+  const v = fd(form), id = form.dataset.id;
+  if (await guard(() => S.store.update(P.doc(S.evId, 'competitors', id), { checkedIn: true, checkedInAt: new Date().toISOString(), checkedInBy: S.myId || '', waiver: !!v.waiver, feePaid: !!v.feePaid }), 'Checked in')) closeModal();
+}
 function importForm() {
   openModal(sheet('Import competitors', `<p class="small">Paste CSV text or choose a .csv file. It needs a row of column headings (it doesn’t have to be the first row) with at least a name column. Every recognised column is imported; anything missing is listed and the competitors are marked <b>Incomplete</b> so the details can be entered later. Check shows everything before you import. Recognised columns:</p>
     <p class="tiny mono muted">first_name, last_name (or one name column: “Last, First” / “First Last”), gender, dob, rank, dojo, state, country, email, phone, emergency_name, emergency_phone, waiver, paid, events</p>

@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.62.0 Requirements & Design
+# Karate Event Tracker · v1.65.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -948,3 +948,33 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
   So when the "continues" block disappears, that division is done on this ring and the "Next division" block is what starts.
 - The division name is in the header only; each match keeps its round / pool line (`queueItemHTML`, the former item markup). Spectator ring boards (three items) are grouped the same way.
 **Verify.** test/matgroups.js (local demo, Ring 2: one header per division and none repeated; "N left" ≥ the matches shown; "First up" with nothing on the mat; no division name on the match lines; framed blocks; after putting a match on the mat its division shows "on the mat · continues" and the next "Next division"; phone fit). ringcall, matnow, matready, bracketback, prevkata, rankmark, public, ringdrag, e2e set.
+
+## §93 Competitors filter "Not paid" (v1.63.0)
+**Requirement.** Competitor card: add the filter "Not paid" to the list (Not checked in, Checked in, …).
+**Design.** The Competitors filter has "Not paid" after "Checked in" (directors only; payment is director information). It lists competitors whose fee is not marked paid, leaving out withdrawn ones. It works with search and the sort / groups. Like the other filters it is the person's own view (§72), and is remembered. For a non-director (e.g. a director viewing as a spectator) a remembered "Not paid" or "Missing information" filter counts as "All".
+**Verify.** test/unpaid.js (local demo with two unpaid, one withdrawn: "Not paid" right after "Checked in"; shows only the unpaid one not withdrawn; "1 competitor shown"; remembered after reload; spectators have no "Not paid" and an unfiltered list). e2e set, imports, sort / fold tests, mobile.
+
+## §94 Competitors: registration status beside Check in (v1.64.0)
+**Requirement.** On the Competitors list, show the registration status (waiver signed, fee paid) for each competitor like Checked in, so that when a competitor checks in the other statuses can be confirmed at the same time if not already done.
+**Design.**
+- Each row (directors) shows Check in, Waiver and Paid / Not paid as toggle buttons (`regToggles`): green "✓ Waiver" / "✓ Paid" when done, amber "Waiver" / "Not paid" when not. One tap changes the competitor record (`waiver`, `feePaid`); the card does not open.
+- Check in: someone whose waiver or fee is not marked opens a small check-in box (`checkInForm`) with "Waiver signed" and "Fee paid" (with the fee amount when known) ticks preset from the record. "Check in" saves `checkedIn` together with both. A fully registered competitor is still checked in (or out) with one tap.
+- Phone: the status buttons span the full card width (one line). Non-directors still see only the Checked in chip (payment is director information).
+**Verify.** test/regstatus.js (desktop and 390 px: Check in · Waiver · Not paid; Waiver toggles on / off without opening the card; Check in on someone not registered opens the box, ticking both and Check in saves all three; the row shows ✓ Checked in · ✓ Waiver · ✓ Paid; a fully registered competitor is checked in with one tap; no sideways scroll). spectfeed (check-in), unpaid, golive, e2e set, mobile.
+
+## §95 Ring managers check competitors in — nothing else (v1.65.0)
+**Requirement.** Make only the check-in process accessible to managers, so they can check competitors in, with no access to other information.
+**Design.**
+- **App** (Competitors tab):
+  - A ring manager / staff member (`role() === 'manager'`) gets the Check in button on each row and nothing else: no Waiver / Paid toggles; rows do not open the competitor card; no Import / Export / Remove group / Add competitor; no "Not paid", "Missing information" or "No division match" filters; no Incomplete marks.
+  - Their tap only toggles `checkedIn` (with `checkedInAt` / `checkedInBy`); the director's waiver / fee box (§94) is for directors only. Spectators get no button.
+  - Private details (birth date, contacts, notes in `pv/`) were already director-only in the database.
+- **Database** (`firestore.rules`): new `events/{e}/competitors/{c}` update rule.
+  - Allowed for the event's managers (`managerIds`) and staff (`staffIds`) while the event is open, when the update changes only `checkedIn` (a boolean), `checkedInAt` and `checkedInBy`.
+  - Any other field, creating or deleting a competitor stays director-only.
+  - Note: waiver / paid and the competitor's public fields are on the competitor record that team members can read; the app does not show waiver / paid to managers.
+**Redeploy the rules:** `npm run deploy:rules`.
+**Verify.**
+- Rules in the Firestore emulator (test/rules-emulator.js, 74 passed): manager and staff check in / out; denied: waiver, fee (even together with check-in), name, creating, deleting, a non-boolean check-in, private details, a non-team user, an archived event; the director still changes anything.
+- test/mgrcheckin.js (View as Ring manager: Check in buttons only; one tap toggles check-in and nothing else; spectator has none).
+- regstatus, unpaid, spectfeed, e2e set and the other browser tests.
