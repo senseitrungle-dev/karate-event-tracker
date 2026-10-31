@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.60.0 Requirements & Design
+# Karate Event Tracker · v1.60.1 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -920,3 +920,12 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
 - Printout (§85): "ki-tei kata" after kumite team (`PRINT_ORDER`).
 - Fix (v1.59 regression): the competitor card read "07/27/20" while the year was still being typed as 2020. Two-digit years are now read by imports only (`splitDate(s, shortYear)`); the card still asks for 4 digits.
 **Verify.** logic.test (KITEI event, STD_EVENTS, Open Rank divisions fit white belt to dan at any age, print order). test/formimport.js (Kitei column → Ki-tei Kata for the two who answered; the event turned on; "Add Ki-tei divisions" → Open Rank Women / Men; 2nd kyu and white belt placed in Open Rank Men; re-import adds Ki-tei). combine.js (typing the year), the full e2e set and the other browser tests.
+
+## §90 Emergency contact and phone optional (v1.60.1)
+**Requirement.** The emergency contact and emergency phone are optional and are not flagged as incomplete.
+**Design.**
+- `KT.validateCompetitor` no longer lists "Emergency contact", so the Incomplete chip, the "Missing information" filter and the go-live competitor checks ignore it.
+- The competitor card labels both fields "(optional)" (no required mark).
+- Import: a file without emergency columns no longer lists "Emergency contact" under "Not in the file — enter later", and rows without them are not "details to enter later". The fields are still imported (and exported) when present.
+- After an import where nobody needs details, the Competitors list leaves the "Missing information" filter. Otherwise competitors updated to complete (§88) would vanish from the filtered list.
+**Verify.** logic.test (a competitor without emergency contact has no problems). lenientimport.js (not listed as missing). formimport.js (form rows with phone but no emergency contact: only the row without a waiver needs details; re-import placement visible). e2e set, imports, demos, mobile.

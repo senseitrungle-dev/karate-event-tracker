@@ -4,7 +4,7 @@
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.60.0';
+  const VERSION = '1.60.1';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -323,7 +323,7 @@ const KT = (function () {
     else { const a = c.dob ? ageOn(c.dob, asOf) : ageFromYear(c.birthYear, asOf); if (a == null || a < 3 || a > 110) p.push('Valid date of birth'); }
     if (!RANK_BY[c.rank]) p.push('Rank');
     if (!c.dojo) p.push('Dojo / club');
-    if (!c.emergencyName || !c.emergencyPhone) p.push('Emergency contact');
+    // v1.60.1: the emergency contact and phone are optional (not flagged as incomplete)
     if (!c.waiver) p.push('Signed waiver');
     return p;
   }

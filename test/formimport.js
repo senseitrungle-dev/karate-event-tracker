@@ -28,6 +28,7 @@ const path = require('path');
   ok('columns found include Waiver (paragraph heading), Events and Team Kata (question heading)', /Waiver ← Waiver By filling out this form and in…/.test(t) && /Events/.test(t) && /Team Kata ← Team Kata \(Name/.test(t));
   ok('Kitei Kata column read as the Ki-tei Kata event (v1.60); Timestamp not used', /Ki-tei Kata ← Kitei Kata/.test(t) && /Not used.*Timestamp/.test(t) && !/Not used.*Kitei/.test(t));
   ok('dates read month-day-year (11/24/07 can only be month first)', /month-day-year|month first|MM/i.test(t));
+  ok('emergency contact optional (v1.60.1): not listed as missing; only Dan (no waiver) has details to enter later', !/Not in the file — enter later.*Emergency/.test(t) && /4 competitors ready to import — 1 with details to enter later/.test(t));
   await p.click('button[data-act="imp-run"]'); await p.waitForTimeout(1500);
   const cs = (await comps()).filter(c => /^Test/.test(c.lastName)), by = Object.fromEntries(cs.map(c => [c.firstName, c]));
   ok(`4 imported (${cs.length})`, cs.length === 4 && (await comps()).length === n0 + 4);

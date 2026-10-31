@@ -23,7 +23,7 @@ const path = require('path');
   const t = (await p.textContent('#imp-preview')).replace(/\s+/g, ' ');
   console.log('  ', t.slice(0, 420));
   ok('columns found: Name, Rank ← Belt, Dojo ← Club, Emergency phone ← Parent Phone', /Columns found \(4\)/.test(t) && /Rank ← Belt/.test(t) && /Dojo \/ club ← Club/.test(t) && /Emergency phone ← Parent Phone/.test(t));
-  ok('missing columns listed for later: Gender, Date of birth, Emergency contact, Waiver, Events', ['Gender', 'Date of birth', 'Emergency contact', 'Waiver', 'Events'].every(c => new RegExp('Not in the file — enter later.*' + c).test(t)));
+  ok('missing columns listed for later: Gender, Date of birth, Waiver, Events (emergency contact is optional — v1.60.1)', ['Gender', 'Date of birth', 'Waiver', 'Events'].every(c => new RegExp('Not in the file — enter later.*' + c).test(t)) && !/Not in the file — enter later.*Emergency contact/.test(t));
   ok('unrecognised column shown as not used', /Not used .*T-shirt size/.test(t));
   ok('3 named rows ready, all 3 with details to enter later; the row without a name reported', /3 competitors ready/.test(t) && /3 with details to enter later/.test(t) && /Row 5: no name — not imported/.test(t));
   const rows = await p.$$eval('#imp-preview table.imp-tbl tbody tr', r => r.map(x => [...x.cells].map(c => c.textContent.trim())));
