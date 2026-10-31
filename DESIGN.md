@@ -1,4 +1,4 @@
-# Karate Event Tracker · v1.63.0 Requirements & Design
+# Karate Event Tracker · v1.64.0 Requirements & Design
 
 ## 1. Requirements (from project doc + decisions of 2026-09-28)
 R1  Web app usable on phone, tablet, computer (responsive, touch-friendly); portable to native later (plain JS, no framework, logic isolated from UI).
@@ -953,3 +953,11 @@ Full browser regression: all 55 browser test files pass (access.js and publink.j
 **Requirement.** Competitor card: add the filter "Not paid" to the list (Not checked in, Checked in, …).
 **Design.** The Competitors filter has "Not paid" after "Checked in" (directors only; payment is director information). It lists competitors whose fee is not marked paid, leaving out withdrawn ones. It works with search and the sort / groups. Like the other filters it is the person's own view (§72), and is remembered. For a non-director (e.g. a director viewing as a spectator) a remembered "Not paid" or "Missing information" filter counts as "All".
 **Verify.** test/unpaid.js (local demo with two unpaid, one withdrawn: "Not paid" right after "Checked in"; shows only the unpaid one not withdrawn; "1 competitor shown"; remembered after reload; spectators have no "Not paid" and an unfiltered list). e2e set, imports, sort / fold tests, mobile.
+
+## §94 Competitors: registration status beside Check in (v1.64.0)
+**Requirement.** On the Competitors list, show the registration status (waiver signed, fee paid) for each competitor like Checked in, so that when a competitor checks in the other statuses can be confirmed at the same time if not already done.
+**Design.**
+- Each row (directors) shows Check in, Waiver and Paid / Not paid as toggle buttons (`regToggles`): green "✓ Waiver" / "✓ Paid" when done, amber "Waiver" / "Not paid" when not. One tap changes the competitor record (`waiver`, `feePaid`); the card does not open.
+- Check in: someone whose waiver or fee is not marked opens a small check-in box (`checkInForm`) with "Waiver signed" and "Fee paid" (with the fee amount when known) ticks preset from the record. "Check in" saves `checkedIn` together with both. A fully registered competitor is still checked in (or out) with one tap.
+- Phone: the status buttons span the full card width (one line). Non-directors still see only the Checked in chip (payment is director information).
+**Verify.** test/regstatus.js (desktop and 390 px: Check in · Waiver · Not paid; Waiver toggles on / off without opening the card; Check in on someone not registered opens the box, ticking both and Check in saves all three; the row shows ✓ Checked in · ✓ Waiver · ✓ Paid; a fully registered competitor is checked in with one tap; no sideways scroll). spectfeed (check-in), unpaid, golive, e2e set, mobile.

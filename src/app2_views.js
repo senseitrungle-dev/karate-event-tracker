@@ -202,6 +202,11 @@ function compSortMode() {
   if (KT.ENT_SORTS[S.ui.compSort]) return S.ui.compSort;
   const lv = (curEvent() || {}).level; return lv === 'International' ? 'country' : lv === 'National' ? 'region' : 'club';
 }
+/** v1.64: registration status beside Check in — waiver signed and fee paid, one tap each (directors). */
+function regToggles(c) {
+  const b = (act, on, yes, no) => `<button class="sm reg ${on ? 'on' : 'ghost'}" data-act="${act}" data-id="${esc(c.id)}" aria-pressed="${!!on}">${on ? '✓ ' + yes : no}</button>`;
+  return b('comp-waiver', c.waiver, 'Waiver', 'Waiver') + b('comp-paid', c.feePaid, 'Paid', 'Not paid');
+}
 function competitorsHTML() {
   const ev = curEvent(), dir = isDirector(), tour = ev.kind === 'tournament';
   const q = S.ui.q.toLowerCase(), f = !dir && ['unpaid', 'incomplete'].includes(S.ui.filter) ? 'all' : S.ui.filter;   // director-only filters
@@ -248,7 +253,7 @@ function competitorsHTML() {
       <td>${esc(c.gender === 'F' ? 'W' : c.gender === 'M' ? 'M' : '')}${age != null ? ` · <span class="num">${age}</span>` : ''}</td>
       <td>${esc(KT.rankLabel(c.rank))}</td>
       ${tour ? `<td class="ev-cell"><div class="pill-list">${evs}</div></td>` : ''}
-      <td>${c.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : dir ? `<button class="sm ${c.checkedIn ? '' : 'ghost'}" data-act="checkin" data-id="${esc(c.id)}" aria-pressed="${!!c.checkedIn}">${c.checkedIn ? '✓ Checked in' : 'Check in'}</button>` : (c.checkedIn ? '<span class="chip ok">Checked in</span>' : '<span class="chip plain">Not checked in</span>')}
+      <td class="reg-cell">${c.status === 'withdrawn' ? '<span class="chip bad">Withdrawn</span>' : dir ? `<div class="reg-btns"><button class="sm ${c.checkedIn ? '' : 'ghost'}" data-act="checkin" data-id="${esc(c.id)}" aria-pressed="${!!c.checkedIn}">${c.checkedIn ? '✓ Checked in' : 'Check in'}</button>${regToggles(c)}</div>` : (c.checkedIn ? '<span class="chip ok">Checked in</span>' : '<span class="chip plain">Not checked in</span>')}
         ${miss.length ? `<span class="chip warn" title="Missing: ${esc(miss.join(', '))}">Incomplete</span>` : ''}</td></tr>`;
   }).join('');
   return fab('comp-new', tour ? 'Add competitor' : 'Add participant') + eventHeader() + yobNote + `<div class="section-h">${tools}<div class="row actions">${acts}</div></div>${foldCtl}
