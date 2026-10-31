@@ -759,16 +759,26 @@ tr.grp-tog.shut td { opacity: .8; }
 .pr-preview .pv-sheet { margin: 0 auto 12px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,.18); background: #fff; }
 .pr-out { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .pr-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+/* v1.62: mat card queue grouped by division — header bar per division, strong break between divisions */
+.queue .q-grp { border: 1px solid var(--line-2); border-left: 4px solid var(--ai); border-radius: 10px; padding: 0 10px 6px; margin-top: 10px; background: var(--panel); }
+.queue .q-grp.cont { border-left-color: var(--ok); }
+.queue .q-grp + .q-grp { margin-top: 14px; }
+.queue .q-div { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 -10px 2px; padding: 6px 10px; background: var(--paper); border-bottom: 1px solid var(--line-2); border-radius: 9px 9px 0 0; font-weight: 700; font-size: .82rem; }
+.queue .q-div-name { min-width: 0; overflow-wrap: anywhere; margin-right: auto; }
+.queue .q-div-n { font-weight: 600; font-size: .72rem; color: var(--ink-3); white-space: nowrap; }
+.queue .q-tag { font-size: .66rem; padding: 1px 7px; }
+.queue .q-grp .q:first-of-type { border-top: 0; }
+.queue .q-sub { margin-top: -4px; }
 </style>
 <header id="bar" class="bar"></header><nav id="tabs" class="tabs" hidden></nav><main id="main"></main><nav id="bnav" class="bnav" hidden aria-label="Sections"></nav><div id="modal" hidden></div><div id="confirm" hidden></div>
-<script>/* Karate Event Tracker v1.61.0 */
+<script>/* Karate Event Tracker v1.62.0 */
 /* ============================================================
    Karate Event Tracker — core logic (pure, no DOM)
    Brackets, divisions, WTKF (2009) scoring. Portable to native.
    ============================================================ */
 const KT = (function () {
   'use strict';
-  const VERSION = '1.61.0';
+  const VERSION = '1.62.0';
 
   /* ---------- reference data ---------- */
   const EVENT_TYPES = {
@@ -5529,6 +5539,31 @@ function nowHTML(rs) {
     <div class="side" style="justify-content:flex-end;text-align:right"><span style="min-width:0"><div class="name">${esc(entName(res.b, rs.did))}</div><div class="dojo">${esc(entDojo(res.b))}</div>${h2hPrevHTML(rs.did, rs.mid, res.b)}</span><span class="belt b"></span></div></div>
     ${rs.phase ? `<div class="phase">${esc(rs.phase)}</div>` : ''}`;
 }
+/** One queued match / performance on a mat card (the division is in its group's header — v1.62). */
+function queueItemHTML(x, withActions) {
+  const can = withActions && (x.kp ? canScoreKP(x.did, x.kp.key) : canScoreMatch(x.did, x.m.id));
+  if (x.kp) return `<div class="q" ${kpTapAttrs(x.did, x.kp.key)} style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id, x.did))}</span></span>
+    <span class="vs">${can ? `<button class="sm go" data-act="kp-score" data-did="${esc(x.did)}" data-key="${esc(x.kp.key)}">Score</button>` : 'kata'}</span></div>
+    <div class="tiny muted q-sub">${esc(x.kp.label)}</div>`;
+  return `<div class="q" data-act="match" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}" role="button" tabindex="0"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a, x.did))}</span></span>
+    <span class="vs">${can ? `<button class="sm go" data-act="score" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}">Score</button>` : 'vs'}</span>
+    <span class="side" style="justify-content:flex-end"><span class="name">${esc(entName(x.r.b, x.did))}</span><span class="belt b"></span></span></div>
+    <div class="tiny muted q-sub">${esc(KT.matchLabel(x.m, S.d.brackets[x.did]))}${kindOf(DC.divBy[x.did]) === 'fukugo' ? ' · ' + (KT.fukugoPart(x.m, S.d.brackets[x.did]) === 'kitei' ? 'Ki-tei' : 'Kumite') : ''}</div>`;
+}
+/** v1.62: the queue grouped by division — a header bar per division (name, how many are left in it) and a clear break between divisions.
+    The division on the mat is "continues"; when it has nothing left, the next group is marked "Next division". */
+function queueGroupsHTML(shown, waiting, rs, withActions) {
+  const groups = [];
+  for (const x of shown) { const g = groups[groups.length - 1]; if (g && g.did === x.did) g.items.push(x); else groups.push({ did: x.did, items: [x] }); }
+  const onMat = (rs && rs.did) || '';
+  return groups.map((g, i) => {
+    const dv = DC.divBy[g.did] || {}, left = waiting.filter(y => y.did === g.did).length, cont = g.did === onMat;
+    // the division on the mat continues; the first other division after it is the next one
+    const first = groups.findIndex(x => x.did !== onMat);
+    const tag = cont ? '<span class="chip plain q-tag">on the mat · continues</span>' : i === first ? `<span class="chip aka q-tag">${onMat ? 'Next division' : 'First up'}</span>` : '';
+    return `<div class="q-grp${cont ? ' cont' : ''}" data-did="${esc(g.did)}"><div class="q-div"><span class="q-div-name">${esc(dv.name || '')}</span>${tag}<span class="q-div-n">${left} left</span></div>${g.items.map(x => queueItemHTML(x, withActions)).join('')}</div>`;
+  }).join('');
+}
 function ringBoardHTML(rings, withActions) {
   if (!rings.length) return `<div class="card small muted">No rings set up yet.</div>`;
   return `<div class="grid2">${rings.map(r => {
@@ -5545,16 +5580,7 @@ function ringBoardHTML(rings, withActions) {
     return `<div class="card ring-card stack" data-ring="${esc(r.id)}"><div class="row between"><h3>${esc(r.name)}</h3><div class="row" style="gap:6px">${rdy}<span class="chip ${q.length ? '' : 'plain'}">${q.length} waiting</span></div></div>
       <div>${now || '<div class="small muted">Nothing on the mat.</div>'}${openBtn}</div>
       ${withActions ? callPanelHTML(r) : calledHTML(r.id)}
-      <div class="queue"><div class="label">Up next</div>${next.map(x => {
-        const can = withActions && (x.kp ? canScoreKP(x.did, x.kp.key) : canScoreMatch(x.did, x.m.id));
-        if (x.kp) return `<div class="q" ${kpTapAttrs(x.did, x.kp.key)} style="grid-template-columns:1fr auto"><span class="side"><span class="belt a" style="background:var(--ai);border-color:var(--ai)"></span><span class="name">${esc(entName(x.kp.id, x.did))}</span></span>
-          <span class="vs">${can ? `<button class="sm go" data-act="kp-score" data-did="${esc(x.did)}" data-key="${esc(x.kp.key)}">Score</button>` : 'kata'}</span></div>
-          <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(x.kp.label)}</div>`;
-        return `<div class="q" data-act="match" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}" role="button" tabindex="0"><span class="side"><span class="belt a"></span><span class="name">${esc(entName(x.r.a, x.did))}</span></span>
-        <span class="vs">${can ? `<button class="sm go" data-act="score" data-did="${esc(x.did)}" data-mid="${esc(x.m.id)}">Score</button>` : 'vs'}</span>
-        <span class="side" style="justify-content:flex-end"><span class="name">${esc(entName(x.r.b, x.did))}</span><span class="belt b"></span></span></div>
-        <div class="tiny muted" style="margin-top:-4px">${esc(DC.divBy[x.did].name)} · ${esc(KT.matchLabel(x.m, S.d.brackets[x.did]))}${kindOf(DC.divBy[x.did]) === 'fukugo' ? ' · ' + (KT.fukugoPart(x.m, S.d.brackets[x.did]) === 'kitei' ? 'Ki-tei' : 'Kumite') : ''}</div>`;
-      }).join('') || '<div class="small muted">Nothing waiting.</div>'}</div></div>`;
+      <div class="queue"><div class="label">Up next</div>${queueGroupsHTML(next, q.filter(x => !isNow(x)), rs, withActions) || '<div class="small muted">Nothing waiting.</div>'}</div></div>`;
   }).join('')}</div>`;
 }
 function matHTML() {
